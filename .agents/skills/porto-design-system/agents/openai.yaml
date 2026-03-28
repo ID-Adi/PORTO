@@ -1,0 +1,7 @@
+interface:
+  display_name: "PORTO Design System"
+  short_description: "Guide PORTO visual and frontend decisions"
+  default_prompt: "Use $porto-design-system to keep this PORTO design or frontend task aligned with the docs-based visual system and recommended stack."
+
+policy:
+  allow_implicit_invocation: true
