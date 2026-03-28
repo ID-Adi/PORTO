@@ -1,3 +1,5 @@
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 import type { CraftRule } from "@/shared/types/content";
 import { SectionTitle } from "@/shared/ui/section-title";
 
@@ -20,9 +22,11 @@ export function CraftRules({ content }: CraftRulesProps) {
             key={rule.title}
             className="grid gap-4 py-5 md:grid-cols-[110px_1fr] md:gap-8"
           >
-            <p className="eyebrow text-xs text-(--muted-foreground)">
-              {String(index + 1).padStart(2, "0")}
-            </p>
+            <div className="pt-1">
+              <Badge variant="outline" className="eyebrow rounded-full">
+                {String(index + 1).padStart(2, "0")}
+              </Badge>
+            </div>
             <div>
               <h3 className="text-lg font-medium tracking-[-0.03em]">
                 {rule.title}
@@ -30,6 +34,7 @@ export function CraftRules({ content }: CraftRulesProps) {
               <p className="mt-3 max-w-3xl text-sm leading-7 text-(--muted-foreground)">
                 {rule.body}
               </p>
+              {index < content.length - 1 ? <Separator className="mt-5" /> : null}
             </div>
           </article>
         ))}
@@ -37,4 +42,3 @@ export function CraftRules({ content }: CraftRulesProps) {
     </section>
   );
 }
-
