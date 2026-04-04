@@ -1,11 +1,13 @@
 export type HeroContent = {
-  badge: string;
+  pixelLogoText: string;
+  avatarUrl: string;
+  name: string;
+  isVerified: boolean;
   title: string;
-  description: string;
-  location: string;
-  highlights: string[];
-  primaryCta: string;
-  secondaryCta: string;
+  infoItems: {
+    icon: string;
+    text: string;
+  }[];
 };
 
 export type SummaryItem = {

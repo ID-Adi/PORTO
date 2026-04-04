@@ -1,12 +1,4 @@
 import { Badge } from "@/components/ui/badge";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
 import type { ProcessStep } from "@/shared/types/content";
 import { SectionTitle } from "@/shared/ui/section-title";
 
@@ -16,57 +8,54 @@ type ProcessTimelineProps = {
 
 export function ProcessTimeline({ steps }: ProcessTimelineProps) {
   return (
-    <section className="section-frame border-b border-(--line) px-5 py-14 md:px-8 lg:px-10">
-      <SectionTitle
-        eyebrow="Workflow"
-        title="A homepage process that matches the PORTO docs."
-        description="This keeps implementation aligned with the design-system-first approach described in the repository notes, instead of jumping straight into arbitrary sections."
-      />
+    <section id="process" className="border-b border-(--line)">
+      <div className="mx-auto w-[calc(100%-2rem)] max-w-[768px] px-2 py-14 sm:px-5 md:w-full md:px-8 lg:px-10">
+        <SectionTitle
+          eyebrow="Workflow"
+          title="A homepage process that matches the PORTO docs."
+          description="This keeps implementation aligned with the design-system-first approach described in the repository notes, instead of jumping straight into arbitrary sections."
+        />
 
-      <div className="mt-10 grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
-        <Card className="surface-dots border border-white/50 bg-white/70 shadow-none">
-          <CardHeader>
-            <CardTitle>Frontend architecture</CardTitle>
-            <CardDescription>
+        <div className="mt-10 grid gap-0 border border-(--line) lg:grid-cols-[0.9fr_1.1fr]">
+          <div className="surface-dots p-5 lg:border-r lg:border-(--line)">
+            <p className="eyebrow text-xs text-(--muted-foreground)">Setup</p>
+            <h3 className="mt-2 text-base font-medium">Frontend architecture</h3>
+            <p className="mt-2 text-sm leading-7 text-(--muted-foreground)">
               Monolith project at the repo root, with feature modules handling
               homepage growth and shared primitives kept independent.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Routing layer</span>
-              <span className="font-medium">src/app</span>
+            </p>
+            <div className="mt-6 space-y-0">
+              <div className="flex items-center justify-between border-t border-(--line) py-3 text-sm">
+                <span className="text-(--muted-foreground)">Routing layer</span>
+                <span className="font-mono text-xs font-medium">src/app</span>
+              </div>
+              <div className="flex items-center justify-between border-t border-(--line) py-3 text-sm">
+                <span className="text-(--muted-foreground)">Domain sections</span>
+                <span className="font-mono text-xs font-medium">src/modules/home</span>
+              </div>
+              <div className="flex items-center justify-between border-t border-(--line) py-3 text-sm">
+                <span className="text-(--muted-foreground)">Shared primitives</span>
+                <span className="font-mono text-xs font-medium">src/shared + components/ui</span>
+              </div>
             </div>
-            <Separator />
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Domain sections</span>
-              <span className="font-medium">src/modules/home</span>
-            </div>
-            <Separator />
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Shared primitives</span>
-              <span className="font-medium">src/shared + components/ui</span>
-            </div>
-          </CardContent>
-        </Card>
+          </div>
 
-        <div className="grid gap-4">
-          {steps.map((step) => (
-            <Card
-              key={step.step}
-              className="border border-white/50 bg-white/70 shadow-none"
-            >
-              <CardHeader>
+          <div className="grid gap-0">
+            {steps.map((step, index) => (
+              <div
+                key={step.step}
+                className={`p-5 ${index > 0 ? "border-t border-(--line)" : ""}`}
+              >
                 <Badge variant="outline" className="w-fit rounded-full">
                   {step.step}
                 </Badge>
-                <CardTitle>{step.title}</CardTitle>
-                <CardDescription className="leading-7">
+                <h3 className="mt-2 text-base font-medium">{step.title}</h3>
+                <p className="mt-2 text-sm leading-7 text-(--muted-foreground)">
                   {step.body}
-                </CardDescription>
-              </CardHeader>
-            </Card>
-          ))}
+                </p>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </section>

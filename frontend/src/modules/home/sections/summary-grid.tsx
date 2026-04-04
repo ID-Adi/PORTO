@@ -1,12 +1,5 @@
 import { Badge } from "@/components/ui/badge";
 import type { SummaryItem } from "@/shared/types/content";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { SectionTitle } from "@/shared/ui/section-title";
 
 type SummaryGridProps = {
@@ -15,33 +8,34 @@ type SummaryGridProps = {
 
 export function SummaryGrid({ items }: SummaryGridProps) {
   return (
-    <section className="section-frame border-b border-(--line) px-5 py-14 md:px-8 lg:px-10">
-      <SectionTitle
-        eyebrow="Structure"
-        title="Monolith outside, modular inside."
-        description="One product, one app, and a folder split that keeps routing, domain sections, and shared primitives from bleeding into each other."
-      />
+    <section className="border-b border-(--line)">
+      <div className="mx-auto w-[calc(100%-2rem)] max-w-[768px] px-2 py-14 sm:px-5 md:w-full md:px-8 lg:px-10">
+        <SectionTitle
+          eyebrow="Structure"
+          title="Monolith outside, modular inside."
+          description="One product, one app, and a folder split that keeps routing, domain sections, and shared primitives from bleeding into each other."
+        />
 
-      <div className="mt-10 grid gap-4 md:grid-cols-2">
-        {items.map((item) => (
-          <Card
-            key={item.title}
-            className="surface-dots min-h-44 border border-white/50 bg-white/70 shadow-none"
-          >
-            <CardHeader>
+        <div className="mt-10 grid gap-0 border border-(--line) md:grid-cols-2">
+          {items.map((item, index) => (
+            <div
+              key={item.title}
+              className={`surface-dots min-h-44 p-5 ${
+                index % 2 !== 0 ? "md:border-l md:border-(--line)" : ""
+              } ${index >= 2 ? "border-t border-(--line)" : ""}`}
+            >
               <Badge variant="outline" className="w-fit rounded-full">
                 {item.meta}
               </Badge>
-              <CardTitle className="text-xl tracking-[-0.04em]">
+              <h3 className="mt-3 text-base font-medium tracking-[-0.03em]">
                 {item.title}
-              </CardTitle>
-              <CardDescription className="max-w-xl leading-7">
+              </h3>
+              <p className="mt-2 max-w-xl text-sm leading-7 text-(--muted-foreground)">
                 {item.description}
-              </CardDescription>
-            </CardHeader>
-            <CardContent />
-          </Card>
-        ))}
+              </p>
+            </div>
+          ))}
+        </div>
       </div>
     </section>
   );

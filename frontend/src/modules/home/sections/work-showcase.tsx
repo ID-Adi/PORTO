@@ -2,14 +2,6 @@ import { ArrowUpRight } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import type { ProjectHighlight } from "@/shared/types/content";
 import { SectionTitle } from "@/shared/ui/section-title";
 
@@ -19,45 +11,49 @@ type WorkShowcaseProps = {
 
 export function WorkShowcase({ items }: WorkShowcaseProps) {
   return (
-    <section className="section-frame border-b border-(--line) px-5 py-14 md:px-8 lg:px-10">
-      <SectionTitle
-        eyebrow="Selected Work"
-        title="Three homepage directions already encoded into the system."
-        description="The content is still dummy, but the cards now express how PORTO can present narrative, structure, and proof without losing its restrained visual language."
-      />
+    <section id="work" className="border-b border-(--line)">
+      <div className="mx-auto w-[calc(100%-2rem)] max-w-[768px] px-2 py-14 sm:px-5 md:w-full md:px-8 lg:px-10">
+        <SectionTitle
+          eyebrow="Selected Work"
+          title="Three homepage directions already encoded into the system."
+          description="The content is still dummy, but the cards now express how PORTO can present narrative, structure, and proof without losing its restrained visual language."
+        />
 
-      <div className="mt-10 grid gap-4 lg:grid-cols-3">
-        {items.map((item) => (
-          <Card
-            key={item.title}
-            className="surface-hatch border border-white/50 bg-white/70 shadow-none"
-          >
-            <CardHeader>
-              <Badge variant="outline" className="w-fit rounded-full">
-                {item.metric}
-              </Badge>
-              <CardTitle className="text-xl tracking-[-0.04em]">
-                {item.title}
-              </CardTitle>
-              <CardDescription className="leading-7">
-                {item.summary}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="flex flex-wrap gap-2">
-              {item.tags.map((tag) => (
-                <Badge key={tag} variant="secondary" className="rounded-full">
-                  {tag}
+        <div className="mt-10 grid gap-0 border border-(--line) lg:grid-cols-3">
+          {items.map((item, index) => (
+            <div
+              key={item.title}
+              className={`surface-hatch flex flex-col justify-between p-5 ${
+                index > 0 ? "border-t border-(--line) lg:border-t-0 lg:border-l" : ""
+              }`}
+            >
+              <div>
+                <Badge variant="outline" className="w-fit rounded-full">
+                  {item.metric}
                 </Badge>
-              ))}
-            </CardContent>
-            <CardFooter>
-              <Button variant="ghost" className="px-0">
-                Open direction
-                <ArrowUpRight data-icon="inline-end" />
-              </Button>
-            </CardFooter>
-          </Card>
-        ))}
+                <h3 className="mt-3 text-base font-medium tracking-[-0.03em]">
+                  {item.title}
+                </h3>
+                <p className="mt-2 text-sm leading-7 text-(--muted-foreground)">
+                  {item.summary}
+                </p>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {item.tags.map((tag) => (
+                    <Badge key={tag} variant="secondary" className="rounded-full">
+                      {tag}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+              <div className="mt-6">
+                <Button variant="ghost" className="px-0">
+                  Open direction
+                  <ArrowUpRight data-icon="inline-end" />
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     </section>
   );

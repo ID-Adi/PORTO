@@ -16,14 +16,21 @@ export const homePageContent: {
   contact: ContactContent;
 } = {
   hero: {
-    badge: "PORTO UI/UX Direction",
-    title: "Minimalist technical portfolio built as a small design system.",
-    description:
-      "This first pass focuses on the interface language before feature depth: tight grid rhythm, thin borders, restrained motion, and modular sections inspired by the PORTO docs and the Chanh Dai reference.",
-    location: "Monolith project, modular frontend architecture",
-    highlights: ["Next.js + TypeScript", "Tailwind CSS", "shadcn/ui-ready"],
-    primaryCta: "Review selected work",
-    secondaryCta: "Read architecture notes",
+    pixelLogoText: "PAWA",
+    avatarUrl: "/avatar.png",
+    name: "Adi",
+    isVerified: true,
+    title: "Developer @PORTO",
+    infoItems: [
+      { icon: "Code", text: "Design Engineer & Developer" },
+      { icon: "Lightbulb", text: "Creator @PORTO" },
+      { icon: "MapPin", text: "Indonesia" },
+      { icon: "Clock", text: "GMT+7 // Local time" },
+      { icon: "Phone", text: "+62 812 0000 0000" },
+      { icon: "Mail", text: "hello@example.com" },
+      { icon: "Link", text: "porto.dev" },
+      { icon: "User", text: "he/him" },
+    ],
   },
   summary: [
     {
