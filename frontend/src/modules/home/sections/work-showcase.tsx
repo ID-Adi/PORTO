@@ -19,13 +19,11 @@ export function WorkShowcase({ items }: WorkShowcaseProps) {
           description="The content is still dummy, but the cards now express how PORTO can present narrative, structure, and proof without losing its restrained visual language."
         />
 
-        <div className="mt-10 grid gap-0 border border-(--line) lg:grid-cols-3">
-          {items.map((item, index) => (
+        <div className="mt-10 grid gap-px border border-(--line) bg-(--line) lg:grid-cols-3">
+          {items.map((item) => (
             <div
               key={item.title}
-              className={`surface-hatch flex flex-col justify-between p-5 ${
-                index > 0 ? "border-t border-(--line) lg:border-t-0 lg:border-l" : ""
-              }`}
+              className="surface-hatch bg-background flex flex-col justify-between p-5"
             >
               <div>
                 <Badge variant="outline" className="w-fit rounded-full">

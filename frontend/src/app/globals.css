@@ -6,6 +6,7 @@
 
 /* ── Light palette (default) ── */
 :root {
+  --page-gutter: 13.5px;
   --background: oklch(0.985 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
@@ -102,6 +103,7 @@ body {
   min-height: 100vh;
   background: var(--background);
   font-family: var(--font-geist-sans), sans-serif;
+  background-image: radial-gradient(circle at center, rgba(24, 24, 27, 0.02), transparent 60%);
 }
 
 a {
@@ -139,6 +141,158 @@ a {
   background-size: 16px 16px;
   opacity: 0.8;
   pointer-events: none;
+}
+
+.page-frame {
+  width: calc(100% - (var(--page-gutter) * 2));
+  max-width: 768px;
+  margin-inline: auto;
+}
+
+.profile-hero-mark {
+  position: relative;
+  width: calc(100% - (var(--page-gutter) * 2));
+  max-width: 768px;
+  margin-inline: auto;
+  border-left: 1px solid var(--line);
+  border-right: 1px solid var(--line);
+  background-image: radial-gradient(var(--texture-fg) 1px, transparent 0);
+  background-size: 10px 10px;
+  background-position: center;
+}
+
+.profile-hero-mark::after,
+.profile-section::before,
+.profile-section::after {
+  content: "";
+  position: absolute;
+  left: -100vw;
+  width: 200vw;
+  height: 1px;
+  background: var(--line);
+  pointer-events: none;
+}
+
+.profile-section::before {
+  top: -1px;
+}
+
+.profile-hero-mark::after,
+.profile-section::after {
+  bottom: -1px;
+}
+
+/* Prevent double lines on left/right wings when sections are directly adjacent */
+.profile-hero-mark:has(+ .profile-section)::after,
+.profile-section:has(+ .profile-section)::after {
+  display: none;
+}
+
+.profile-section {
+  position: relative;
+  width: calc(100% - (var(--page-gutter) * 2));
+  max-width: 768px;
+  margin-inline: auto;
+  border-left: 1px solid var(--line);
+  border-right: 1px solid var(--line);
+  background: var(--background);
+}
+
+.profile-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.875rem 1rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.profile-divider,
+.profile-mini-divider {
+  position: relative;
+  width: calc(100% - (var(--page-gutter) * 2));
+  max-width: 768px;
+  margin-inline: auto;
+  border-left: 1px solid var(--line);
+  border-right: 1px solid var(--line);
+}
+
+.profile-divider {
+  height: 2rem;
+}
+
+.profile-mini-divider {
+  height: 0.5rem;
+}
+
+.profile-divider::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -100vw;
+  width: 200vw;
+  background-image: repeating-linear-gradient(
+    315deg,
+    color-mix(in srgb, var(--foreground) 8%, transparent) 0,
+    color-mix(in srgb, var(--foreground) 8%, transparent) 1px,
+    transparent 0,
+    transparent 50%
+  );
+  background-size: 10px 10px;
+  pointer-events: none;
+}
+
+.profile-kicker {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+
+.profile-inline-note {
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+
+.profile-pill {
+  border: 1px solid var(--line);
+  background: transparent;
+  border-radius: 999px;
+  height: 1.75rem;
+  padding-inline: 0.7rem;
+  font-size: 11px;
+  font-family: var(--font-geist-mono), monospace;
+  color: var(--foreground);
+}
+
+.profile-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  height: 1.9rem;
+  padding-inline: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 12px;
+  background: color-mix(in srgb, var(--background) 97%, black 3%);
+}
+
+.profile-link {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 11px;
+  color: var(--foreground);
+}
+
+.profile-row {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: 1rem;
+  padding: 0.875rem 1rem;
 }
 
 /* ── Section frame — border-x on every section ── */
@@ -225,5 +379,55 @@ a {
   }
   html {
     @apply font-sans;
+  }
+}
+
+@media (max-width: 640px) {
+  :root {
+    --page-gutter: 13.5px;
+  }
+
+  .profile-section-heading {
+    padding: 0.7rem 0.85rem;
+  }
+
+  .profile-row {
+    grid-template-columns: 92px 1fr;
+    gap: 0.6rem;
+    padding: 0.75rem 0.85rem;
+  }
+
+  .profile-pill {
+    height: 1.55rem;
+    padding-inline: 0.55rem;
+    font-size: 10px;
+  }
+
+  .profile-chip {
+    height: 1.7rem;
+    padding-inline: 0.6rem;
+    font-size: 11px;
+  }
+
+  .profile-divider {
+    height: 1.5rem;
+  }
+
+  .profile-mini-divider {
+    height: 0.4rem;
+  }
+
+  .profile-section-heading h2 {
+    font-size: 13px;
+  }
+}
+
+@media (max-width: 900px) {
+  .profile-section-heading {
+    padding: 0.8rem 0.95rem;
+  }
+
+  .profile-row {
+    padding: 0.8rem 0.95rem;
   }
 }

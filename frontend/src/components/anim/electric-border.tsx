@@ -1,3 +1,5 @@
+"use client";
+
 import React, { useEffect, useRef, useCallback, CSSProperties, ReactNode } from 'react';
 
 function hexToRgba(hex: string, alpha: number = 1): string {
@@ -180,14 +182,14 @@ const ElectricBorder: React.FC<ElectricBorderProps> = ({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const octaves = 10;
-    const lacunarity = 1.6;
-    const gain = 0.7;
+    const octaves = 3;       // Bring back sharpness
+    const lacunarity = 2.0;  
+    const gain = 0.5;
     const amplitude = chaos;
-    const frequency = 10;
+    const frequency = 25;    // Many zigzags
     const baseFlatness = 0;
-    const displacement = 60;
-    const borderOffset = 60;
+    const displacement = 5;  // Keep it tight
+    const borderOffset = 10; 
 
     const updateSize = () => {
       const rect = container.getBoundingClientRect();
@@ -219,7 +221,7 @@ const ElectricBorder: React.FC<ElectricBorderProps> = ({
       ctx.scale(dpr, dpr);
 
       ctx.strokeStyle = color;
-      ctx.lineWidth = 1.5;
+      ctx.lineWidth = 0.7;
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
 

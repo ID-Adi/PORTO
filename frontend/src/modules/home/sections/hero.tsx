@@ -99,12 +99,6 @@ export function HeroSection({ content }: HeroSectionProps) {
 
           {/* Details / Header Column */}
           <div className="flex flex-col justify-center">
-            {/* Row 1: Raw CSS string (hidden on mobile to match reference) */}
-            <div className="hidden border-b border-(--line) px-4 py-0.5 sm:block md:px-6 lg:px-8">
-              <span className="font-mono text-[9px] sm:text-[10px] text-(--muted-foreground) opacity-70">
-                text-3xl text-zinc-950 font-medium
-              </span>
-            </div>
 
             {/* Row 2: Name and Badges */}
             <div className="border-b border-(--line) px-4 py-2 sm:py-1 md:px-6 lg:px-8">

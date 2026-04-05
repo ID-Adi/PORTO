@@ -1,128 +1,183 @@
-import type {
-  ContactContent,
-  CraftRule,
-  HeroContent,
-  ProcessStep,
-  ProjectHighlight,
-  SummaryItem,
-} from "@/shared/types/content";
+import type { ProfilePageContent } from "@/shared/types/content";
 
-export const homePageContent: {
-  hero: HeroContent;
-  summary: SummaryItem[];
-  projects: ProjectHighlight[];
-  process: ProcessStep[];
-  rules: CraftRule[];
-  contact: ContactContent;
-} = {
-  hero: {
-    pixelLogoText: "PAWA",
-    avatarUrl: "/avatar.png",
-    name: "Adi",
-    isVerified: true,
-    title: "Developer @PORTO",
-    infoItems: [
-      { icon: "Code", text: "Design Engineer & Developer" },
-      { icon: "Lightbulb", text: "Creator @PORTO" },
-      { icon: "MapPin", text: "Indonesia" },
-      { icon: "Clock", text: "GMT+7 // Local time" },
-      { icon: "Phone", text: "+62 812 0000 0000" },
-      { icon: "Mail", text: "hello@example.com" },
-      { icon: "Link", text: "porto.dev" },
-      { icon: "User", text: "he/him" },
-    ],
-  },
-  summary: [
+export const homePageContent: ProfilePageContent = {
+  monogram: "PAWA",
+  name: "Prasetya Adi Wijaya",
+  title: "Design Engineer building PORTO with editorial discipline and product-level polish.",
+  status: "Open for selected builds",
+  metaLine: "text-3xl text-zinc-950 dark:text-zinc-50 font-medium",
+  avatarUrl: "/avatar.png",
+  overview: [
+    { left: { icon: "code", value: "Design Engineer @PORTO" } },
+    { left: { icon: "lightbulb", value: "Founder @PORTO" } },
     {
-      title: "Visual System",
-      meta: "Tokens first",
-      description:
-        "Monochrome surfaces, editorial spacing, thin borders, and subtle dot or hatch textures.",
+      left: { icon: "mapPin", value: "Makassar, Indonesia" },
+      right: { icon: "clock", value: "17:00 // GMT+8" },
     },
     {
-      title: "Architecture",
-      meta: "Monolith / modular",
-      description:
-        "Single app in one repository root, with routing in app/ and domain logic isolated by module.",
+      left: { icon: "phone", value: "+62 812 345 6789" },
+      right: { icon: "mail", value: "hello@porto.dev" },
     },
     {
-      title: "Dummy Content",
-      meta: "Fast iteration",
-      description:
-        "Temporary data lives beside the module it serves so UI exploration stays fast before CMS or API work.",
+      left: { icon: "link", value: "porto.dev" },
+      right: { icon: "user", value: "he/him" },
+    },
+  ],
+  socials: [
+    { label: "X", href: "https://x.com", detail: "Updates and micro-thoughts" },
+    { label: "GitHub", href: "https://github.com", detail: "Code, experiments, and UI systems" },
+    { label: "LinkedIn", href: "https://linkedin.com", detail: "Professional notes and background" },
+    { label: "daily.dev", href: "https://daily.dev", detail: "Dev bookmarks and reads" },
+    { label: "Discord", href: "https://discord.gg", detail: "Community and discussions" },
+    { label: "YouTube", href: "https://youtube.com", detail: "Walkthroughs and showcases" },
+  ],
+  about: [
+    "PORTO is being shaped as a minimalist technical profile surface: high signal, thin borders, disciplined spacing, and dense information arranged like a product sheet rather than a fluffy landing page.",
+    "The reference from chanhdai.com pushes a strong idea: make the interface feel engineered, not decorative. This version adapts that language into PORTO with a profile-first composition, modular rows, and tighter information rhythm.",
+  ],
+  principles: [
+    {
+      label: "Visual Rule",
+      value: "Monochrome + thin borders",
+      note: "Texture stays subtle and only supports structure, never stealing the scene.",
     },
     {
-      title: "Quality Bar",
-      meta: "Not optional",
-      description:
-        "Accessibility, responsive behavior, performance discipline, and content consistency stay part of the baseline.",
+      label: "Layout Rule",
+      value: "Boxed 768px frame",
+      note: "Sections read like one continuous editorial system with consistent vertical rails.",
+    },
+    {
+      label: "Product Rule",
+      value: "Server-first by default",
+      note: "Interactive islands exist only where they improve the experience, not by accident.",
+    },
+  ],
+  testimonials: [
+    {
+      quote: "The strongest part is the restraint. It feels deliberate, not random-polished.",
+      author: "Rizky",
+      role: "Product Designer",
+    },
+    {
+      quote: "This direction turns a personal site into something that feels like a well-structured interface.",
+      author: "Nadia",
+      role: "Frontend Engineer",
+    },
+    {
+      quote: "The grid, spacing, and borders do the heavy lifting. Nice. Quiet. Sharp.",
+      author: "Farhan",
+      role: "Creative Technologist",
+    },
+  ],
+  partners: ["Vercel-adjacent", "shadcn/ui", "Next.js", "Tailwind CSS", "Radix UI", "Lucide"],
+  stack: [
+    "Next.js 16",
+    "React 19",
+    "TypeScript",
+    "Tailwind CSS v4",
+    "shadcn/ui",
+    "Radix UI",
+    "Lucide",
+    "Playwright",
+    "Vercel",
+  ],
+  components: [
+    {
+      title: "Profile Header Grid",
+      description: "A boxed profile intro using split rows, monospaced meta labels, and rail-aligned borders.",
+      meta: "Header / Foundation",
+      hrefLabel: "Open component",
+    },
+    {
+      title: "Data-Heavy Section Sheets",
+      description: "Sections read like compact product sheets: readable, structured, and intentionally dense.",
+      meta: "Section / Content",
+      hrefLabel: "Open component",
+    },
+    {
+      title: "Editorial Card Previews",
+      description: "Dark preview blocks balance the otherwise light monochrome canvas and mimic the reference rhythm.",
+      meta: "Card / Showcase",
+      hrefLabel: "Open component",
+    },
+  ],
+  writing: [
+    {
+      title: "Build the system before the page",
+      description: "Why tokens, rails, and content rhythm should settle before adding more sections.",
+      meta: "Essay / UI Systems",
+      hrefLabel: "Read article",
+    },
+    {
+      title: "How to make a portfolio feel engineered",
+      description: "Notes on using structure, spacing, and quiet texture to get a more technical editorial result.",
+      meta: "Notes / Design",
+      hrefLabel: "Read article",
+    },
+  ],
+  experience: [
+    {
+      period: "2025 — Now",
+      title: "Building PORTO",
+      detail: "Designing and implementing a documentation-driven frontend foundation for a portfolio and internal skill system.",
+    },
+    {
+      period: "2023 — 2025",
+      title: "Frontend Product Work",
+      detail: "Worked on modular UI systems, landing surfaces, and admin-facing interfaces with a strong focus on maintainability.",
     },
   ],
   projects: [
     {
-      title: "Editorial Landing System",
-      summary:
-        "A homepage direction that treats border rhythm, spacing scale, and typography hierarchy as first-class system decisions.",
-      metric: "01 / foundation pass",
-      tags: ["Grid discipline", "Thin border", "Subtle texture"],
+      period: "01",
+      title: "Editorial Homepage System",
+      detail: "Reframed the homepage from generic marketing sections into a compact profile sheet inspired by chanhdai.com.",
     },
     {
-      title: "Component-Ready Portfolio Shell",
-      summary:
-        "A modular monolith that keeps route composition in app/ and domain sections in modules/ so new pages can grow without layout drift.",
-      metric: "02 / modular setup",
-      tags: ["App Router", "Feature modules", "Shared primitives"],
+      period: "02",
+      title: "Monolith with strict UI boundaries",
+      detail: "Kept route composition in app/, domain work in modules/, and reusable UI inside shared/components.",
     },
     {
-      title: "Performance-Aware UI Layer",
-      summary:
-        "A design direction that stays visually detailed without falling into heavy animation, excessive client components, or decorative noise.",
-      metric: "03 / quality pass",
-      tags: ["Light motion", "Server-first", "Content discipline"],
+      period: "03",
+      title: "Playwright-driven visual QA",
+      detail: "Used before/after snapshots as a working loop instead of hoping the browser agrees later. Browser dulu, ego belakangan 😄",
     },
   ],
-  process: [
+  awards: [
     {
-      step: "01",
-      title: "Define the visual grammar",
-      body:
-        "Lock the monochrome palette, spacing rhythm, border behavior, and type hierarchy before expanding into more sections.",
+      period: "2026",
+      title: "Internal Direction Lock",
+      detail: "PORTO docs, frontend structure, and visual implementation finally speak the same language.",
     },
     {
-      step: "02",
-      title: "Compose reusable sections",
-      body:
-        "Build hero, work, process, and contact blocks as reusable section modules so each addition strengthens the system instead of fragmenting it.",
-    },
-    {
-      step: "03",
-      title: "Harden interaction quality",
-      body:
-        "Add accessible states, responsive handling, and restrained motion only after the static composition already feels stable and intentional.",
+      period: "2025",
+      title: "Design System Discipline",
+      detail: "Established a practical rule set for grid, borders, and restrained motion before scaling content.",
     },
   ],
-  rules: [
+  certifications: [
     {
-      title: "Build the system before the pages",
-      body:
-        "Tokens, spacing, borders, section shells, and card primitives should settle first so later sections feel like one product, not stitched templates.",
+      period: "UI",
+      title: "Accessible interaction baseline",
+      detail: "Keyboard focus, readable density, and structured semantics remain part of the build bar.",
     },
     {
-      title: "Use texture as support, not decoration",
-      body:
-        "Dot grids and diagonal hatch patterns should stay low-contrast and reinforce the engineered feel instead of competing with content.",
-    },
-    {
-      title: "Prefer modular domains over global sprawl",
-      body:
-        "Keep page composition in app/, keep section logic in modules/, and keep reusable primitives in shared/ so the monolith remains maintainable as the portfolio expands.",
+      period: "DX",
+      title: "Modular monolith setup",
+      detail: "Local skills, docs, and frontend code are organized to support iteration without chaos.",
     },
   ],
-  contact: {
-    title: "Use this foundation to shape the next PORTO sections.",
-    description:
-      "The current homepage is still using dummy content, but the structure is now ready for real narrative, project entries, and richer interaction design on top of the same visual system.",
-    primaryCta: "Continue homepage build",
-    secondaryCta: "Inspect frontend structure",
-  },
+  bookmarks: [
+    {
+      period: "01",
+      title: "Layout rhythm over visual noise",
+      detail: "The strongest mood often comes from spacing, alignment, and borders, not from adding more stuff.",
+    },
+    {
+      period: "02",
+      title: "Reference with adaptation",
+      detail: "Copying the concept works better than copying every pixel; otherwise it becomes cosplay with CSS.",
+    },
+  ],
 };

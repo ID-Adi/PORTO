@@ -1,29 +1,30 @@
-import { ExternalLink, Globe, Mail } from "lucide-react";
-
-const socialLinks = [
-  { icon: Mail, href: "mailto:hello@porto.dev", label: "Email" },
-  { icon: ExternalLink, href: "https://github.com", label: "GitHub" },
-  { icon: Globe, href: "https://linkedin.com", label: "LinkedIn" },
+const footerLinks = [
+  { href: "https://porto.dev/llms.txt", label: "llms.txt" },
+  { href: "https://github.com", label: "GitHub" },
+  { href: "https://linkedin.com", label: "LinkedIn" },
+  { href: "mailto:hello@porto.dev", label: "Email" },
 ];
 
 export function SiteFooter() {
   return (
     <footer className="border-t border-(--line)">
-      <div className="mx-auto flex w-[calc(100%-2rem)] max-w-[768px] items-center justify-between px-2 py-5 sm:px-5 md:w-full md:px-8">
-        <p className="text-xs text-(--muted-foreground)">
-          © {new Date().getFullYear()} PORTO. Built with discipline.
+      <div className="page-frame border-x border-(--line) px-4 py-6 pb-20">
+        <p className="text-[12px] text-(--muted-foreground)">
+          Inspired by technical editorial interfaces, adapted for PORTO.
         </p>
-        <div className="flex items-center gap-3">
-          {socialLinks.map((link) => (
+        <p className="mt-2 text-[12px] text-(--muted-foreground)">
+          Built by Adi. Source and experiments live in the same monolith because apparently I enjoy neat little boxes.
+        </p>
+        <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-[12px]">
+          {footerLinks.map((link) => (
             <a
               key={link.label}
               href={link.href}
               target="_blank"
-              rel="noopener noreferrer"
-              aria-label={link.label}
+              rel="noreferrer"
               className="text-(--muted-foreground) transition-colors hover:text-(--foreground)"
             >
-              <link.icon className="h-4 w-4" />
+              {link.label}
             </a>
           ))}
         </div>

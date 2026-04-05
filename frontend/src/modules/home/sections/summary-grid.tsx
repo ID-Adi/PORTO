@@ -16,13 +16,11 @@ export function SummaryGrid({ items }: SummaryGridProps) {
           description="One product, one app, and a folder split that keeps routing, domain sections, and shared primitives from bleeding into each other."
         />
 
-        <div className="mt-10 grid gap-0 border border-(--line) md:grid-cols-2">
+        <div className="mt-10 grid gap-px border border-(--line) bg-(--line) md:grid-cols-2">
           {items.map((item, index) => (
             <div
               key={item.title}
-              className={`surface-dots min-h-44 p-5 ${
-                index % 2 !== 0 ? "md:border-l md:border-(--line)" : ""
-              } ${index >= 2 ? "border-t border-(--line)" : ""}`}
+              className="surface-dots bg-background min-h-44 p-5"
             >
               <Badge variant="outline" className="w-fit rounded-full">
                 {item.meta}

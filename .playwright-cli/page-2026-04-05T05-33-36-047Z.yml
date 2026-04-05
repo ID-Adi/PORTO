@@ -1,0 +1,282 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - banner [ref=e3]:
+      - generic [ref=e4]:
+        - generic [ref=e5]:
+          - link "Home" [ref=e6] [cursor=pointer]:
+            - /url: /
+            - generic [ref=e8]: PORTO
+          - navigation [ref=e9]:
+            - link "Components" [ref=e10] [cursor=pointer]:
+              - /url: "#components"
+            - link "Blocks" [ref=e11] [cursor=pointer]:
+              - /url: "#projects"
+            - link "Blog" [ref=e12] [cursor=pointer]:
+              - /url: "#writing"
+            - link "Sponsors" [ref=e13] [cursor=pointer]:
+              - /url: "#partners"
+        - generic [ref=e14]:
+          - button "Search" [ref=e15]:
+            - img
+            - generic [ref=e16]: Search...
+            - generic [ref=e17]: ⌘
+            - generic [ref=e18]: K
+          - link "GitHub" [ref=e19] [cursor=pointer]:
+            - /url: https://github.com
+            - img
+            - generic [ref=e20]: 1.6k
+          - button "Toggle theme" [ref=e22]:
+            - img
+    - main [ref=e23]:
+      - generic [ref=e24]:
+        - generic [ref=e27]: PO
+        - generic [ref=e28]:
+          - generic [ref=e29]:
+            - img "Adi Rahman" [ref=e33]
+            - generic [ref=e34]:
+              - generic [ref=e35]: text-3xl text-zinc-950 dark:text-zinc-50 font-medium
+              - generic [ref=e37]:
+                - heading "Adi Rahman" [level=1] [ref=e38]
+                - img [ref=e39]
+                - generic [ref=e42]: Open for selected builds
+              - generic [ref=e43]: Design Engineer building PORTO with editorial discipline and product-level polish.
+          - generic [ref=e44]:
+            - article [ref=e45]:
+              - paragraph [ref=e46]: Role
+              - paragraph [ref=e47]: Design Engineer @PORTO
+              - paragraph [ref=e48]: Working across interface systems, content architecture, and frontend execution.
+            - article [ref=e49]:
+              - paragraph [ref=e50]: Focus
+              - paragraph [ref=e51]: System-first product pages
+              - paragraph [ref=e52]: Building pages that feel closer to a product surface than a marketing template.
+            - article [ref=e53]:
+              - paragraph [ref=e54]: Location
+              - paragraph [ref=e55]: Makassar, Indonesia
+              - paragraph [ref=e56]: GMT+8 // 1h ahead of Jakarta
+            - article [ref=e57]:
+              - paragraph [ref=e58]: Contact
+              - paragraph [ref=e59]: hello@porto.dev
+              - paragraph [ref=e60]: Open to selected collaboration with strong product taste.
+        - generic [ref=e62]:
+          - heading "Social Links" [level=2] [ref=e64]
+          - generic [ref=e65]:
+            - link "GitHub Code, experiments, and UI systems" [ref=e66] [cursor=pointer]:
+              - /url: https://github.com
+              - generic [ref=e67]:
+                - paragraph [ref=e68]: GitHub
+                - paragraph [ref=e69]: Code, experiments, and UI systems
+              - img [ref=e70]
+            - link "LinkedIn Professional notes and background" [ref=e73] [cursor=pointer]:
+              - /url: https://linkedin.com
+              - generic [ref=e74]:
+                - paragraph [ref=e75]: LinkedIn
+                - paragraph [ref=e76]: Professional notes and background
+              - img [ref=e77]
+            - link "Email Direct line for product and design work" [ref=e80] [cursor=pointer]:
+              - /url: mailto:hello@porto.dev
+              - generic [ref=e81]:
+                - paragraph [ref=e82]: Email
+                - paragraph [ref=e83]: Direct line for product and design work
+              - img [ref=e84]
+            - link "Playground Ongoing documentation and internal skills" [ref=e87] [cursor=pointer]:
+              - /url: https://porto.dev
+              - generic [ref=e88]:
+                - paragraph [ref=e89]: Playground
+                - paragraph [ref=e90]: Ongoing documentation and internal skills
+              - img [ref=e91]
+        - generic [ref=e95]:
+          - heading "About" [level=2] [ref=e97]
+          - generic [ref=e98]:
+            - generic [ref=e99]:
+              - paragraph [ref=e100]: "PORTO is being shaped as a minimalist technical profile surface: high signal, thin borders, disciplined spacing, and dense information arranged like a product sheet rather than a fluffy landing page."
+              - paragraph [ref=e101]: "The reference from chanhdai.com pushes a strong idea: make the interface feel engineered, not decorative. This version adapts that language into PORTO with a profile-first composition, modular rows, and tighter information rhythm."
+            - generic [ref=e102]:
+              - article [ref=e103]:
+                - paragraph [ref=e104]: Visual Rule
+                - paragraph [ref=e105]: Monochrome + thin borders
+                - paragraph [ref=e106]: Texture stays subtle and only supports structure, never stealing the scene.
+              - article [ref=e107]:
+                - paragraph [ref=e108]: Layout Rule
+                - paragraph [ref=e109]: Boxed 768px frame
+                - paragraph [ref=e110]: Sections read like one continuous editorial system with consistent vertical rails.
+              - article [ref=e111]:
+                - paragraph [ref=e112]: Product Rule
+                - paragraph [ref=e113]: Server-first by default
+                - paragraph [ref=e114]: Interactive islands exist only where they improve the experience, not by accident.
+        - generic [ref=e116]:
+          - generic [ref=e117]:
+            - heading "Testimonials" [level=2] [ref=e118]
+            - button "Wall of Love" [ref=e119]
+          - generic [ref=e120]:
+            - article [ref=e121]:
+              - img [ref=e122]
+              - paragraph [ref=e125]: “The strongest part is the restraint. It feels deliberate, not random-polished.”
+              - generic [ref=e126]:
+                - generic [ref=e127]: Rizky
+                - img [ref=e128]
+                - generic [ref=e130]: Product Designer
+            - article [ref=e131]:
+              - img [ref=e132]
+              - paragraph [ref=e135]: “This direction turns a personal site into something that feels like a well-structured interface.”
+              - generic [ref=e136]:
+                - generic [ref=e137]: Nadia
+                - img [ref=e138]
+                - generic [ref=e140]: Frontend Engineer
+            - article [ref=e141]:
+              - img [ref=e142]
+              - paragraph [ref=e145]: “The grid, spacing, and borders do the heavy lifting. Nice. Quiet. Sharp.”
+              - generic [ref=e146]:
+                - generic [ref=e147]: Farhan
+                - img [ref=e148]
+                - generic [ref=e150]: Creative Technologist
+        - generic [ref=e152]:
+          - generic [ref=e153]:
+            - heading "Partners" [level=2] [ref=e154]
+            - button "All Partners" [ref=e155]
+          - generic [ref=e156]:
+            - generic [ref=e157]: Vercel-adjacent
+            - generic [ref=e158]: shadcn/ui
+            - generic [ref=e159]: Next.js
+            - generic [ref=e160]: Tailwind CSS
+            - generic [ref=e161]: Radix UI
+            - generic [ref=e162]: Lucide
+        - generic [ref=e164]:
+          - heading "Stack" [level=2] [ref=e166]
+          - generic [ref=e167]:
+            - generic [ref=e168]: Next.js 16
+            - generic [ref=e169]: React 19
+            - generic [ref=e170]: TypeScript
+            - generic [ref=e171]: Tailwind CSS v4
+            - generic [ref=e172]: shadcn/ui
+            - generic [ref=e173]: Radix UI
+            - generic [ref=e174]: Lucide
+            - generic [ref=e175]: Playwright
+            - generic [ref=e176]: Vercel
+        - generic [ref=e178]:
+          - generic [ref=e179]:
+            - heading "Components (3)" [level=2] [ref=e180]
+            - button "All Components" [ref=e181]
+          - generic [ref=e182]:
+            - article [ref=e183]:
+              - generic [ref=e185]:
+                - paragraph [ref=e186]: Header / Foundation
+                - paragraph [ref=e187]: Profile Header Grid
+              - paragraph [ref=e188]: A boxed profile intro using split rows, monospaced meta labels, and rail-aligned borders.
+            - article [ref=e189]:
+              - generic [ref=e191]:
+                - paragraph [ref=e192]: Section / Content
+                - paragraph [ref=e193]: Data-Heavy Section Sheets
+              - paragraph [ref=e194]: "Sections read like compact product sheets: readable, structured, and intentionally dense."
+            - article [ref=e195]:
+              - generic [ref=e197]:
+                - paragraph [ref=e198]: Card / Showcase
+                - paragraph [ref=e199]: Editorial Card Previews
+              - paragraph [ref=e200]: Dark preview blocks balance the otherwise light monochrome canvas and mimic the reference rhythm.
+        - generic [ref=e202]:
+          - generic [ref=e203]:
+            - heading "Writing (2)" [level=2] [ref=e204]
+            - button "All Posts" [ref=e205]
+          - generic [ref=e206]:
+            - article [ref=e207]:
+              - paragraph [ref=e208]: Essay / UI Systems
+              - heading "Build the system before the page" [level=3] [ref=e209]
+              - paragraph [ref=e210]: Why tokens, rails, and content rhythm should settle before adding more sections.
+              - button "Read article" [ref=e211]
+            - article [ref=e212]:
+              - paragraph [ref=e213]: Notes / Design
+              - heading "How to make a portfolio feel engineered" [level=3] [ref=e214]
+              - paragraph [ref=e215]: Notes on using structure, spacing, and quiet texture to get a more technical editorial result.
+              - button "Read article" [ref=e216]
+        - generic [ref=e218]:
+          - heading "Experience" [level=2] [ref=e220]
+          - generic [ref=e221]:
+            - article [ref=e222]:
+              - paragraph [ref=e223]: 2025 — Now
+              - generic [ref=e224]:
+                - heading "Building PORTO" [level=3] [ref=e225]
+                - paragraph [ref=e226]: Designing and implementing a documentation-driven frontend foundation for a portfolio and internal skill system.
+            - article [ref=e227]:
+              - paragraph [ref=e228]: 2023 — 2025
+              - generic [ref=e229]:
+                - heading "Frontend Product Work" [level=3] [ref=e230]
+                - paragraph [ref=e231]: Worked on modular UI systems, landing surfaces, and admin-facing interfaces with a strong focus on maintainability.
+        - generic [ref=e233]:
+          - generic [ref=e234]:
+            - heading "Projects" [level=2] [ref=e235]
+            - button "See All" [ref=e236]
+          - generic [ref=e237]:
+            - article [ref=e238]:
+              - paragraph [ref=e239]: "01"
+              - generic [ref=e240]:
+                - heading "Editorial Homepage System" [level=3] [ref=e241]
+                - paragraph [ref=e242]: Reframed the homepage from generic marketing sections into a compact profile sheet inspired by chanhdai.com.
+            - article [ref=e243]:
+              - paragraph [ref=e244]: "02"
+              - generic [ref=e245]:
+                - heading "Monolith with strict UI boundaries" [level=3] [ref=e246]
+                - paragraph [ref=e247]: Kept route composition in app/, domain work in modules/, and reusable UI inside shared/components.
+            - article [ref=e248]:
+              - paragraph [ref=e249]: "03"
+              - generic [ref=e250]:
+                - heading "Playwright-driven visual QA" [level=3] [ref=e251]
+                - paragraph [ref=e252]: Used before/after snapshots as a working loop instead of hoping the browser agrees later. Browser dulu, ego belakangan 😄
+        - generic [ref=e254]:
+          - generic [ref=e255]:
+            - heading "Honors & Awards" [level=2] [ref=e256]
+            - button "Full List" [ref=e257]
+          - generic [ref=e258]:
+            - article [ref=e259]:
+              - paragraph [ref=e260]: "2026"
+              - generic [ref=e261]:
+                - heading "Internal Direction Lock" [level=3] [ref=e262]
+                - paragraph [ref=e263]: PORTO docs, frontend structure, and visual implementation finally speak the same language.
+            - article [ref=e264]:
+              - paragraph [ref=e265]: "2025"
+              - generic [ref=e266]:
+                - heading "Design System Discipline" [level=3] [ref=e267]
+                - paragraph [ref=e268]: Established a practical rule set for grid, borders, and restrained motion before scaling content.
+        - generic [ref=e270]:
+          - generic [ref=e271]:
+            - heading "Certifications" [level=2] [ref=e272]
+            - button "Verify" [ref=e273]
+          - generic [ref=e274]:
+            - article [ref=e275]:
+              - paragraph [ref=e276]: UI
+              - generic [ref=e277]:
+                - heading "Accessible interaction baseline" [level=3] [ref=e278]
+                - paragraph [ref=e279]: Keyboard focus, readable density, and structured semantics remain part of the build bar.
+            - article [ref=e280]:
+              - paragraph [ref=e281]: DX
+              - generic [ref=e282]:
+                - heading "Modular monolith setup" [level=3] [ref=e283]
+                - paragraph [ref=e284]: Local skills, docs, and frontend code are organized to support iteration without chaos.
+        - generic [ref=e286]:
+          - generic [ref=e287]:
+            - heading "Bookmarks" [level=2] [ref=e288]
+            - button "Read More" [ref=e289]
+          - generic [ref=e290]:
+            - article [ref=e291]:
+              - paragraph [ref=e292]: "01"
+              - generic [ref=e293]:
+                - heading "Layout rhythm over visual noise" [level=3] [ref=e294]
+                - paragraph [ref=e295]: The strongest mood often comes from spacing, alignment, and borders, not from adding more stuff.
+            - article [ref=e296]:
+              - paragraph [ref=e297]: "02"
+              - generic [ref=e298]:
+                - heading "Reference with adaptation" [level=3] [ref=e299]
+                - paragraph [ref=e300]: Copying the concept works better than copying every pixel; otherwise it becomes cosplay with CSS.
+    - contentinfo [ref=e301]:
+      - generic [ref=e302]:
+        - paragraph [ref=e303]: Inspired by technical editorial interfaces, adapted for PORTO.
+        - paragraph [ref=e304]: Built by Adi. Source and experiments live in the same monolith because apparently I enjoy neat little boxes.
+        - generic [ref=e305]:
+          - link "llms.txt" [ref=e306] [cursor=pointer]:
+            - /url: https://porto.dev/llms.txt
+          - link "GitHub" [ref=e307] [cursor=pointer]:
+            - /url: https://github.com
+          - link "LinkedIn" [ref=e308] [cursor=pointer]:
+            - /url: https://linkedin.com
+          - link "Email" [ref=e309] [cursor=pointer]:
+            - /url: mailto:hello@porto.dev
+  - button "Open Next.js Dev Tools" [ref=e315] [cursor=pointer]:
+    - img [ref=e316]
