@@ -166,10 +166,12 @@ a {
 .profile-section::after {
   content: "";
   position: absolute;
-  left: -100vw;
-  width: 200vw;
+  left: 50%;
+  width: 100vw;
+  width: 100dvw;
   height: 1px;
   background: var(--line);
+  transform: translateX(-50%);
   pointer-events: none;
 }
 
@@ -230,8 +232,9 @@ a {
   position: absolute;
   top: 0;
   bottom: 0;
-  left: -100vw;
-  width: 200vw;
+  left: 50%;
+  width: 100vw;
+  width: 100dvw;
   background-image: repeating-linear-gradient(
     315deg,
     color-mix(in srgb, var(--foreground) 8%, transparent) 0,
@@ -240,6 +243,7 @@ a {
     transparent 50%
   );
   background-size: 10px 10px;
+  transform: translateX(-50%);
   pointer-events: none;
 }
 
