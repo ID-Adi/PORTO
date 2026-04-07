@@ -7,6 +7,8 @@
 /* ── Light palette (default) ── */
 :root {
   --page-gutter: 13.5px;
+  --frame-width: min(768px, calc(100vw - (var(--page-gutter) * 2)));
+  --grid-row: 56px;
   --background: oklch(0.985 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
@@ -92,6 +94,7 @@
 html {
   scroll-behavior: smooth;
   scrollbar-width: none; /* Firefox */
+  overflow-x: clip;
 }
 
 html::-webkit-scrollbar {
@@ -101,9 +104,50 @@ html::-webkit-scrollbar {
 body {
   margin: 0;
   min-height: 100vh;
+  overflow-x: clip;
   background: var(--background);
   font-family: var(--font-geist-sans), sans-serif;
   background-image: radial-gradient(circle at center, rgba(24, 24, 27, 0.02), transparent 60%);
+}
+
+.site-grid-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.site-grid-overlay::before,
+.site-grid-overlay::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--line);
+}
+
+.site-grid-overlay::before {
+  left: calc(50% - (var(--frame-width) / 2));
+}
+
+.site-grid-overlay::after {
+  right: calc(50% - (var(--frame-width) / 2));
+}
+
+.content-rails {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.content-rails__line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--line);
 }
 
 a {
@@ -166,12 +210,10 @@ a {
 .profile-section::after {
   content: "";
   position: absolute;
-  left: 50%;
-  width: 100vw;
-  width: 100dvw;
+  left: 0;
+  right: 0;
   height: 1px;
   background: var(--line);
-  transform: translateX(-50%);
   pointer-events: none;
 }
 
@@ -207,6 +249,11 @@ a {
   gap: 1rem;
   padding: 0.875rem 1rem;
   border-bottom: 1px solid var(--line);
+}
+
+.profile-bleed-top,
+.profile-bleed-bottom {
+  position: relative;
 }
 
 .profile-divider,
@@ -293,6 +340,7 @@ a {
 }
 
 .profile-row {
+  position: relative;
   display: grid;
   grid-template-columns: 120px 1fr;
   gap: 1rem;

@@ -30,7 +30,7 @@ type ListSectionProps = {
 function FrameSection({ id, title, children, actionLabel }: SectionProps) {
   return (
     <section id={id} className="profile-section">
-      <div className="profile-section-heading">
+      <div className="profile-section-heading profile-bleed-bottom">
         <h2 className="text-[15px] font-medium tracking-[-0.03em]">{title}</h2>
         {actionLabel ? (
           <button className="profile-pill" type="button">
@@ -50,7 +50,7 @@ function ListSection({ id, title, items, actionLabel }: ListSectionProps) {
         {items.map((item, index) => (
           <article
             key={`${title}-${item.title}-${index}`}
-            className={`profile-row ${index > 0 ? "border-t border-(--line)" : ""}`}
+            className={`profile-row ${index > 0 ? "border-t border-(--line) profile-bleed-top" : ""}`}
           >
             <p className="profile-kicker">{item.period}</p>
             <div>
@@ -100,6 +100,11 @@ const SocialBrands: Record<string, { icon: React.ElementType; bg: string; fg: st
 
 
 export function ProfileSheet({ content }: ProfileSheetProps) {
+  const socialRows = Array.from(
+    { length: Math.ceil(content.socials.length / 3) },
+    (_, index) => content.socials.slice(index * 3, index * 3 + 3)
+  );
+
   return (
     <div className="pb-20">
       <section className="profile-hero-mark">
@@ -160,9 +165,12 @@ export function ProfileSheet({ content }: ProfileSheetProps) {
           </div>
         </div>
 
-        <div className="border-t border-(--line) py-3 sm:py-4">
+        <div className="border-t border-(--line) profile-bleed-top py-3 sm:py-4">
           {content.overview.map((row, index) => (
-            <div key={index}>
+            <div
+              key={index}
+              className={row.right && index > 0 ? "border-t border-(--line) profile-bleed-top" : ""}
+            >
               {row.right ? (
                 /* Paired row: 2-col on desktop, stacked on mobile */
                 <>
@@ -187,29 +195,38 @@ export function ProfileSheet({ content }: ProfileSheetProps) {
       <div className="profile-divider" />
 
       <FrameSection id="socials" title="Social Links">
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-px bg-(--line)">
-          {content.socials.map((item) => {
-            const brandConfig = SocialBrands[item.label];
-            const BrandIcon = brandConfig?.icon;
-            return (
-              <a
-                key={item.label}
-                href={item.href}
-                target="_blank"
-                rel="noreferrer"
-                className="group flex items-center gap-3 bg-background px-3 py-3 sm:px-4 sm:py-3.5 transition-colors hover:bg-black/[0.02] dark:hover:bg-white/[0.02]"
-              >
-                <div
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
-                  style={{ backgroundColor: brandConfig?.bg ?? "#18181b" }}
-                >
-                  {BrandIcon && <BrandIcon className="h-4.5 w-4.5" style={{ color: brandConfig?.fg ?? "#fff" }} />}
-                </div>
-                <span className="flex-1 text-sm font-medium tracking-[-0.02em]">{item.label}</span>
-                <ArrowUpRight className="h-3.5 w-3.5 text-(--muted-foreground) transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
-              </a>
-            );
-          })}
+        <div>
+          {socialRows.map((row, rowIndex) => (
+            <div
+              key={`social-row-${rowIndex}`}
+              className={rowIndex > 0 ? "border-t border-(--line) profile-bleed-top" : ""}
+            >
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-px bg-(--line)">
+                {row.map((item) => {
+                  const brandConfig = SocialBrands[item.label];
+                  const BrandIcon = brandConfig?.icon;
+                  return (
+                    <a
+                      key={item.label}
+                      href={item.href}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="group flex items-center gap-3 bg-background px-3 py-3 sm:px-4 sm:py-3.5 transition-colors hover:bg-black/[0.02] dark:hover:bg-white/[0.02]"
+                    >
+                      <div
+                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
+                        style={{ backgroundColor: brandConfig?.bg ?? "#18181b" }}
+                      >
+                        {BrandIcon && <BrandIcon className="h-4.5 w-4.5" style={{ color: brandConfig?.fg ?? "#fff" }} />}
+                      </div>
+                      <span className="flex-1 text-sm font-medium tracking-[-0.02em]">{item.label}</span>
+                      <ArrowUpRight className="h-3.5 w-3.5 text-(--muted-foreground) transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
+                    </a>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </div>
       </FrameSection>
 
