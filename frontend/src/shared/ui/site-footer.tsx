@@ -7,12 +7,12 @@ const footerLinks = [
 
 export function SiteFooter() {
   return (
-    <footer className="border-t border-(--line)">
-      <div className="page-frame border-x border-(--line) px-4 py-6 pb-20">
-        <p className="text-[12px] text-(--muted-foreground)">
+    <footer className="max-w-screen overflow-x-hidden px-2 pb-24 pt-2">
+      <div className="screen-line-top page-frame border-x border-(--line) px-4 py-6">
+        <p className="font-mono text-[12px] tracking-tight text-(--muted-foreground)">
           Inspired by technical editorial interfaces, adapted for PORTO.
         </p>
-        <p className="mt-2 text-[12px] text-(--muted-foreground)">
+        <p className="mt-2 max-w-xl text-[12px] leading-6 text-(--muted-foreground)">
           Built by Adi. Source and experiments live in the same monolith because apparently I enjoy neat little boxes.
         </p>
         <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-[12px]">
@@ -22,7 +22,7 @@ export function SiteFooter() {
               href={link.href}
               target="_blank"
               rel="noreferrer"
-              className="text-(--muted-foreground) transition-colors hover:text-(--foreground)"
+              className="font-mono text-(--muted-foreground) transition-colors hover:text-(--foreground)"
             >
               {link.label}
             </a>

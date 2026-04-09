@@ -6,7 +6,13 @@ export const homePageContent: ProfilePageContent = {
   title: "Design Engineer building PORTO with editorial discipline and product-level polish.",
   status: "Open for selected builds",
   metaLine: "text-3xl text-zinc-950 dark:text-zinc-50 font-medium",
+  pronunciationText: "Prasetya Adi Wijaya",
   avatarUrl: "/avatar.png",
+  flipSentences: [
+    "Building PORTO with editorial discipline.",
+    "Shipping profile surfaces with product-level polish.",
+    "Thin borders, quiet texture, strong hierarchy.",
+  ],
   overview: [
     { left: { icon: "code", value: "Design Engineer @PORTO" } },
     { left: { icon: "lightbulb", value: "Founder @PORTO" } },

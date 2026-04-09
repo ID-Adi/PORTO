@@ -2,38 +2,32 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
-@custom-variant dark (&:is(.dark *));
+@custom-variant dark (&:where(.dark, .dark *));
 
-/* ── Light palette (default) ── */
 :root {
-  --page-gutter: 13.5px;
+  --page-gutter: 8px;
+  --page-width: 768px;
   --background: oklch(0.985 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
+  --primary: oklch(0.145 0 0);
   --primary-foreground: oklch(0.985 0 0);
   --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
+  --secondary-foreground: oklch(0.145 0 0);
   --muted: oklch(0.97 0 0);
   --muted-foreground: oklch(0.556 0 0);
   --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
+  --accent-foreground: oklch(0.145 0 0);
   --destructive: oklch(0.577 0.245 27.325);
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
-  --line: rgba(24, 24, 27, 0.12);
-  --panel: rgba(255, 255, 255, 0.66);
-  --panel-strong: rgba(255, 255, 255, 0.88);
+  --line: color-mix(in oklab, var(--border) 70%, var(--background));
+  --surface: oklch(1 0 0);
   --shadow: 0 20px 60px rgba(24, 24, 27, 0.06);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
   --radius: 0.25rem;
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
@@ -43,12 +37,18 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
-
-  /* texture colors for light mode */
-  --texture-fg: rgba(24, 24, 27, 0.06);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --texture-fg: rgba(24, 24, 27, 0.05);
+  --selection: oklch(0.145 0 0);
+  --selection-foreground: oklch(0.985 0 0);
+  --font-sans: "Geist", "Inter", "Segoe UI", sans-serif;
+  --font-mono: "Geist Mono", "SFMono-Regular", "SF Mono", "Menlo", monospace;
 }
 
-/* ── Dark palette (override) ── */
 .dark {
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
@@ -56,8 +56,8 @@
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.205 0 0);
   --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
+  --primary: oklch(0.985 0 0);
+  --primary-foreground: oklch(0.145 0 0);
   --secondary: oklch(0.269 0 0);
   --secondary-foreground: oklch(0.985 0 0);
   --muted: oklch(0.269 0 0);
@@ -69,8 +69,7 @@
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.556 0 0);
   --line: rgba(255, 255, 255, 0.1);
-  --panel: rgba(255, 255, 255, 0.03);
-  --panel-strong: rgba(255, 255, 255, 0.04);
+  --surface: oklch(0.205 0 0);
   --shadow: none;
   --sidebar: oklch(0.205 0 0);
   --sidebar-foreground: oklch(0.985 0 0);
@@ -80,9 +79,9 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
-
-  /* texture colors for dark mode */
   --texture-fg: rgba(255, 255, 255, 0.04);
+  --selection: oklch(0.985 0 0);
+  --selection-foreground: oklch(0.145 0 0);
 }
 
 * {
@@ -91,19 +90,18 @@
 
 html {
   scroll-behavior: smooth;
-  scrollbar-width: none; /* Firefox */
-}
-
-html::-webkit-scrollbar {
-  display: none; /* Chrome, Safari, Edge */
 }
 
 body {
   margin: 0;
   min-height: 100vh;
   background: var(--background);
-  font-family: var(--font-geist-sans), sans-serif;
-  background-image: radial-gradient(circle at center, rgba(24, 24, 27, 0.02), transparent 60%);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-synthesis-weight: none;
+  text-rendering: optimizeLegibility;
 }
 
 a {
@@ -112,14 +110,66 @@ a {
 }
 
 ::selection {
-  background: rgba(128, 128, 128, 0.25);
+  background: var(--selection);
+  color: var(--selection-foreground);
 }
 
-/* ── Surface textures (use CSS vars for theme-aware colors) ── */
+::-webkit-scrollbar {
+  width: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 999px;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+.page-frame {
+  width: min(calc(100% - (var(--page-gutter) * 2)), var(--page-width));
+  margin-inline: auto;
+}
+
+.screen-line-top,
+.screen-line-bottom,
+.profile-hero-mark,
+.profile-panel,
+.profile-divider,
+.profile-mini-divider {
+  position: relative;
+}
+
+.screen-line-top::before,
+.screen-line-bottom::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  width: 100vw;
+  height: 1px;
+  background: var(--line);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.screen-line-top::before {
+  top: 0;
+}
+
+.screen-line-bottom::after {
+  bottom: 0;
+}
+
 .surface-dots {
-  background-image: radial-gradient(var(--texture-fg) 1.2px, transparent 1.2px);
+  background-image: radial-gradient(var(--texture-fg) 1px, transparent 0);
+  background-size: 10px 10px;
   background-position: center;
-  background-size: 12px 12px;
 }
 
 .surface-hatch {
@@ -138,65 +188,29 @@ a {
     transparent 0,
     transparent 50%
   );
-  background-size: 16px 16px;
-  opacity: 0.8;
+  background-size: 10px 10px;
   pointer-events: none;
+  opacity: 0.9;
 }
 
-.page-frame {
-  width: calc(100% - (var(--page-gutter) * 2));
-  max-width: 768px;
-  margin-inline: auto;
-}
-
-.profile-hero-mark {
-  position: relative;
-  width: calc(100% - (var(--page-gutter) * 2));
-  max-width: 768px;
+.profile-hero-mark,
+.profile-panel,
+.profile-divider,
+.profile-mini-divider {
+  width: min(calc(100% - (var(--page-gutter) * 2)), var(--page-width));
   margin-inline: auto;
   border-left: 1px solid var(--line);
   border-right: 1px solid var(--line);
+}
+
+.profile-hero-mark {
+  background-color: var(--background);
   background-image: radial-gradient(var(--texture-fg) 1px, transparent 0);
   background-size: 10px 10px;
   background-position: center;
 }
 
-.profile-hero-mark::after,
-.profile-section::before,
-.profile-section::after {
-  content: "";
-  position: absolute;
-  left: 50%;
-  width: 100vw;
-  width: 100dvw;
-  height: 1px;
-  background: var(--line);
-  transform: translateX(-50%);
-  pointer-events: none;
-}
-
-.profile-section::before {
-  top: -1px;
-}
-
-.profile-hero-mark::after,
-.profile-section::after {
-  bottom: -1px;
-}
-
-/* Prevent double lines on left/right wings when sections are directly adjacent */
-.profile-hero-mark:has(+ .profile-section)::after,
-.profile-section:has(+ .profile-section)::after {
-  display: none;
-}
-
-.profile-section {
-  position: relative;
-  width: calc(100% - (var(--page-gutter) * 2));
-  max-width: 768px;
-  margin-inline: auto;
-  border-left: 1px solid var(--line);
-  border-right: 1px solid var(--line);
+.profile-panel {
   background: var(--background);
 }
 
@@ -205,26 +219,29 @@ a {
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  padding: 0.875rem 1rem;
+  min-height: 4.5rem;
+  padding: 0 1rem;
   border-bottom: 1px solid var(--line);
 }
 
-.profile-divider,
-.profile-mini-divider {
-  position: relative;
-  width: calc(100% - (var(--page-gutter) * 2));
-  max-width: 768px;
-  margin-inline: auto;
-  border-left: 1px solid var(--line);
-  border-right: 1px solid var(--line);
+.profile-panel-title {
+  font-size: clamp(1.75rem, 4vw, 2rem);
+  font-weight: 600;
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+
+.profile-panel-sup {
+  top: -0.75em;
+  margin-left: 0.35rem;
+  font-size: 0.95rem;
+  font-weight: 500;
+  letter-spacing: normal;
+  color: var(--muted-foreground);
 }
 
 .profile-divider {
   height: 2rem;
-}
-
-.profile-mini-divider {
-  height: 0.5rem;
 }
 
 .profile-divider::before {
@@ -234,7 +251,11 @@ a {
   bottom: 0;
   left: 50%;
   width: 100vw;
-  width: 100dvw;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.profile-divider::before {
   background-image: repeating-linear-gradient(
     315deg,
     color-mix(in srgb, var(--foreground) 8%, transparent) 0,
@@ -243,31 +264,28 @@ a {
     transparent 50%
   );
   background-size: 10px 10px;
-  transform: translateX(-50%);
-  pointer-events: none;
+}
+
+.profile-mini-divider {
+  height: 0.5rem;
 }
 
 .profile-kicker {
-  font-family: var(--font-geist-mono), monospace;
+  font-family: var(--font-mono);
   font-size: 10px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--muted-foreground);
 }
 
-.profile-inline-note {
-  font-size: 11px;
-  color: var(--muted-foreground);
-}
-
 .profile-pill {
+  height: 1.9rem;
+  padding-inline: 0.8rem;
   border: 1px solid var(--line);
-  background: transparent;
   border-radius: 999px;
-  height: 1.75rem;
-  padding-inline: 0.7rem;
+  background: transparent;
+  font-family: var(--font-mono);
   font-size: 11px;
-  font-family: var(--font-geist-mono), monospace;
   color: var(--foreground);
 }
 
@@ -276,18 +294,19 @@ a {
   align-items: center;
   gap: 0.4rem;
   height: 1.9rem;
-  padding-inline: 0.75rem;
+  padding-inline: 0.8rem;
   border: 1px solid var(--line);
   border-radius: 999px;
-  font-size: 12px;
   background: color-mix(in srgb, var(--background) 97%, black 3%);
+  font-family: var(--font-mono);
+  font-size: 12px;
 }
 
 .profile-link {
   border: 0;
   background: transparent;
   padding: 0;
-  font-family: var(--font-geist-mono), monospace;
+  font-family: var(--font-mono);
   font-size: 11px;
   color: var(--foreground);
 }
@@ -296,44 +315,13 @@ a {
   display: grid;
   grid-template-columns: 120px 1fr;
   gap: 1rem;
-  padding: 0.875rem 1rem;
-}
-
-/* ── Section frame — border-x on every section ── */
-.section-frame {
-  border-left: 1px solid var(--line);
-  border-right: 1px solid var(--line);
-}
-
-/* ── Panel glass ── */
-.panel {
-  border: 1px solid var(--border);
-  background: var(--panel);
-  box-shadow: var(--shadow);
-  backdrop-filter: blur(10px);
-}
-
-/* ── Eyebrow label — monospace uppercase ── */
-.eyebrow {
-  font-family: var(--font-geist-mono), monospace;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-}
-
-/* ── Global structural lines moved to SiteShell React component ── */
-
-/* ── Horizontal line top/bottom ── */
-.screen-line-top {
-  border-top: 1px solid var(--line);
-}
-
-.screen-line-bottom {
-  border-bottom: 1px solid var(--line);
+  padding: 0.95rem 1rem;
 }
 
 @theme inline {
   --font-heading: var(--font-sans);
   --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -378,39 +366,37 @@ a {
   * {
     @apply border-border outline-ring/50;
   }
-  body {
-    @apply bg-background text-foreground;
-  }
+
   html {
     @apply font-sans;
+  }
+
+  body {
+    @apply bg-background text-foreground;
   }
 }
 
 @media (max-width: 640px) {
-  :root {
-    --page-gutter: 13.5px;
+  .profile-section-heading {
+    min-height: 3.6rem;
+    padding-inline: 0.85rem;
   }
 
-  .profile-section-heading {
-    padding: 0.7rem 0.85rem;
+  .profile-panel-title {
+    font-size: 1.35rem;
   }
 
   .profile-row {
     grid-template-columns: 92px 1fr;
     gap: 0.6rem;
-    padding: 0.75rem 0.85rem;
+    padding: 0.8rem 0.85rem;
   }
 
-  .profile-pill {
-    height: 1.55rem;
-    padding-inline: 0.55rem;
-    font-size: 10px;
-  }
-
+  .profile-pill,
   .profile-chip {
-    height: 1.7rem;
-    padding-inline: 0.6rem;
-    font-size: 11px;
+    height: 1.65rem;
+    padding-inline: 0.65rem;
+    font-size: 10px;
   }
 
   .profile-divider {
@@ -419,19 +405,5 @@ a {
 
   .profile-mini-divider {
     height: 0.4rem;
-  }
-
-  .profile-section-heading h2 {
-    font-size: 13px;
-  }
-}
-
-@media (max-width: 900px) {
-  .profile-section-heading {
-    padding: 0.8rem 0.95rem;
-  }
-
-  .profile-row {
-    padding: 0.8rem 0.95rem;
   }
 }

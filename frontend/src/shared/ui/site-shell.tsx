@@ -8,9 +8,9 @@ type SiteShellProps = {
 
 export function SiteShell({ children }: SiteShellProps) {
   return (
-    <div className="relative w-full">
+    <div className="group/site relative w-full">
       <SiteHeader />
-      <main>{children}</main>
+      <main className="max-w-screen overflow-x-hidden px-2">{children}</main>
       <SiteFooter />
       <FloatingNav />
     </div>

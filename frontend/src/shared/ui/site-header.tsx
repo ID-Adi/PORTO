@@ -1,23 +1,25 @@
 "use client";
 
+import Link from "next/link";
 import { Moon, Search, Sun } from "lucide-react";
 import { useEffect, useReducer } from "react";
-import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
 import { Icons } from "@/shared/ui/icons";
 
 const navItems = [
   { label: "Components", href: "#components" },
-  { label: "Blocks", href: "#projects" },
-  { label: "Blog", href: "#writing" },
-  { label: "Sponsors", href: "#partners" },
+  { label: "Projects", href: "#projects" },
+  { label: "Writing", href: "#writing" },
+  { label: "Partners", href: "#partners" },
 ];
 
 function getInitialTheme(): boolean {
   if (typeof window === "undefined") return false;
+
   const stored = window.localStorage.getItem("porto-theme");
   if (stored) return stored === "dark";
+
   return window.matchMedia("(prefers-color-scheme: dark)").matches;
 }
 
@@ -28,87 +30,105 @@ export function SiteHeader() {
   );
 
   useEffect(() => {
-    const theme = getInitialTheme();
-    document.documentElement.classList.toggle("dark", theme);
-    dispatch(theme);
+    dispatch(getInitialTheme());
   }, []);
 
   function toggleTheme() {
     const next = !isDark;
+
     document.documentElement.classList.toggle("dark", next);
     window.localStorage.setItem("porto-theme", next ? "dark" : "light");
     dispatch(next);
   }
 
   return (
-    <header className="sticky top-0 z-50 border-b border-(--line) bg-(--background)">
-      <div className="page-frame flex h-14 items-center justify-between border-x border-(--line)">
-        {/* Left Section */}
-        <div className="flex h-full items-center">
-          <Link href="/" aria-label="Home" className="flex h-full items-center border-r border-(--line) px-4 transition-colors hover:bg-black/[0.02] sm:px-5">
-            <span className="font-mono text-[12px] font-bold tracking-widest text-(--foreground)">
-              PORTO<span className="text-(--muted-foreground)">/&gt;</span>
-            </span>
+    <>
+      <header className="sticky top-0 z-50 max-w-screen overflow-x-hidden bg-background px-2 pt-2">
+        <div className="screen-line-top screen-line-bottom page-frame relative flex h-12 items-center justify-between gap-2 border-x border-(--line) px-2 sm:gap-4">
+          <Link
+            href="/"
+            aria-label="Home"
+            className="flex h-8 items-center border-r border-(--line) pr-3 font-mono text-[12px] font-bold tracking-[0.24em] transition-opacity hover:opacity-80"
+          >
+            PORTO
+            <span className="ml-1 text-(--muted-foreground)">/&gt;</span>
           </Link>
 
-          <nav className="hidden h-full items-center gap-6 px-6 md:flex">
+          <div className="hidden min-w-0 flex-1 items-center justify-center gap-5 px-2 md:flex">
             {navItems.map((item) => (
               <a
                 key={item.href}
                 href={item.href}
-                className="flex h-full items-center font-mono text-sm text-[var(--muted-foreground)] transition-colors hover:text-[var(--foreground)]"
+                className="font-mono text-[12px] tracking-[0.14em] text-(--muted-foreground) uppercase transition-colors hover:text-(--foreground)"
               >
                 {item.label}
               </a>
             ))}
-          </nav>
-        </div>
-
-        {/* Right Section */}
-        <div className="flex h-full items-center border-l border-(--line)">
-          <div className="hidden h-full items-center border-r border-(--line) px-2 md:flex">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-9 items-center gap-2 rounded-md px-2 font-mono text-[13px] font-normal text-[var(--muted-foreground)] hover:bg-transparent hover:text-[var(--foreground)]"
-              aria-label="Search"
-            >
-              <Search className="h-3.5 w-3.5" />
-              <span className="sr-only">Search...</span>
-              <div className="flex gap-0.5">
-                <span className="rounded-[4px] border border-(--line) px-1 text-[9px] leading-4 tracking-tighter">⌘</span>
-                <span className="rounded-[4px] border border-(--line) px-1 text-[9px] leading-4 tracking-tighter">K</span>
-              </div>
-            </Button>
           </div>
 
-          <div className="flex h-full items-center border-r border-(--line) px-2">
+          <div className="ml-auto flex items-center">
+            <div className="hidden items-center md:flex">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 gap-2 border-none px-2 font-mono text-[12px] font-medium text-(--muted-foreground) hover:bg-transparent hover:text-(--foreground)"
+                aria-label="Search"
+              >
+                <Search className="size-3.5" />
+                Search
+                <span className="inline-flex gap-0.5">
+                  <span className="rounded-[4px] border border-(--line) px-1 leading-4">
+                    ⌘
+                  </span>
+                  <span className="rounded-[4px] border border-(--line) px-1 leading-4">
+                    K
+                  </span>
+                </span>
+              </Button>
+            </div>
+
+            <div className="mx-2 hidden h-4 w-px bg-(--line) md:block" />
+
             <Button
               variant="ghost"
               size="sm"
-              className="h-9 rounded-md px-2 font-mono text-[13px] font-normal text-[var(--foreground)] hover:bg-transparent"
+              className="h-8 gap-2 border-none px-2 font-mono text-[12px] font-medium hover:bg-transparent"
               asChild
             >
-              <a href="https://github.com" target="_blank" rel="noopener noreferrer" aria-label="GitHub">
-                <Icons.gitHub className="h-4 w-4" />
-                <span className="hidden font-mono text-[13px] md:inline-block">1.6k</span>
+              <a
+                href="https://github.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="GitHub"
+              >
+                <Icons.gitHub className="size-4" />
+                <span className="hidden md:inline-block">1.6k</span>
               </a>
             </Button>
-          </div>
 
-          <div className="flex h-full items-center px-1 sm:px-2">
+            <div className="mx-2 h-4 w-px bg-(--line)" />
+
             <Button
               variant="ghost"
-              size="icon"
-              className="h-9 w-9 rounded-md hover:bg-transparent"
+              size="icon-sm"
+              className="border-none hover:bg-transparent"
               onClick={toggleTheme}
               aria-label="Toggle theme"
             >
-              {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+              {isDark ? (
+                <Sun className="size-4" />
+              ) : (
+                <Moon className="size-4" />
+              )}
             </Button>
           </div>
+
+          <div className="absolute top-[-3.5px] left-[-4.5px] size-2 border border-(--line) bg-background" />
+          <div className="absolute top-[-3.5px] right-[-4.5px] size-2 border border-(--line) bg-background" />
         </div>
-      </div>
-    </header>
+      </header>
+
+      <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 h-20 bg-linear-to-t from-background to-transparent sm:hidden" />
+    </>
   );
 }

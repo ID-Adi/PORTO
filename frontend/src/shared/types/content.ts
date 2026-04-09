@@ -88,7 +88,9 @@ export type ProfilePageContent = {
   title: string;
   status: string;
   metaLine: string;
+  pronunciationText?: string;
   avatarUrl: string;
+  flipSentences: string[];
   overview: OverviewRow[];
   socials: SocialLinkItem[];
   about: string[];
