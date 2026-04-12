@@ -11,41 +11,31 @@ import {
   Sparkles,
   User,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
 
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import {
+  Panel,
+  PanelContent,
+  PanelDescription,
+  PanelHeader,
+  PanelTitle,
+  PanelTitleSup,
+} from "@/shared/ui/panel";
 import { Icons } from "@/shared/ui/icons";
 import type { ProfilePageContent } from "@/shared/types/content";
 
+import {
+  OverviewItem,
+  OverviewItemContent,
+  OverviewItemIcon,
+  OverviewItemLink,
+} from "../components/overview-item";
 import { ProfileIntro } from "../components/profile-intro";
+import { SocialLogoTile } from "../components/social-logo-tile";
 
 type ProfileSheetProps = {
   content: ProfilePageContent;
-};
-
-type SectionProps = {
-  id?: string;
-  title: string;
-  count?: number;
-  children: React.ReactNode;
-  actionLabel?: string;
-};
-
-type RailSectionProps = {
-  id?: string;
-  title: string;
-  children: React.ReactNode;
-  className?: string;
-};
-
-type ListSectionProps = {
-  id?: string;
-  title: string;
-  items: {
-    period: string;
-    title: string;
-    detail: string;
-  }[];
-  actionLabel?: string;
 };
 
 const overviewIconMap: Record<string, React.ElementType> = {
@@ -61,95 +51,21 @@ const overviewIconMap: Record<string, React.ElementType> = {
 
 const socialBrands: Record<
   string,
-  { icon: React.ElementType; bg: string; fg: string }
+  { src: string }
 > = {
-  X: { icon: Icons.x, bg: "#18181b", fg: "#ffffff" },
-  GitHub: { icon: Icons.gitHub, bg: "#24292f", fg: "#ffffff" },
-  LinkedIn: { icon: Icons.linkedIn, bg: "#0A66C2", fg: "#ffffff" },
-  "daily.dev": { icon: Icons.dailyDev, bg: "#6E5494", fg: "#ffffff" },
-  Discord: { icon: Icons.discord, bg: "#5865F2", fg: "#ffffff" },
-  YouTube: { icon: Icons.youtube, bg: "#FF0000", fg: "#ffffff" },
+  X: { src: "/social-links/x.svg" },
+  GitHub: { src: "/social-links/github.svg" },
+  LinkedIn: { src: "/social-links/linkedin.svg" },
+  "daily.dev": { src: "/social-links/dailydev.svg" },
+  Discord: { src: "/social-links/discord.svg" },
+  YouTube: { src: "/social-links/youtube.svg" },
 };
-
-function SectionAction({ actionLabel }: { actionLabel?: string }) {
-  if (!actionLabel) {
-    return null;
-  }
-
-  return (
-    <button className="profile-pill" type="button">
-      {actionLabel}
-    </button>
-  );
-}
-
-function RailSection({
-  id,
-  title,
-  children,
-  className,
-}: RailSectionProps) {
-  return (
-    <section id={id} className={cn("profile-panel", className)}>
-      <h2 className="sr-only">{title}</h2>
-      {children}
-    </section>
-  );
-}
-
-function FrameSection({
-  id,
-  title,
-  count,
-  children,
-  actionLabel,
-}: SectionProps) {
-  return (
-    <section id={id} className="profile-panel">
-      <header className="profile-section-heading">
-        <h2 className="profile-panel-title">
-          {title}
-          {typeof count === "number" ? (
-            <sup className="profile-panel-sup">({count})</sup>
-          ) : null}
-        </h2>
-        <SectionAction actionLabel={actionLabel} />
-      </header>
-      {children}
-    </section>
-  );
-}
-
-function ListSection({ id, title, items, actionLabel }: ListSectionProps) {
-  return (
-    <FrameSection id={id} title={title} actionLabel={actionLabel}>
-      <div>
-        {items.map((item, index) => (
-          <article
-            key={`${title}-${item.title}-${index}`}
-            className={`profile-row ${index > 0 ? "border-t border-(--line)" : ""}`}
-          >
-            <p className="profile-kicker">{item.period}</p>
-            <div>
-              <h3 className="text-sm font-medium tracking-[-0.03em]">
-                {item.title}
-              </h3>
-              <p className="mt-1 text-[12px] leading-6 text-(--muted-foreground)">
-                {item.detail}
-              </p>
-            </div>
-          </article>
-        ))}
-      </div>
-    </FrameSection>
-  );
-}
 
 function ProfileCover({ monogram }: { monogram: string }) {
   return (
-    <section className="profile-hero-mark screen-line-bottom">
-      <div className="flex aspect-[2.2/1] w-full items-center justify-center sm:aspect-[3/1]">
-        <div className="flex select-none items-center justify-center border border-black bg-black px-5 py-3 font-mono text-5xl font-black tracking-[0.18em] text-white sm:px-6 sm:py-4 sm:text-7xl">
+    <section className="profile-hero-mark screen-line-top screen-line-bottom before:-top-px after:-bottom-px">
+      <div className="flex aspect-[2/1] w-full items-center justify-center text-black select-none dark:text-white sm:aspect-[3/1]">
+        <div className="inline-flex h-14 w-28 items-center justify-center pl-[0.12em] font-mono text-[3rem] leading-none font-black tracking-[0.12em] sm:h-16 sm:w-32 sm:text-[3.35rem]">
           {monogram}
         </div>
       </div>
@@ -165,6 +81,69 @@ function MiniSeparator() {
   return <div className="profile-mini-divider" aria-hidden />;
 }
 
+function SectionAction({ actionLabel }: { actionLabel?: string }) {
+  if (!actionLabel) {
+    return null;
+  }
+
+  return (
+    <Button className="profile-pill border-none" variant="ghost" size="sm" type="button">
+      {actionLabel}
+    </Button>
+  );
+}
+
+function RailSection({
+  id,
+  title,
+  children,
+  className,
+}: {
+  id?: string;
+  title: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <Panel id={id} className={className}>
+      <h2 className="sr-only">{title}</h2>
+      {children}
+    </Panel>
+  );
+}
+
+function FrameSection({
+  id,
+  title,
+  count,
+  children,
+  actionLabel,
+  description,
+}: {
+  id?: string;
+  title: string;
+  count?: number;
+  children: React.ReactNode;
+  actionLabel?: string;
+  description?: string;
+}) {
+  return (
+    <Panel id={id}>
+      <PanelHeader className={description ? undefined : "after:content-none"}>
+        <div className="flex min-h-[4.5rem] items-center justify-between gap-4">
+          <PanelTitle>
+            {title}
+            {typeof count === "number" ? <PanelTitleSup>({count})</PanelTitleSup> : null}
+          </PanelTitle>
+          <SectionAction actionLabel={actionLabel} />
+        </div>
+        {description ? <PanelDescription>{description}</PanelDescription> : null}
+      </PanelHeader>
+      {children}
+    </Panel>
+  );
+}
+
 function OverviewCell({
   icon,
   value,
@@ -176,28 +155,24 @@ function OverviewCell({
   const href = getOverviewHref(icon, value);
 
   return (
-    <div className="flex items-center gap-4 font-mono text-sm">
-      <div className="flex size-8 shrink-0 items-center justify-center rounded-full border border-(--line) bg-background shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
-        {Icon ? (
-          <Icon className="size-3.5 text-(--muted-foreground)" strokeWidth={1.5} />
-        ) : null}
-      </div>
+    <OverviewItem>
+      <OverviewItemIcon>
+        {Icon ? <Icon strokeWidth={1.5} /> : null}
+      </OverviewItemIcon>
 
       {href ? (
-        <a
-          className="text-balance text-[13px] tracking-tight underline-offset-4 hover:underline"
+        <OverviewItemLink
+          className="text-[13px] tracking-tight"
           href={href}
-          target="_blank"
-          rel="noopener"
         >
           {formatOverviewValue(icon, value)}
-        </a>
+        </OverviewItemLink>
       ) : (
-        <p className="text-balance text-[13px] tracking-tight text-(--foreground)">
+        <OverviewItemContent className="text-[13px] tracking-tight text-(--foreground)">
           {formatOverviewValue(icon, value)}
-        </p>
+        </OverviewItemContent>
       )}
-    </div>
+    </OverviewItem>
   );
 }
 
@@ -211,17 +186,14 @@ function OverviewLeadRow({
   const Icon = overviewIconMap[icon];
 
   return (
-    <div className="flex items-center gap-4 font-mono text-sm">
-      <div className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-(--line) bg-muted/50 ring-1 ring-(--line) ring-offset-1 ring-offset-background">
-        {Icon ? (
-          <Icon className="size-3.5 text-(--muted-foreground)" strokeWidth={1.5} />
-        ) : null}
-      </div>
-
-      <p className="text-[13px] font-medium tracking-tight text-(--foreground)">
+    <OverviewItem>
+      <OverviewItemIcon>
+        {Icon ? <Icon strokeWidth={1.5} /> : null}
+      </OverviewItemIcon>
+      <OverviewItemContent className="text-[13px] font-medium tracking-tight text-(--foreground)">
         {value}
-      </p>
-    </div>
+      </OverviewItemContent>
+    </OverviewItem>
   );
 }
 
@@ -235,28 +207,30 @@ function OverviewSection({ content }: { content: ProfilePageContent }) {
   }>;
 
   return (
-    <RailSection id="overview" title="Overview">
-      <div className="p-4 sm:p-5">
-        <div className="space-y-2.5">
-          {leadRows.map((item, index) => (
-            <OverviewLeadRow key={`${item.icon}-${index}`} {...item} />
-          ))}
-        </div>
+    <RailSection id="overview" title="Overview" className="after:content-none">
+      <PanelContent className="space-y-2.5">
+        {leadRows.map((item, index) => (
+          <OverviewLeadRow key={`${item.icon}-${index}`} {...item} />
+        ))}
 
-        <div className="mt-4 grid gap-x-4 gap-y-2.5 border-t border-(--line) pt-4 sm:grid-cols-2">
+        <div className="grid gap-x-4 gap-y-2.5 sm:grid-cols-2">
           {compactRows.map((item, index) => (
             <OverviewCell key={`${item.icon}-${index}`} {...item} />
           ))}
         </div>
-      </div>
+      </PanelContent>
     </RailSection>
   );
 }
 
 function SocialLinkRail({ content }: { content: ProfilePageContent }) {
   return (
-    <RailSection id="socials" title="Social Links" className="screen-line-top">
-      <div className="relative">
+    <RailSection
+      id="socials"
+      title="Social Links"
+      className="social-links-section before:content-none after:content-none"
+    >
+      <div className="social-links-grid relative">
         <div className="pointer-events-none absolute inset-0 -z-1 grid grid-cols-2 gap-2 md:grid-cols-3">
           <div className="border-r border-(--line)" />
           <div className="border-l border-(--line) md:border-x" />
@@ -264,9 +238,8 @@ function SocialLinkRail({ content }: { content: ProfilePageContent }) {
         </div>
 
         <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
-          {content.socials.map((item, index) => {
+          {content.socials.map((item) => {
             const brandConfig = socialBrands[item.label];
-            const BrandIcon = brandConfig?.icon;
 
             return (
               <a
@@ -275,27 +248,12 @@ function SocialLinkRail({ content }: { content: ProfilePageContent }) {
                 target="_blank"
                 rel="noreferrer"
                 className={cn(
-                  "flex items-center gap-4 p-4 pr-2 transition-[background-color] ease-out hover:bg-black/[0.02] dark:hover:bg-white/[0.03]",
-                  "max-md:nth-[2n+1]:screen-line-top max-md:nth-[2n+1]:screen-line-bottom",
-                  "md:nth-[3n+1]:screen-line-top md:nth-[3n+1]:screen-line-bottom"
+                  "social-link-card flex items-center gap-4 p-4 pr-2 hover:bg-black/[0.02] dark:hover:bg-white/[0.03]"
                 )}
               >
-                <div
-                  className="flex size-8 shrink-0 items-center justify-center rounded-lg ring-1 ring-black/10 ring-inset dark:ring-white/15"
-                  style={{ backgroundColor: brandConfig?.bg ?? "#18181b" }}
-                >
-                  {BrandIcon ? (
-                    <BrandIcon
-                      className="size-4"
-                      style={{ color: brandConfig?.fg ?? "#fff" }}
-                    />
-                  ) : null}
-                </div>
+                <SocialLogoTile src={brandConfig?.src ?? "/social-links/github.svg"} alt={item.label} />
 
-                <h3 className="flex-1 text-sm font-medium tracking-[-0.02em]">
-                  {item.label}
-                </h3>
-
+                <h3 className="flex-1 text-sm font-medium tracking-[-0.02em]">{item.label}</h3>
                 <ArrowUpRight className="size-4 text-(--muted-foreground)" />
               </a>
             );
@@ -303,6 +261,228 @@ function SocialLinkRail({ content }: { content: ProfilePageContent }) {
         </div>
       </div>
     </RailSection>
+  );
+}
+
+function AboutSection({ content }: { content: ProfilePageContent }) {
+  return (
+    <FrameSection id="about" title="About">
+      <PanelContent className="space-y-4">
+        {content.about.map((paragraph) => (
+          <p key={paragraph} className="font-mono text-[13px] leading-7 text-(--muted-foreground)">
+            {paragraph}
+          </p>
+        ))}
+      </PanelContent>
+    </FrameSection>
+  );
+}
+
+function TestimonialsSection({ content }: { content: ProfilePageContent }) {
+  return (
+    <FrameSection id="testimonials" title="Testimonials" actionLabel="Wall of Love">
+      <div className="grid gap-0 lg:grid-cols-3">
+        {content.testimonials.map((item, index) => (
+          <article
+            key={item.author}
+            className={`surface-hatch px-4 py-4 sm:px-5 ${
+              index > 0 ? "border-t border-(--line) lg:border-t-0 lg:border-l" : ""
+            }`}
+          >
+            <Sparkles className="size-4 text-(--muted-foreground)" />
+            <p className="mt-3 text-[13px] leading-7 text-(--foreground)/88">&ldquo;{item.quote}&rdquo;</p>
+            <div className="mt-4 flex items-center gap-2 text-[12px] text-(--muted-foreground)">
+              <span className="font-medium text-(--foreground)">{item.author}</span>
+              <Dot className="size-4" />
+              <span>{item.role}</span>
+            </div>
+          </article>
+        ))}
+      </div>
+    </FrameSection>
+  );
+}
+
+function GitHubContributionsSection({ content }: { content: ProfilePageContent }) {
+  const totalCount = content.contributions.reduce((sum, item) => sum + item.count, 0);
+
+  return (
+    <Panel id="contributions">
+      <h2 className="sr-only">GitHub Contributions</h2>
+      <div className="overflow-x-auto px-2 py-2">
+        <div className="contribution-grid min-w-max">
+          {content.contributions.map((item) => (
+            <div
+              key={item.date}
+              className="contribution-cell"
+              data-level={item.level}
+              title={`${item.count} contribution${item.count === 1 ? "" : "s"} on ${item.date}`}
+            />
+          ))}
+        </div>
+      </div>
+      <div className="flex items-center justify-between gap-4 px-2 pb-2 text-[12px] text-(--muted-foreground)">
+        <p>
+          {totalCount} contributions this year on{" "}
+          <a className="underline underline-offset-4" href="https://github.com" target="_blank" rel="noreferrer">
+            GitHub
+          </a>
+          .
+        </p>
+        <div className="flex items-center gap-2">
+          <span>Less</span>
+          <div className="flex items-center gap-1">
+            {[0, 1, 2, 3, 4].map((level) => (
+              <div key={level} className="contribution-cell size-[11px]" data-level={level} />
+            ))}
+          </div>
+          <span>More</span>
+        </div>
+      </div>
+    </Panel>
+  );
+}
+
+function SponsorsSection({ content }: { content: ProfilePageContent }) {
+  return (
+    <FrameSection
+      id="partners"
+      title="Sponsors"
+      actionLabel="All Sponsors"
+      description="Support systems, tools, and platform choices that keep PORTO moving."
+    >
+      <div className="relative">
+        <div className="pointer-events-none absolute inset-0 -z-1 grid grid-cols-1 gap-4 max-sm:hidden sm:grid-cols-2">
+          <div className="border-r border-(--line)" />
+          <div className="border-l border-(--line)" />
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {content.sponsors.map((item) => (
+            <a
+              key={item.name}
+              href={item.href}
+              target="_blank"
+              rel="noreferrer"
+              className={cn(
+                "flex min-h-20 flex-col items-center justify-center gap-1 px-4 py-5 transition-[background-color] ease-out hover:bg-black/[0.02] dark:hover:bg-white/[0.03]",
+                "max-sm:screen-line-top max-sm:screen-line-bottom",
+                "sm:nth-[2n+1]:screen-line-top sm:nth-[2n+1]:screen-line-bottom"
+              )}
+            >
+              <span className="text-sm font-medium tracking-[-0.03em]">{item.name}</span>
+              <span className="font-mono text-[11px] text-(--muted-foreground)">{item.meta}</span>
+            </a>
+          ))}
+
+          <a
+            href="mailto:hello@porto.dev"
+            className={cn(
+              "flex min-h-20 items-center justify-center font-mono text-[12px] text-(--muted-foreground) transition-[background-color] ease-out hover:bg-black/[0.02] hover:text-(--foreground) dark:hover:bg-white/[0.03]",
+              "max-sm:screen-line-top max-sm:screen-line-bottom",
+              "sm:nth-[2n+1]:screen-line-top sm:nth-[2n+1]:screen-line-bottom"
+            )}
+          >
+            Sponsor My Work
+          </a>
+        </div>
+      </div>
+    </FrameSection>
+  );
+}
+
+function StackSection({ content }: { content: ProfilePageContent }) {
+  return (
+    <FrameSection id="stack" title="Tech Stack">
+      <PanelContent className="flex flex-wrap gap-2">
+        {content.stack.map((item) => (
+          <span key={item} className="profile-chip">
+            {item}
+          </span>
+        ))}
+      </PanelContent>
+    </FrameSection>
+  );
+}
+
+function CardGridSection({
+  id,
+  title,
+  items,
+  actionLabel,
+  count,
+  columns,
+}: {
+  id: string;
+  title: string;
+  items: ProfilePageContent["components"] | ProfilePageContent["blog"];
+  actionLabel?: string;
+  count?: number;
+  columns: string;
+}) {
+  return (
+    <FrameSection id={id} title={title} count={count} actionLabel={actionLabel}>
+      <div className={cn("grid gap-0", columns)}>
+        {items.map((item, index) => (
+          <article
+            key={item.title}
+            className={`px-4 py-4 sm:px-5 ${
+              index > 0 ? "border-t border-(--line) lg:border-t-0 lg:border-l" : ""
+            }`}
+          >
+            {id === "components" ? (
+              <div className="surface-hatch flex aspect-[1.7/1] items-end border border-(--line) bg-zinc-950 px-3 py-3 text-white">
+                <div>
+                  <p className="profile-kicker text-white/50">{item.meta}</p>
+                  <p className="mt-1 text-sm font-medium tracking-[-0.03em]">{item.title}</p>
+                </div>
+              </div>
+            ) : (
+              <p className="profile-kicker">{item.meta}</p>
+            )}
+
+            {id !== "components" ? (
+              <h3 className="mt-1 text-sm font-medium tracking-[-0.03em]">{item.title}</h3>
+            ) : null}
+            <p className="mt-3 text-[12px] leading-6 text-(--muted-foreground)">{item.description}</p>
+            <button className="profile-link mt-3" type="button">
+              {item.hrefLabel}
+            </button>
+          </article>
+        ))}
+      </div>
+    </FrameSection>
+  );
+}
+
+function ListSection({
+  id,
+  title,
+  items,
+  actionLabel,
+}: {
+  id: string;
+  title: string;
+  items: ProfilePageContent["experience"];
+  actionLabel?: string;
+}) {
+  return (
+    <FrameSection id={id} title={title} actionLabel={actionLabel}>
+      <div>
+        {items.map((item, index) => (
+          <article
+            key={`${title}-${item.title}-${index}`}
+            className={`profile-row ${index > 0 ? "border-t border-(--line)" : ""}`}
+          >
+            <p className="profile-kicker">{item.period}</p>
+            <div>
+              <h3 className="text-sm font-medium tracking-[-0.03em]">{item.title}</h3>
+              <p className="mt-1 text-[12px] leading-6 text-(--muted-foreground)">{item.detail}</p>
+            </div>
+          </article>
+        ))}
+      </div>
+    </FrameSection>
   );
 }
 
@@ -331,7 +511,7 @@ function formatOverviewValue(icon: string, value: string) {
 
 export function ProfileSheet({ content }: ProfileSheetProps) {
   return (
-    <div className="pb-20 *:[[id]]:scroll-mt-24">
+    <div className="*:[[id]]:scroll-mt-24">
       <ProfileCover monogram={content.monogram} />
       <ProfileIntro
         avatarUrl={content.avatarUrl}
@@ -345,197 +525,50 @@ export function ProfileSheet({ content }: ProfileSheetProps) {
       <OverviewSection content={content} />
       <SocialLinkRail content={content} />
       <SectionSeparator />
-      <FrameSection id="about" title="About">
-        <div className="grid gap-0 lg:grid-cols-[1.35fr_0.65fr]">
-          <div className="px-4 py-4 sm:px-5">
-            {content.about.map((paragraph) => (
-              <p
-                key={paragraph}
-                className="text-[13px] leading-7 text-(--muted-foreground)"
-              >
-                {paragraph}
-              </p>
-            ))}
-          </div>
-          <div className="grid border-t border-(--line) lg:border-t-0 lg:border-l">
-            {content.principles.map((item, index) => (
-              <article
-                key={item.label}
-                className={`px-4 py-4 sm:px-5 ${
-                  index > 0 ? "border-t border-(--line)" : ""
-                }`}
-              >
-                <p className="profile-kicker">{item.label}</p>
-                <p className="mt-1 text-sm font-medium tracking-[-0.03em]">
-                  {item.value}
-                </p>
-                {item.note ? (
-                  <p className="mt-1 text-[12px] leading-6 text-(--muted-foreground)">
-                    {item.note}
-                  </p>
-                ) : null}
-              </article>
-            ))}
-          </div>
-        </div>
-      </FrameSection>
 
+      <AboutSection content={content} />
       <MiniSeparator />
-      <FrameSection
-        id="testimonials"
-        title="Testimonials"
-        actionLabel="Wall of Love"
-      >
-        <div className="grid gap-0 lg:grid-cols-3">
-          {content.testimonials.map((item, index) => (
-            <article
-              key={item.author}
-              className={`surface-hatch px-4 py-4 sm:px-5 ${
-                index > 0
-                  ? "border-t border-(--line) lg:border-t-0 lg:border-l"
-                  : ""
-              }`}
-            >
-              <Sparkles className="size-4 text-(--muted-foreground)" />
-              <p className="mt-3 text-[13px] leading-7 text-(--foreground)/88">
-                &ldquo;{item.quote}&rdquo;
-              </p>
-              <div className="mt-4 flex items-center gap-2 text-[12px] text-(--muted-foreground)">
-                <span className="font-medium text-(--foreground)">
-                  {item.author}
-                </span>
-                <Dot className="size-4" />
-                <span>{item.role}</span>
-              </div>
-            </article>
-          ))}
-        </div>
-      </FrameSection>
-
+      <TestimonialsSection content={content} />
       <MiniSeparator />
-      <FrameSection id="partners" title="Partners" actionLabel="All Partners">
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3">
-          {content.partners.map((item, index) => (
-            <div
-              key={item}
-              className={`flex min-h-20 items-center px-4 py-4 text-sm font-medium tracking-[-0.03em] ${
-                index > 0 ? "border-t border-(--line)" : ""
-              } ${index % 2 !== 0 ? "sm:border-l" : ""} ${
-                index >= 2 ? "lg:border-t-0 lg:border-l" : ""
-              }`}
-            >
-              {item}
-            </div>
-          ))}
-        </div>
-      </FrameSection>
-
-      <MiniSeparator />
-      <FrameSection id="stack" title="Stack">
-        <div className="flex flex-wrap gap-2 px-4 py-4 sm:px-5">
-          {content.stack.map((item) => (
-            <span key={item} className="profile-chip">
-              {item}
-            </span>
-          ))}
-        </div>
-      </FrameSection>
-
-      <MiniSeparator />
-      <FrameSection
+      <GitHubContributionsSection content={content} />
+      <SectionSeparator />
+      <SponsorsSection content={content} />
+      <SectionSeparator />
+      <StackSection content={content} />
+      <SectionSeparator />
+      <CardGridSection
         id="components"
         title="Components"
+        items={content.components}
         count={content.components.length}
         actionLabel="All Components"
-      >
-        <div className="grid gap-0 lg:grid-cols-3">
-          {content.components.map((item, index) => (
-            <article
-              key={item.title}
-              className={`px-4 py-4 sm:px-5 ${
-                index > 0
-                  ? "border-t border-(--line) lg:border-t-0 lg:border-l"
-                  : ""
-              }`}
-            >
-              <div className="surface-hatch flex aspect-[1.7/1] items-end border border-(--line) bg-zinc-950 px-3 py-3 text-white">
-                <div>
-                  <p className="profile-kicker text-white/50">{item.meta}</p>
-                  <p className="mt-1 text-sm font-medium tracking-[-0.03em]">
-                    {item.title}
-                  </p>
-                </div>
-              </div>
-              <p className="mt-3 text-[12px] leading-6 text-(--muted-foreground)">
-                {item.description}
-              </p>
-            </article>
-          ))}
-        </div>
-      </FrameSection>
-
-      <MiniSeparator />
-      <FrameSection
+        columns="lg:grid-cols-3"
+      />
+      <SectionSeparator />
+      <CardGridSection
         id="writing"
-        title="Writing"
-        count={content.writing.length}
+        title="Blog"
+        items={content.blog}
+        count={content.blog.length}
         actionLabel="All Posts"
-      >
-        <div className="grid gap-0 lg:grid-cols-2">
-          {content.writing.map((item, index) => (
-            <article
-              key={item.title}
-              className={`px-4 py-4 sm:px-5 ${
-                index > 0
-                  ? "border-t border-(--line) lg:border-t-0 lg:border-l"
-                  : ""
-              }`}
-            >
-              <p className="profile-kicker">{item.meta}</p>
-              <h3 className="mt-1 text-sm font-medium tracking-[-0.03em]">
-                {item.title}
-              </h3>
-              <p className="mt-2 text-[12px] leading-6 text-(--muted-foreground)">
-                {item.description}
-              </p>
-              <button className="profile-link mt-3" type="button">
-                {item.hrefLabel}
-              </button>
-            </article>
-          ))}
-        </div>
-      </FrameSection>
-
-      <MiniSeparator />
+        columns="lg:grid-cols-2"
+      />
+      <SectionSeparator />
       <ListSection id="experience" title="Experience" items={content.experience} />
-      <MiniSeparator />
-      <ListSection
-        id="projects"
-        title="Projects"
-        items={content.projects}
-        actionLabel="See All"
-      />
-      <MiniSeparator />
-      <ListSection
-        id="awards"
-        title="Honors & Awards"
-        items={content.awards}
-        actionLabel="Full List"
-      />
-      <MiniSeparator />
+      <SectionSeparator />
+      <ListSection id="projects" title="Projects" items={content.projects} actionLabel="See All" />
+      <SectionSeparator />
+      <ListSection id="awards" title="Awards" items={content.awards} actionLabel="Full List" />
+      <SectionSeparator />
       <ListSection
         id="certifications"
         title="Certifications"
         items={content.certifications}
         actionLabel="Verify"
       />
-      <MiniSeparator />
-      <ListSection
-        id="bookmarks"
-        title="Bookmarks"
-        items={content.bookmarks}
-        actionLabel="Read More"
-      />
+      <SectionSeparator />
+      <ListSection id="bookmarks" title="Bookmarks" items={content.bookmarks} actionLabel="Read More" />
+      <SectionSeparator />
     </div>
   );
 }

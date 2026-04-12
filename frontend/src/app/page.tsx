@@ -5,7 +5,9 @@ import { SiteShell } from "@/shared/ui/site-shell";
 export default function HomePage() {
   return (
     <SiteShell>
-      <ProfileSheet content={homePageContent} />
+      <div className="page-frame *:[[id]]:scroll-mt-24">
+        <ProfileSheet content={homePageContent} />
+      </div>
     </SiteShell>
   );
 }

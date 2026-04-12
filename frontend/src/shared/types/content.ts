@@ -1,46 +1,3 @@
-export type HeroContent = {
-  pixelLogoText: string;
-  avatarUrl: string;
-  name: string;
-  isVerified: boolean;
-  title: string;
-  infoItems: {
-    icon: string;
-    text: string;
-  }[];
-};
-
-export type SummaryItem = {
-  title: string;
-  description: string;
-  meta: string;
-};
-
-export type CraftRule = {
-  title: string;
-  body: string;
-};
-
-export type ProjectHighlight = {
-  title: string;
-  summary: string;
-  metric: string;
-  tags: string[];
-};
-
-export type ProcessStep = {
-  step: string;
-  title: string;
-  body: string;
-};
-
-export type ContactContent = {
-  title: string;
-  description: string;
-  primaryCta: string;
-  secondaryCta: string;
-};
-
 export type ProfileFact = {
   label: string;
   value: string;
@@ -76,6 +33,18 @@ export type ShowcaseCard = {
   hrefLabel: string;
 };
 
+export type SponsorItem = {
+  name: string;
+  href: string;
+  meta: string;
+};
+
+export type ContributionDay = {
+  date: string;
+  count: number;
+  level: 0 | 1 | 2 | 3 | 4;
+};
+
 export type TimelineItem = {
   period: string;
   title: string;
@@ -94,12 +63,12 @@ export type ProfilePageContent = {
   overview: OverviewRow[];
   socials: SocialLinkItem[];
   about: string[];
-  principles: ProfileFact[];
   testimonials: TestimonialItem[];
-  partners: string[];
+  contributions: ContributionDay[];
+  sponsors: SponsorItem[];
   stack: string[];
   components: ShowcaseCard[];
-  writing: ShowcaseCard[];
+  blog: ShowcaseCard[];
   experience: TimelineItem[];
   projects: TimelineItem[];
   awards: TimelineItem[];

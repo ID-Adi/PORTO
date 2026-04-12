@@ -128,7 +128,7 @@ export function SiteHeader() {
         </div>
       </header>
 
-      <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 h-20 bg-linear-to-t from-background to-transparent sm:hidden" />
+      <div className="pointer-events-none fixed inset-x-0 bottom-0 z-30 h-20 bg-linear-to-t from-background to-transparent sm:hidden" />
     </>
   );
 }

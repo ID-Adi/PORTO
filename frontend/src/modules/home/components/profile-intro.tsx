@@ -1,10 +1,8 @@
 "use client";
 
 import Image from "next/image";
-import { BadgeCheck, Volume2 } from "lucide-react";
+import { Volume2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-
-import ElectricBorder from "@/components/anim/electric-border";
 import type { ProfilePageContent } from "@/shared/types/content";
 
 type ProfileIntroProps = Pick<
@@ -20,45 +18,33 @@ function InteractiveAvatar({
   avatarUrl,
   name,
 }: Pick<ProfileIntroProps, "avatarUrl" | "name">) {
-  const [isHovered, setIsHovered] = useState(false);
-
   return (
-    <div
-      className="relative size-30 cursor-pointer sm:size-40"
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-    >
-      <div
-        className={`pointer-events-none absolute inset-0 transition-opacity duration-500 ease-out ${
-          isHovered ? "opacity-100" : "opacity-0"
-        }`}
-      >
-        <ElectricBorder
-          color="#f59e0b"
-          borderRadius={9999}
-          chaos={0.06}
-          speed={1.4}
-          className="size-full rounded-full"
-        />
-      </div>
+    <Image
+      className="size-30 rounded-full ring-1 ring-(--border) ring-offset-2 ring-offset-background select-none sm:size-40"
+      src={avatarUrl}
+      alt={name}
+      width={160}
+      height={160}
+      priority
+      sizes="(max-width: 640px) 120px, 160px"
+    />
+  );
+}
 
-      <div
-        className={`absolute inset-0 overflow-hidden rounded-full border bg-background transition-shadow duration-300 ${
-          isHovered
-            ? "border-transparent shadow-none"
-            : "border-(--line) shadow-[0_0_0_1px_var(--line)]"
-        }`}
-      >
-        <Image
-          src={avatarUrl}
-          alt={name}
-          fill
-          priority
-          sizes="(max-width: 640px) 120px, 160px"
-          className="object-cover"
-        />
-      </div>
-    </div>
+function VerifiedIcon(props: React.ComponentProps<"svg">) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      fill="none"
+      viewBox="0 0 24 24"
+      aria-hidden
+      {...props}
+    >
+      <path
+        fill="currentColor"
+        d="M24 12a4.454 4.454 0 0 0-2.564-3.91 4.437 4.437 0 0 0-.948-4.578 4.436 4.436 0 0 0-4.577-.948A4.44 4.44 0 0 0 12 0a4.423 4.423 0 0 0-3.9 2.564 4.434 4.434 0 0 0-2.43-.178 4.425 4.425 0 0 0-2.158 1.126 4.42 4.42 0 0 0-1.12 2.156 4.42 4.42 0 0 0 .183 2.421A4.456 4.456 0 0 0 0 12a4.465 4.465 0 0 0 2.576 3.91 4.433 4.433 0 0 0 .936 4.577 4.459 4.459 0 0 0 4.577.95A4.454 4.454 0 0 0 12 24a4.439 4.439 0 0 0 3.91-2.563 4.26 4.26 0 0 0 5.526-5.526A4.453 4.453 0 0 0 24 12Zm-13.709 4.917-4.38-4.378 1.652-1.663 2.646 2.646L15.83 7.4l1.72 1.591-7.258 7.926Z"
+      />
+    </svg>
   );
 }
 
@@ -99,15 +85,13 @@ function NamePronunciationButton({
     <button
       type="button"
       onClick={speakName}
-      className={`inline-flex size-7 items-center justify-center rounded-full border transition-colors ${
-        isSpeaking
-          ? "border-zinc-400 bg-zinc-950 text-zinc-50 dark:border-zinc-500 dark:bg-zinc-50 dark:text-zinc-950"
-          : "border-(--line) text-(--muted-foreground) hover:bg-black/[0.03] hover:text-(--foreground) dark:hover:bg-white/[0.06]"
+      className={`relative text-(--muted-foreground) transition-[color,scale] select-none hover:text-(--foreground) active:scale-[0.9] after:absolute after:-inset-1 ${
+        isSpeaking ? "text-(--foreground)" : ""
       }`}
       aria-label={`Pronounce ${name}`}
       title={`Pronounce ${name}`}
     >
-      <Volume2 className="size-3.5" strokeWidth={1.8} />
+      <Volume2 className="size-4.5" strokeWidth={1.7} />
     </button>
   );
 }
@@ -158,7 +142,7 @@ function RotatingSubtitle({
     <div className="relative flex h-full items-center overflow-hidden">
       <span
         key={items[index]}
-        className={`inline-block font-mono text-[12px] tracking-tight text-(--muted-foreground) transition-all duration-300 ease-out sm:text-sm ${
+        className={`inline-block font-pixel-square text-sm text-balance text-(--muted-foreground) transition-all duration-300 ease-out ${
           isReducedMotion ? "translate-y-0 opacity-100" : "translate-y-[-1px] opacity-100"
         }`}
       >
@@ -186,7 +170,7 @@ export function ProfileIntro({
       <div className="flex min-w-0 flex-1 flex-col">
         <div className="flex grow items-end pb-1 pl-4">
           <div
-            className="line-clamp-1 font-mono text-[11px] tracking-tight text-zinc-300 select-none max-sm:hidden dark:text-zinc-800"
+            className="line-clamp-1 font-mono text-xs text-zinc-300 select-none max-sm:hidden dark:text-zinc-800"
             aria-hidden
           >
             {"text-3xl "}
@@ -197,11 +181,11 @@ export function ProfileIntro({
         </div>
 
         <div className="border-t border-(--line)">
-          <div className="flex flex-wrap items-center gap-2 pl-4 pr-3">
-            <h1 className="-translate-y-px text-3xl font-semibold tracking-tight sm:text-[2rem]">
+          <div className="flex min-w-0 items-center gap-2 pl-4">
+            <h1 className="min-w-0 flex-1 line-clamp-1 -translate-y-px text-3xl font-semibold tracking-tight">
               {name}
             </h1>
-            <BadgeCheck className="size-4.5 fill-sky-500 text-white" />
+            <VerifiedIcon className="size-4.5 text-sky-500 select-none" />
             {pronunciationText ? (
               <NamePronunciationButton
                 name={name}
@@ -210,7 +194,7 @@ export function ProfileIntro({
             ) : null}
           </div>
 
-          <div className="h-12.5 border-t border-(--line) px-4 py-1 sm:h-9">
+          <div className="h-12.5 border-t border-(--line) py-1 pl-4 sm:h-9">
             <RotatingSubtitle flipSentences={flipSentences} title={title} />
           </div>
         </div>
