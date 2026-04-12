@@ -63,11 +63,16 @@ const socialBrands: Record<
 
 function ProfileCover({ monogram }: { monogram: string }) {
   return (
-    <section className="profile-hero-mark screen-line-top screen-line-bottom before:-top-px after:-bottom-px">
-      <div className="flex aspect-[2/1] w-full items-center justify-center text-black select-none dark:text-white sm:aspect-[3/1]">
-        <div className="inline-flex h-14 w-28 items-center justify-center pl-[0.12em] font-mono text-[3rem] leading-none font-black tracking-[0.12em] sm:h-16 sm:w-32 sm:text-[3.35rem]">
-          {monogram}
-        </div>
+    <section
+      className={cn(
+        "aspect-[2/1] border-x border-(--line) select-none sm:aspect-[3/1]",
+        "flex items-center justify-center text-black dark:text-white",
+        "screen-line-top screen-line-bottom before:-top-px after:-bottom-px",
+        "bg-[radial-gradient(var(--texture-fg)_1px,transparent_0)] bg-size-[10px_10px] bg-center"
+      )}
+    >
+      <div className="inline-flex h-14 w-28 items-center justify-center pl-[0.12em] font-mono text-[3rem] leading-none font-black tracking-[0.12em] sm:h-16 sm:w-32 sm:text-[3.35rem]">
+        {monogram}
       </div>
     </section>
   );
@@ -228,9 +233,9 @@ function SocialLinkRail({ content }: { content: ProfilePageContent }) {
     <RailSection
       id="socials"
       title="Social Links"
-      className="social-links-section before:content-none after:content-none"
+      className="before:content-none after:content-none"
     >
-      <div className="social-links-grid relative">
+      <div className="relative">
         <div className="pointer-events-none absolute inset-0 -z-1 grid grid-cols-2 gap-2 md:grid-cols-3">
           <div className="border-r border-(--line)" />
           <div className="border-l border-(--line) md:border-x" />
@@ -248,7 +253,9 @@ function SocialLinkRail({ content }: { content: ProfilePageContent }) {
                 target="_blank"
                 rel="noreferrer"
                 className={cn(
-                  "social-link-card flex items-center gap-4 p-4 pr-2 hover:bg-black/[0.02] dark:hover:bg-white/[0.03]"
+                  "flex items-center gap-4 p-4 pr-2 transition-[background-color] ease-out hover:bg-black/[0.02] dark:hover:bg-white/[0.03]",
+                  "max-md:nth-[2n+1]:screen-line-top max-md:nth-[2n+1]:screen-line-bottom",
+                  "md:nth-[3n+1]:screen-line-top md:nth-[3n+1]:screen-line-bottom"
                 )}
               >
                 <SocialLogoTile src={brandConfig?.src ?? "/social-links/github.svg"} alt={item.label} />

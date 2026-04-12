@@ -140,7 +140,6 @@ a {
 
 .screen-line-top,
 .screen-line-bottom,
-.profile-hero-mark,
 .profile-divider,
 .profile-mini-divider {
   position: relative;
@@ -193,18 +192,10 @@ a {
   opacity: 0.95;
 }
 
-.profile-hero-mark,
 .profile-divider,
 .profile-mini-divider {
   border-left: 1px solid var(--line);
   border-right: 1px solid var(--line);
-}
-
-.profile-hero-mark {
-  background-color: var(--background);
-  background-image: radial-gradient(var(--texture-fg) 1px, transparent 0);
-  background-size: 10px 10px;
-  background-position: center;
 }
 
 .profile-divider {
@@ -233,41 +224,6 @@ a {
 .profile-mini-divider {
   height: 0.5rem;
   background: var(--background);
-}
-
-.social-links-section {
-  --social-line: color-mix(in oklab, var(--line) 72%, transparent);
-}
-
-.social-links-grid {
-  position: relative;
-}
-
-.social-links-grid::after {
-  content: "";
-  position: absolute;
-  inset-inline: 0;
-  bottom: 0;
-  height: 1px;
-  background: var(--social-line);
-  pointer-events: none;
-}
-
-.social-link-card {
-  position: relative;
-  border-top: 1px solid var(--social-line);
-  transition: background-color 160ms ease-out;
-}
-
-.social-link-card::after {
-  content: "";
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  width: 1px;
-  background: var(--social-line);
-  pointer-events: none;
 }
 
 .profile-kicker {
