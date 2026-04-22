@@ -1,7 +1,12 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { GeistMono } from "geist/font/mono";
 import { GeistPixelSquare } from "geist/font/pixel";
 import { GeistSans } from "geist/font/sans";
+
+import { homePageContent } from "@/modules/home/data/landing-content";
+import { siteConfig } from "@/shared/config/site";
+import { AppProviders } from "@/shared/providers/app-providers";
+import { ScrollToTop } from "@/shared/ui/scroll-to-top";
 
 import "./globals.css";
 
@@ -14,40 +19,84 @@ const fontVariables = [
 ].join(" ");
 
 export const metadata: Metadata = {
-  title: "PORTO",
-  description: "Minimalist technical portfolio exploration for PORTO.",
+  metadataBase: new URL(siteConfig.url),
+  title: {
+    default: siteConfig.name,
+    template: `%s | ${siteConfig.name}`,
+  },
+  description: siteConfig.description,
+  alternates: {
+    canonical: "/",
+  },
+  manifest: "/manifest.json",
+  openGraph: {
+    title: siteConfig.name,
+    description: siteConfig.description,
+    url: siteConfig.url,
+    siteName: siteConfig.name,
+    type: "website",
+    images: [
+      {
+        url: siteConfig.ogImage,
+        width: 1200,
+        height: 630,
+        alt: siteConfig.name,
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: siteConfig.name,
+    description: siteConfig.description,
+    creator: siteConfig.creator,
+    images: [siteConfig.ogImage],
+  },
 };
 
-const themeScript = String.raw`
-  try {
-    const storedTheme = localStorage.getItem("porto-theme");
-    const resolvedTheme = storedTheme
-      ? storedTheme === "dark"
-      : window.matchMedia("(prefers-color-scheme: dark)").matches;
-
-    document.documentElement.classList.toggle("dark", resolvedTheme);
-  } catch (_) {}
-`;
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#1a1a1a" },
+  ],
+};
 
 type RootLayoutProps = {
   children: React.ReactNode;
+};
+
+const personJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "Person",
+  name: homePageContent.name,
+  url: siteConfig.url,
+  image: new URL(homePageContent.avatarUrl, siteConfig.url).toString(),
+  jobTitle: "Design Engineer",
+  worksFor: {
+    "@type": "Organization",
+    name: "PORTO",
+  },
+  sameAs: homePageContent.socials.map((item) => item.href),
 };
 
 export default function RootLayout({ children }: RootLayoutProps) {
   return (
     <html
       lang="en"
-      className={fontVariables}
+      className={`${fontVariables} dark`}
+      data-theme="dark"
       suppressHydrationWarning
     >
       <head>
         <script
-          type="text/javascript"
-          dangerouslySetInnerHTML={{ __html: themeScript }}
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(personJsonLd) }}
         />
       </head>
       <body suppressHydrationWarning>
-        {children}
+        <AppProviders>
+          {children}
+        </AppProviders>
+        <ScrollToTop />
       </body>
     </html>
   );

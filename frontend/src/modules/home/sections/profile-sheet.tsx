@@ -1,19 +1,23 @@
+import Image from "next/image";
 import {
   ArrowUpRight,
   Clock,
   Code,
-  Dot,
   Lightbulb,
   Link2,
   Mail,
   MapPin,
   Phone,
-  Sparkles,
   User,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import {
   Panel,
   PanelContent,
@@ -24,7 +28,10 @@ import {
 } from "@/shared/ui/panel";
 import { Icons } from "@/shared/ui/icons";
 import type { ProfilePageContent } from "@/shared/types/content";
+import { CopyButton } from "@/shared/ui/copy-button";
 
+import { ContributionGraph } from "../components/contribution-graph";
+import { LiveClock } from "../components/live-clock";
 import {
   OverviewItem,
   OverviewItemContent,
@@ -33,6 +40,7 @@ import {
 } from "../components/overview-item";
 import { ProfileIntro } from "../components/profile-intro";
 import { SocialLogoTile } from "../components/social-logo-tile";
+import { TestimonialsWall } from "../components/testimonials-wall";
 
 type ProfileSheetProps = {
   content: ProfilePageContent;
@@ -152,12 +160,42 @@ function FrameSection({
 function OverviewCell({
   icon,
   value,
+  kind,
+  copyable,
+  note,
 }: {
   icon: string;
   value: string;
+  kind?: "text" | "time";
+  copyable?: boolean;
+  note?: string;
 }) {
   const Icon = overviewIconMap[icon];
   const href = getOverviewHref(icon, value);
+  const copyLabel = icon === "phone" ? "phone number" : icon === "mail" ? "email address" : value;
+
+  let contentNode: React.ReactNode;
+
+  if (kind === "time") {
+    contentNode = <LiveClock />;
+  } else if (href) {
+    contentNode = (
+      <OverviewItemLink
+        className="text-[13px] tracking-tight"
+        href={href}
+        target={icon === "mapPin" || icon === "link" ? "_blank" : undefined}
+        rel={icon === "mapPin" || icon === "link" ? "noopener noreferrer" : undefined}
+      >
+        {formatOverviewValue(icon, value)}
+      </OverviewItemLink>
+    );
+  } else {
+    contentNode = (
+      <OverviewItemContent className="text-[13px] tracking-tight text-(--foreground)">
+        {formatOverviewValue(icon, value)}
+      </OverviewItemContent>
+    );
+  }
 
   return (
     <OverviewItem>
@@ -165,18 +203,10 @@ function OverviewCell({
         {Icon ? <Icon strokeWidth={1.5} /> : null}
       </OverviewItemIcon>
 
-      {href ? (
-        <OverviewItemLink
-          className="text-[13px] tracking-tight"
-          href={href}
-        >
-          {formatOverviewValue(icon, value)}
-        </OverviewItemLink>
-      ) : (
-        <OverviewItemContent className="text-[13px] tracking-tight text-(--foreground)">
-          {formatOverviewValue(icon, value)}
-        </OverviewItemContent>
-      )}
+      <div className="flex min-w-0 flex-1 items-center justify-between gap-2">
+        <div className="min-w-0">{contentNode}</div>
+        {copyable ? <CopyButton value={value} label={copyLabel} /> : null}
+      </div>
     </OverviewItem>
   );
 }
@@ -206,10 +236,8 @@ function OverviewSection({ content }: { content: ProfilePageContent }) {
   const leadRows = content.overview.slice(0, 2).map((row) => row.left);
   const compactRows = content.overview
     .slice(2)
-    .flatMap((row) => [row.left, row.right].filter(Boolean)) as Array<{
-    icon: string;
-    value: string;
-  }>;
+    .flatMap((row) => [row.left, row.right])
+    .filter((item): item is NonNullable<typeof item> => Boolean(item));
 
   return (
     <RailSection id="overview" title="Overview" className="after:content-none">
@@ -288,64 +316,18 @@ function AboutSection({ content }: { content: ProfilePageContent }) {
 function TestimonialsSection({ content }: { content: ProfilePageContent }) {
   return (
     <FrameSection id="testimonials" title="Testimonials" actionLabel="Wall of Love">
-      <div className="grid gap-0 lg:grid-cols-3">
-        {content.testimonials.map((item, index) => (
-          <article
-            key={item.author}
-            className={`surface-hatch px-4 py-4 sm:px-5 ${
-              index > 0 ? "border-t border-(--line) lg:border-t-0 lg:border-l" : ""
-            }`}
-          >
-            <Sparkles className="size-4 text-(--muted-foreground)" />
-            <p className="mt-3 text-[13px] leading-7 text-(--foreground)/88">&ldquo;{item.quote}&rdquo;</p>
-            <div className="mt-4 flex items-center gap-2 text-[12px] text-(--muted-foreground)">
-              <span className="font-medium text-(--foreground)">{item.author}</span>
-              <Dot className="size-4" />
-              <span>{item.role}</span>
-            </div>
-          </article>
-        ))}
-      </div>
+      <PanelContent>
+        <TestimonialsWall items={content.testimonials} />
+      </PanelContent>
     </FrameSection>
   );
 }
 
 function GitHubContributionsSection({ content }: { content: ProfilePageContent }) {
-  const totalCount = content.contributions.reduce((sum, item) => sum + item.count, 0);
-
   return (
     <Panel id="contributions">
       <h2 className="sr-only">GitHub Contributions</h2>
-      <div className="overflow-x-auto px-2 py-2">
-        <div className="contribution-grid min-w-max">
-          {content.contributions.map((item) => (
-            <div
-              key={item.date}
-              className="contribution-cell"
-              data-level={item.level}
-              title={`${item.count} contribution${item.count === 1 ? "" : "s"} on ${item.date}`}
-            />
-          ))}
-        </div>
-      </div>
-      <div className="flex items-center justify-between gap-4 px-2 pb-2 text-[12px] text-(--muted-foreground)">
-        <p>
-          {totalCount} contributions this year on{" "}
-          <a className="underline underline-offset-4" href="https://github.com" target="_blank" rel="noreferrer">
-            GitHub
-          </a>
-          .
-        </p>
-        <div className="flex items-center gap-2">
-          <span>Less</span>
-          <div className="flex items-center gap-1">
-            {[0, 1, 2, 3, 4].map((level) => (
-              <div key={level} className="contribution-cell size-[11px]" data-level={level} />
-            ))}
-          </div>
-          <span>More</span>
-        </div>
-      </div>
+      <ContributionGraph fallbackData={content.contributions} />
     </Panel>
   );
 }
@@ -403,9 +385,28 @@ function StackSection({ content }: { content: ProfilePageContent }) {
     <FrameSection id="stack" title="Tech Stack">
       <PanelContent className="flex flex-wrap gap-2">
         {content.stack.map((item) => (
-          <span key={item} className="profile-chip">
-            {item}
-          </span>
+          <Tooltip key={item.name}>
+            <TooltipTrigger asChild>
+              <span className="profile-chip">
+                <Image
+                  className="tech-icon size-4 object-contain"
+                  src={`https://cdn.simpleicons.org/${item.slug}`}
+                  alt={item.name}
+                  unoptimized
+                  width={16}
+                  height={16}
+                />
+                <span>{item.name}</span>
+                {item.version ? (
+                  <span className="text-(--muted-foreground)">{item.version}</span>
+                ) : null}
+              </span>
+            </TooltipTrigger>
+            <TooltipContent sideOffset={8}>
+              {item.name}
+              {item.version ? ` ${item.version}` : ""}
+            </TooltipContent>
+          </Tooltip>
         ))}
       </PanelContent>
     </FrameSection>

@@ -1,32 +1,57 @@
 "use client";
 
-import { ArrowUpIcon } from "lucide-react";
+import { ArrowUp } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import { cn } from "@/lib/utils";
+
 export function ScrollToTop() {
+  const [reduceMotion, setReduceMotion] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
-    const onScroll = () => setIsVisible(window.scrollY > 240);
+    const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
 
-    onScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
+    const updateMotionPreference = () => {
+      setReduceMotion(mediaQuery.matches);
+    };
 
-    return () => window.removeEventListener("scroll", onScroll);
+    const handleScroll = () => {
+      setIsVisible(window.scrollY >= 400);
+    };
+
+    updateMotionPreference();
+    handleScroll();
+
+    mediaQuery.addEventListener("change", updateMotionPreference);
+    window.addEventListener("scroll", handleScroll, { passive: true });
+
+    return () => {
+      mediaQuery.removeEventListener("change", updateMotionPreference);
+      window.removeEventListener("scroll", handleScroll);
+    };
   }, []);
 
   return (
     <button
       type="button"
       aria-label="Scroll to top"
-      onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-      className={`fixed right-4 bottom-4 z-40 flex size-9 items-center justify-center border border-(--line) bg-background transition-all ${
+      onClick={() =>
+        window.scrollTo({
+          top: 0,
+          behavior: reduceMotion ? "auto" : "smooth",
+        })
+      }
+      className={cn(
+        "fixed right-6 bottom-6 z-50 flex size-9 items-center justify-center border border-(--line) bg-background transition-all duration-300",
         isVisible
           ? "translate-y-0 opacity-100"
-          : "pointer-events-none translate-y-4 opacity-0"
-      }`}
+          : reduceMotion
+            ? "pointer-events-none opacity-0"
+            : "pointer-events-none translate-y-4 opacity-0"
+      )}
     >
-      <ArrowUpIcon className="size-4" />
+      <ArrowUp className="size-4" />
     </button>
   );
 }

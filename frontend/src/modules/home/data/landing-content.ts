@@ -1,29 +1,53 @@
 import type {
   ContributionDay,
+  ContributionWeek,
+  ContributionGraphData,
+} from "@/modules/home/types/contributions";
+import type {
   ProfilePageContent,
 } from "@/shared/types/content";
 
-function buildContributionData(): ContributionDay[] {
-  const data: ContributionDay[] = [];
-  const start = new Date("2025-04-14");
+const fallbackContributionColors = [
+  "rgba(24, 24, 27, 0.08)",
+  "rgba(24, 24, 27, 0.18)",
+  "rgba(24, 24, 27, 0.3)",
+  "rgba(24, 24, 27, 0.44)",
+  "rgba(24, 24, 27, 0.6)",
+];
 
-  for (let week = 0; week < 30; week += 1) {
-    for (let day = 0; day < 7; day += 1) {
+function buildContributionData(): ContributionGraphData {
+  const weeks: ContributionWeek[] = [];
+  let total = 0;
+  const today = new Date();
+  const start = new Date(today);
+
+  start.setDate(today.getDate() - 51 * 7 - today.getDay());
+
+  for (let weekIndex = 0; weekIndex < 52; weekIndex += 1) {
+    const contributionDays: ContributionDay[] = [];
+
+    for (let dayIndex = 0; dayIndex < 7; dayIndex += 1) {
       const current = new Date(start);
-      current.setDate(start.getDate() + week * 7 + day);
+      current.setDate(start.getDate() + weekIndex * 7 + dayIndex);
 
-      const intensity = (week * 3 + day * 2) % 5;
-      const count = intensity === 0 ? 0 : intensity * 2 + (day % 2);
+      const level = ((weekIndex * 3 + dayIndex * 2) % 5) as 0 | 1 | 2 | 3 | 4;
+      const contributionCount = level === 0 ? 0 : level * 2 + (dayIndex % 2);
 
-      data.push({
+      total += contributionCount;
+      contributionDays.push({
         date: current.toISOString().slice(0, 10),
-        count,
-        level: intensity as ContributionDay["level"],
+        contributionCount,
+        color: fallbackContributionColors[level],
       });
     }
+
+    weeks.push({ contributionDays });
   }
 
-  return data;
+  return {
+    totalContributions: total,
+    weeks,
+  };
 }
 
 export const homePageContent: ProfilePageContent = {
@@ -45,11 +69,11 @@ export const homePageContent: ProfilePageContent = {
     { left: { icon: "lightbulb", value: "Founder @ PORTO" } },
     {
       left: { icon: "mapPin", value: "Makassar, Indonesia" },
-      right: { icon: "clock", value: "17:00 // GMT+8" },
+      right: { icon: "clock", value: "Asia/Makassar", kind: "time", note: "WITA" },
     },
     {
-      left: { icon: "phone", value: "+62 812 345 6789" },
-      right: { icon: "mail", value: "hello@porto.dev" },
+      left: { icon: "phone", value: "+62 812 345 6789", copyable: true },
+      right: { icon: "mail", value: "hello@porto.dev", copyable: true },
     },
     {
       left: { icon: "link", value: "porto.dev" },
@@ -107,6 +131,31 @@ export const homePageContent: ProfilePageContent = {
       author: "Farhan",
       role: "Creative Technologist",
     },
+    {
+      quote:
+        "PORTO reads like a product surface, not a scrapbook. Itu pujian, bukan roasting 😄",
+      author: "Aulia",
+      role: "Design Systems Lead",
+    },
+    {
+      quote:
+        "The interaction polish adds confidence without breaking the editorial calm.",
+      author: "Dea",
+      role: "Frontend Architect",
+    },
+    {
+      quote:
+        "The new direction feels premium because the details stay disciplined.",
+      author: "Bagas",
+      role: "Product Engineer",
+    },
+    // TODO: replace with real testimonial
+    {
+      quote:
+        "This is the kind of personal site that makes implementation choices feel intentional.",
+      author: "Tara",
+      role: "UX Writer",
+    },
   ],
   contributions: buildContributionData(),
   sponsors: [
@@ -132,15 +181,15 @@ export const homePageContent: ProfilePageContent = {
     },
   ],
   stack: [
-    "Next.js 16",
-    "React 19",
-    "TypeScript",
-    "Tailwind CSS v4",
-    "shadcn/ui",
-    "Radix UI",
-    "Lucide",
-    "Playwright",
-    "Vercel",
+    { name: "Next.js", slug: "nextdotjs", version: "16" },
+    { name: "React", slug: "react", version: "19" },
+    { name: "TypeScript", slug: "typescript", version: "5" },
+    { name: "Tailwind CSS", slug: "tailwindcss", version: "v4" },
+    { name: "shadcn/ui", slug: "shadcnui" },
+    { name: "Radix UI", slug: "radixui" },
+    { name: "Lucide", slug: "lucide" },
+    { name: "Playwright", slug: "playwright" },
+    { name: "Vercel", slug: "vercel" },
   ],
   components: [
     {

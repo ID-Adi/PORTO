@@ -41,12 +41,5 @@ export function OverviewItemLink({
   className,
   ...props
 }: React.ComponentProps<"a">) {
-  return (
-    <a
-      className={cn("underline-offset-4 hover:underline", className)}
-      target="_blank"
-      rel="noopener noreferrer"
-      {...props}
-    />
-  );
+  return <a className={cn("underline-offset-4 hover:underline", className)} {...props} />;
 }

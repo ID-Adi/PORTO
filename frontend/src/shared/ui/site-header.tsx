@@ -1,46 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { Moon, Search, Sun } from "lucide-react";
-import { useEffect, useReducer } from "react";
+import { Search } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { navItems } from "@/modules/home/data/nav-items";
 import { Icons } from "@/shared/ui/icons";
-
-const navItems = [
-  { label: "Components", href: "#components" },
-  { label: "Projects", href: "#projects" },
-  { label: "Writing", href: "#writing" },
-  { label: "Partners", href: "#partners" },
-];
-
-function getInitialTheme(): boolean {
-  if (typeof window === "undefined") return false;
-
-  const stored = window.localStorage.getItem("porto-theme");
-  if (stored) return stored === "dark";
-
-  return window.matchMedia("(prefers-color-scheme: dark)").matches;
-}
+import { openCommandMenu } from "@/shared/ui/command-menu";
+import { ThemeToggle } from "@/shared/ui/theme-toggle";
 
 export function SiteHeader() {
-  const [isDark, dispatch] = useReducer(
-    (_: boolean, action: boolean) => action,
-    false
-  );
-
-  useEffect(() => {
-    dispatch(getInitialTheme());
-  }, []);
-
-  function toggleTheme() {
-    const next = !isDark;
-
-    document.documentElement.classList.toggle("dark", next);
-    window.localStorage.setItem("porto-theme", next ? "dark" : "light");
-    dispatch(next);
-  }
-
   return (
     <>
       <header className="sticky top-0 z-50 max-w-screen overflow-x-hidden bg-background px-2 pt-2">
@@ -73,6 +42,7 @@ export function SiteHeader() {
                 size="sm"
                 className="h-8 gap-2 border-none px-2 font-mono text-[12px] font-medium text-(--muted-foreground) hover:bg-transparent hover:text-(--foreground)"
                 aria-label="Search"
+                onClick={() => openCommandMenu()}
               >
                 <Search className="size-3.5" />
                 Search
@@ -108,19 +78,7 @@ export function SiteHeader() {
 
             <div className="mx-2 h-4 w-px bg-(--line)" />
 
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              className="border-none hover:bg-transparent"
-              onClick={toggleTheme}
-              aria-label="Toggle theme"
-            >
-              {isDark ? (
-                <Sun className="size-4" />
-              ) : (
-                <Moon className="size-4" />
-              )}
-            </Button>
+            <ThemeToggle />
           </div>
 
           <div className="absolute top-[-3.5px] left-[-4.5px] size-2 border border-(--line) bg-background" />

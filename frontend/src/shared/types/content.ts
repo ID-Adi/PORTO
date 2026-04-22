@@ -1,3 +1,5 @@
+import type { ContributionGraphData } from "@/modules/home/types/contributions";
+
 export type ProfileFact = {
   label: string;
   value: string;
@@ -7,6 +9,9 @@ export type ProfileFact = {
 export type OverviewCell = {
   icon: string;
   value: string;
+  kind?: "text" | "time";
+  copyable?: boolean;
+  note?: string;
 };
 
 export type OverviewRow = {
@@ -24,6 +29,7 @@ export type TestimonialItem = {
   quote: string;
   author: string;
   role: string;
+  avatarUrl?: string;
 };
 
 export type ShowcaseCard = {
@@ -39,10 +45,10 @@ export type SponsorItem = {
   meta: string;
 };
 
-export type ContributionDay = {
-  date: string;
-  count: number;
-  level: 0 | 1 | 2 | 3 | 4;
+export type StackItem = {
+  name: string;
+  slug: string;
+  version?: string;
 };
 
 export type TimelineItem = {
@@ -64,9 +70,9 @@ export type ProfilePageContent = {
   socials: SocialLinkItem[];
   about: string[];
   testimonials: TestimonialItem[];
-  contributions: ContributionDay[];
+  contributions: ContributionGraphData;
   sponsors: SponsorItem[];
-  stack: string[];
+  stack: StackItem[];
   components: ShowcaseCard[];
   blog: ShowcaseCard[];
   experience: TimelineItem[];

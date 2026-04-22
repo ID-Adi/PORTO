@@ -1,0 +1,21 @@
+{
+  "name": "PORTO — Prasetya Adi Wijaya",
+  "short_name": "PORTO",
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#171614",
+  "background_color": "#171614",
+  "description": "Design Engineer & Full Stack Developer portfolio",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

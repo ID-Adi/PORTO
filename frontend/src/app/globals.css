@@ -91,6 +91,8 @@
 
 html {
   scroll-behavior: smooth;
+  --x: 50vw;
+  --y: 50vh;
 }
 
 body {
@@ -258,6 +260,29 @@ a {
   font-size: 12px;
 }
 
+.glow-card {
+  container-type: inline-size;
+}
+
+.glow-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(
+      circle at var(--pointer-x) var(--pointer-y),
+      color-mix(in srgb, var(--foreground) 10%, transparent),
+      transparent 40%
+    );
+  opacity: 0;
+  transition: opacity 180ms ease-out;
+}
+
+.glow-card:hover::before {
+  opacity: 1;
+}
+
 .profile-link {
   border: 0;
   background: transparent;
@@ -287,6 +312,10 @@ a {
   background: color-mix(in srgb, var(--foreground) 8%, transparent);
 }
 
+.contribution-cell[data-loading="true"] {
+  animation: contribution-pulse 1.4s ease-in-out infinite;
+}
+
 .contribution-cell[data-level="1"] {
   background: color-mix(in srgb, var(--foreground) 18%, transparent);
 }
@@ -301,6 +330,51 @@ a {
 
 .contribution-cell[data-level="4"] {
   background: color-mix(in srgb, var(--foreground) 60%, transparent);
+}
+
+.dark .tech-icon {
+  filter: invert(1);
+}
+
+::view-transition-old(root) {
+  animation: none;
+}
+
+@keyframes contribution-pulse {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes pronounce-bars {
+  0%,
+  100% {
+    transform: scaleY(0.55);
+  }
+
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+@keyframes clip-expand {
+  from {
+    clip-path: circle(0% at var(--x) var(--y));
+  }
+
+  to {
+    clip-path: circle(150% at var(--x) var(--y));
+  }
+}
+
+.pronounce-bar {
+  transform-origin: bottom;
+  animation: pronounce-bars 0.9s ease-in-out infinite;
 }
 
 @theme inline {
@@ -373,5 +447,19 @@ a {
 
   .profile-mini-divider {
     height: 0.4rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  .glow-card::before,
+  .pronounce-bar,
+  ::view-transition-new(root),
+  ::view-transition-old(root) {
+    animation: none !important;
+    transition: none !important;
   }
 }
