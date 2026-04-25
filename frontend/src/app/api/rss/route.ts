@@ -1,4 +1,4 @@
-import { siteConfig } from "@/shared/config/site";
+import { siteConfig } from "@/config/site";
 
 export async function GET() {
   const posts: Array<{ title: string; description: string; slug: string }> = [];

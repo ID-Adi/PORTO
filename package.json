@@ -6,6 +6,13 @@
     "install:frontend": "pnpm --dir frontend install",
     "dev:frontend": "pnpm --dir frontend dev",
     "build:frontend": "pnpm --dir frontend build",
-    "lint:frontend": "pnpm --dir frontend lint"
+    "lint:frontend": "pnpm --dir frontend lint",
+    "db:up": "docker compose up -d",
+    "db:down": "docker compose down",
+    "install:backend": "pnpm --dir backend install",
+    "dev:backend": "pnpm --dir backend dev",
+    "db:generate": "pnpm --dir backend db:generate",
+    "db:migrate": "pnpm --dir backend db:migrate",
+    "db:studio": "pnpm --dir backend db:studio"
   }
 }

@@ -34,21 +34,29 @@ docs: update visual direction
 
 ```
 frontend/src/
-├── app/            # Next.js App Router — pages and root layout
-├── modules/        # Domain features (e.g. home/) — routing, sections, data
-├── components/ui/  # shadcn/ui sourced components only
-├── shared/         # Config, types, reusable layout UI, helpers
-└── lib/            # Utility functions (cn for classname merging)
+├── app/             # Next.js App Router — routing, pages, API routes
+├── assets/          # Static assets (images, fonts, icons)
+├── components/      # Reusable UI
+│   ├── ui/          # shadcn/ui sourced components
+│   ├── anim/        # Animation primitives (e.g. ElectricBorder)
+│   └── common/      # Shared widgets (CommandMenu, ThemeToggle, CopyButton, ...)
+├── config/          # App-wide config (siteConfig)
+├── context/         # React context providers (Theme, Query, AppProviders)
+├── features/        # Domain features (e.g. home/) — sections, components, data, types
+├── hooks/           # Custom React hooks
+├── layout/          # Layout primitives (SiteShell, SiteHeader, SiteFooter, Panel, ScrollToTop, Icons)
+├── lib/             # Pure helpers (cn utils, query-client)
+├── services/        # API clients & external integrations
+└── types/           # Shared type definitions
 ```
 
-**Module anatomy** (`modules/<domain>/`):
+**Feature anatomy** (`features/<domain>/`):
 - `sections/` — page-level section components
 - `components/` — domain-specific UI pieces
 - `data/` — typed static content (e.g. `landing-content.ts`)
+- `types/` — domain-specific types
 
-**Shared UI** (`shared/ui/`): `SiteShell`, `SiteHeader`, `SiteFooter`, `Panel`, `ScrollToTop`, `Icons` — layout primitives used across modules.
-
-**Routing**: App Router only. Page composition happens in `app/page.tsx`, which imports from `modules/`.
+**Routing**: App Router only. Page composition happens in `app/page.tsx`, which imports from `features/`.
 
 **Theme**: Dark/light mode persisted in `localStorage` under key `porto-theme`. Hydration via inline `<script>` in root layout — no state management library.
 

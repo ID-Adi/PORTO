@@ -1,6 +1,6 @@
-import { homePageContent } from "@/modules/home/data/landing-content";
-import { ProfileSheet } from "@/modules/home/sections/profile-sheet";
-import { SiteShell } from "@/shared/ui/site-shell";
+import { homePageContent } from "@/features/home/data/landing-content";
+import { ProfileSheet } from "@/features/home/sections/profile-sheet";
+import { SiteShell } from "@/layout/site-shell";
 
 export default function HomePage() {
   return (

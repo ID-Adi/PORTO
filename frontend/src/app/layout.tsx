@@ -3,10 +3,10 @@ import { GeistMono } from "geist/font/mono";
 import { GeistPixelSquare } from "geist/font/pixel";
 import { GeistSans } from "geist/font/sans";
 
-import { homePageContent } from "@/modules/home/data/landing-content";
-import { siteConfig } from "@/shared/config/site";
-import { AppProviders } from "@/shared/providers/app-providers";
-import { ScrollToTop } from "@/shared/ui/scroll-to-top";
+import { homePageContent } from "@/features/home/data/landing-content";
+import { siteConfig } from "@/config/site";
+import { AppProviders } from "@/context/app-providers";
+import { ScrollToTop } from "@/layout/scroll-to-top";
 
 import "./globals.css";
 

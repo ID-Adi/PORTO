@@ -2,12 +2,16 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
-@plugin "@toolwind/corner-shape";
-
 @custom-variant dark (&:where(.dark, .dark *));
 @custom-variant supports-corner-shape {
   @supports (corner-shape: initial) {
     @slot;
+  }
+}
+
+@layer utilities {
+  .corner-squircle {
+    corner-shape: squircle;
   }
 }
 
@@ -91,11 +95,13 @@
 
 html {
   scroll-behavior: smooth;
-  --x: 50vw;
-  --y: 50vh;
+  --theme-transition-color: var(--background);
+  --theme-transition-x: 50vw;
+  --theme-transition-y: 50vh;
 }
 
 body {
+  position: relative;
   margin: 0;
   min-height: 100vh;
   background: var(--background);
@@ -105,6 +111,22 @@ body {
   -moz-osx-font-smoothing: grayscale;
   font-synthesis-weight: none;
   text-rendering: optimizeLegibility;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background: var(--theme-transition-color);
+  clip-path: circle(0% at var(--theme-transition-x) var(--theme-transition-y));
+  pointer-events: none;
+  opacity: 0;
+}
+
+html[data-theme-transition="active"] body::before {
+  opacity: 1;
+  animation: theme-transition-reveal 520ms ease-in-out both;
 }
 
 a {
@@ -336,10 +358,6 @@ a {
   filter: invert(1);
 }
 
-::view-transition-old(root) {
-  animation: none;
-}
-
 @keyframes contribution-pulse {
   0%,
   100% {
@@ -362,13 +380,13 @@ a {
   }
 }
 
-@keyframes clip-expand {
+@keyframes theme-transition-reveal {
   from {
-    clip-path: circle(0% at var(--x) var(--y));
+    clip-path: circle(150vmax at var(--theme-transition-x) var(--theme-transition-y));
   }
 
   to {
-    clip-path: circle(150% at var(--x) var(--y));
+    clip-path: circle(0% at var(--theme-transition-x) var(--theme-transition-y));
   }
 }
 
@@ -408,6 +426,7 @@ a {
   --color-card: var(--card);
   --color-foreground: var(--foreground);
   --color-background: var(--background);
+  --color-line: var(--line);
   --radius-sm: 0;
   --radius-md: 0;
   --radius-lg: 0;
@@ -457,8 +476,7 @@ a {
 
   .glow-card::before,
   .pronounce-bar,
-  ::view-transition-new(root),
-  ::view-transition-old(root) {
+  html[data-theme-transition="active"] body::before {
     animation: none !important;
     transition: none !important;
   }

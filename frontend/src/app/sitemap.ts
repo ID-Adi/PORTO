@@ -1,6 +1,6 @@
 import type { MetadataRoute } from "next";
 
-import { siteConfig } from "@/shared/config/site";
+import { siteConfig } from "@/config/site";
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const staticRoutes = ["/", "/#components", "/#projects", "/#writing", "/#partners"];

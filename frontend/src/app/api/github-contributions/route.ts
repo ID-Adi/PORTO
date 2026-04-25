@@ -3,8 +3,8 @@ import { NextResponse } from "next/server";
 import type {
   ContributionGraphData,
   ContributionWeek,
-} from "@/modules/home/types/contributions";
-import { siteConfig } from "@/shared/config/site";
+} from "@/features/home/types/contributions";
+import { siteConfig } from "@/config/site";
 
 export const revalidate = 3600;
 
