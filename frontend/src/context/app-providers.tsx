@@ -5,7 +5,7 @@ import { Toaster } from "sonner";
 
 import { homePageContent } from "@/features/home/data/landing-content";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryProvider } from "@/context/query-provider";
+import { TRPCProvider } from "@/context/trpc-provider";
 import { ThemeProvider } from "@/context/theme-provider";
 import { CommandMenu } from "@/components/common/command-menu";
 
@@ -15,7 +15,7 @@ type AppProvidersProps = {
 
 export function AppProviders({ children }: AppProvidersProps) {
   return (
-    <QueryProvider>
+    <TRPCProvider>
       <ThemeProvider>
         <TooltipProvider delayDuration={120}>
           {children}
@@ -34,6 +34,6 @@ export function AppProviders({ children }: AppProvidersProps) {
           />
         </TooltipProvider>
       </ThemeProvider>
-    </QueryProvider>
+    </TRPCProvider>
   );
 }

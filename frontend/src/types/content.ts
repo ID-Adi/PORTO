@@ -1,4 +1,5 @@
 import type { ContributionGraphData } from "@/features/home/types/contributions";
+import type { ExperienceItemType } from "@/components/common/work-experience";
 
 export type ProfileFact = {
   label: string;
@@ -78,7 +79,7 @@ export type ProfilePageContent = {
   stack: StackItem[];
   components: ShowcaseCard[];
   blog: ShowcaseCard[];
-  experience: TimelineItem[];
+  experience: ExperienceItemType[];
   projects: TimelineItem[];
   awards: TimelineItem[];
   certifications: TimelineItem[];

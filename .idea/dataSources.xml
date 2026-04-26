@@ -8,5 +8,12 @@
       <jdbc-url>jdbc:postgresql://localhost:5433/porto_db</jdbc-url>
       <working-dir>$ProjectFileDir$</working-dir>
     </data-source>
+    <data-source source="LOCAL" name="ERP ADI" uuid="a912ff2e-4df0-44ec-a7cc-d5f464eaf038">
+      <driver-ref>postgresql</driver-ref>
+      <synchronize>true</synchronize>
+      <jdbc-driver>org.postgresql.Driver</jdbc-driver>
+      <jdbc-url>jdbc:postgresql://localhost:5432/erp_adi</jdbc-url>
+      <working-dir>$ProjectFileDir$</working-dir>
+    </data-source>
   </component>
 </project>

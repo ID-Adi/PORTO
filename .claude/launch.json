@@ -1,0 +1,30 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "frontend (Next.js)",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--dir", "frontend", "dev"],
+      "port": 3000,
+      "autoPort": false
+    },
+    {
+      "name": "backend (Hono + tRPC)",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--dir", "backend", "dev"],
+      "port": 4001
+    },
+    {
+      "name": "postgres (Docker)",
+      "runtimeExecutable": "docker",
+      "runtimeArgs": ["compose", "up", "-d"],
+      "port": 5433
+    },
+    {
+      "name": "drizzle studio",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--dir", "backend", "db:studio"],
+      "port": 4983
+    }
+  ]
+}

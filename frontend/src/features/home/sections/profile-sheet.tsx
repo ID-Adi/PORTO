@@ -15,6 +15,7 @@ import {
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Separator as UiSeparator } from "@/components/ui/separator";
+import { WorkExperience } from "@/components/common/work-experience";
 import {
   Tooltip,
   TooltipContent,
@@ -42,7 +43,6 @@ import {
 } from "../components/overview-item";
 import { ProfileIntro } from "../components/profile-intro";
 import { SocialLogoTile } from "../components/social-logo-tile";
-import { TestimonialsWall } from "../components/testimonials-wall";
 
 type ProfileSheetProps = {
   content: ProfilePageContent;
@@ -145,7 +145,7 @@ function FrameSection({
   return (
     <Panel id={id}>
       <PanelHeader className={description ? undefined : "after:content-none"}>
-        <div className="flex min-h-[4.5rem] items-center justify-between gap-4">
+        <div className="flex items-center justify-between gap-4 py-4 sm:py-5">
           <PanelTitle>
             {title}
             {typeof count === "number" ? <PanelTitleSup>({count})</PanelTitleSup> : null}
@@ -242,7 +242,7 @@ function OverviewSection({ content }: { content: ProfilePageContent }) {
     .filter((item): item is NonNullable<typeof item> => Boolean(item));
 
   return (
-    <RailSection id="overview" title="Overview" className="after:content-none">
+    <RailSection id="overview" title="Overview">
       <PanelContent className="space-y-2.5">
         {leadRows.map((item, index) => (
           <OverviewLeadRow key={`${item.icon}-${index}`} {...item} />
@@ -263,13 +263,13 @@ function SocialLinkRail({ content }: { content: ProfilePageContent }) {
     <RailSection
       id="socials"
       title="Social Links"
-      className="before:content-none after:content-none"
+      className="after:content-none"
     >
       <div className="relative">
         <div className="pointer-events-none absolute inset-0 -z-1 grid grid-cols-2 gap-2 md:grid-cols-3">
-          <div className="border-r border-(--line)" />
-          <div className="border-l border-(--line) md:border-x" />
-          <div className="hidden border-l border-(--line) md:block" />
+          <div className="border-r border-line" />
+          <div className="border-l border-line md:border-x" />
+          <div className="border-l border-line max-md:hidden" />
         </div>
 
         <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
@@ -293,11 +293,9 @@ function SocialLinkItem({
     <a
       href={item.href}
       target="_blank"
-      rel="noreferrer"
+      rel="noopener"
       className={cn(
-        "flex cursor-pointer items-center gap-4 p-4 pr-2 transition-[background-color] ease-out hover:bg-muted/50",
-        "max-md:nth-[2n+1]:screen-line-top max-md:nth-[2n+1]:screen-line-bottom",
-        "md:nth-[3n+1]:screen-line-top md:nth-[3n+1]:screen-line-bottom"
+        "social-link-grid-item flex cursor-pointer items-center gap-4 p-4 pr-2 transition-[background-color] ease-out hover:bg-accent-muted"
       )}
     >
       <SocialLogoTile
@@ -307,7 +305,7 @@ function SocialLinkItem({
 
       <h3 className="flex-1 font-medium">{item.label}</h3>
 
-      <ArrowUpRight className="size-4 text-(--muted-foreground)" />
+      <ArrowUpRight className="size-4 text-muted-foreground" />
     </a>
   );
 }
@@ -326,16 +324,6 @@ function AboutSection({ content }: { content: ProfilePageContent }) {
   );
 }
 
-function TestimonialsSection({ content }: { content: ProfilePageContent }) {
-  return (
-    <FrameSection id="testimonials" title="Testimonials" actionLabel="Wall of Love">
-      <PanelContent>
-        <TestimonialsWall items={content.testimonials} />
-      </PanelContent>
-    </FrameSection>
-  );
-}
-
 function GitHubContributionsSection({ content }: { content: ProfilePageContent }) {
   return (
     <Panel id="contributions">
@@ -345,75 +333,25 @@ function GitHubContributionsSection({ content }: { content: ProfilePageContent }
   );
 }
 
-function SponsorsSection({ content }: { content: ProfilePageContent }) {
-  return (
-    <FrameSection
-      id="partners"
-      title="Sponsors"
-      actionLabel="All Sponsors"
-      description="Support systems, tools, and platform choices that keep PORTO moving."
-    >
-      <div className="relative">
-        <div className="pointer-events-none absolute inset-0 -z-1 grid grid-cols-1 gap-4 max-sm:hidden sm:grid-cols-2">
-          <div className="border-r border-(--line)" />
-          <div className="border-l border-(--line)" />
-        </div>
-
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          {content.sponsors.map((item) => (
-            <a
-              key={item.name}
-              href={item.href}
-              target="_blank"
-              rel="noreferrer"
-              className={cn(
-                "flex min-h-20 flex-col items-center justify-center gap-1 px-4 py-5 transition-[background-color] ease-out hover:bg-black/[0.02] dark:hover:bg-white/[0.03]",
-                "max-sm:screen-line-top max-sm:screen-line-bottom",
-                "sm:nth-[2n+1]:screen-line-top sm:nth-[2n+1]:screen-line-bottom"
-              )}
-            >
-              <span className="text-sm font-medium tracking-[-0.03em]">{item.name}</span>
-              <span className="font-mono text-[11px] text-(--muted-foreground)">{item.meta}</span>
-            </a>
-          ))}
-
-          <a
-            href="mailto:hello@porto.dev"
-            className={cn(
-              "flex min-h-20 items-center justify-center font-mono text-[12px] text-(--muted-foreground) transition-[background-color] ease-out hover:bg-black/[0.02] hover:text-(--foreground) dark:hover:bg-white/[0.03]",
-              "max-sm:screen-line-top max-sm:screen-line-bottom",
-              "sm:nth-[2n+1]:screen-line-top sm:nth-[2n+1]:screen-line-bottom"
-            )}
-          >
-            Sponsor My Work
-          </a>
-        </div>
-      </div>
-    </FrameSection>
-  );
-}
-
 function StackSection({ content }: { content: ProfilePageContent }) {
   return (
     <FrameSection id="stack" title="Tech Stack">
       <PanelContent className="flex flex-wrap gap-2">
         {content.stack.map((item) => (
           <Tooltip key={item.name}>
-            <TooltipTrigger asChild>
-              <span className="profile-chip">
-                <Image
-                  className="tech-icon size-4 object-contain"
-                  src={`https://cdn.simpleicons.org/${item.slug}`}
-                  alt={item.name}
-                  unoptimized
-                  width={16}
-                  height={16}
-                />
-                <span>{item.name}</span>
-                {item.version ? (
-                  <span className="text-(--muted-foreground)">{item.version}</span>
-                ) : null}
-              </span>
+            <TooltipTrigger className="profile-chip">
+              <Image
+                className="tech-icon size-4 object-contain"
+                src={`https://cdn.simpleicons.org/${item.slug}`}
+                alt={item.name}
+                unoptimized
+                width={16}
+                height={16}
+              />
+              <span>{item.name}</span>
+              {item.version ? (
+                <span className="text-(--muted-foreground)">{item.version}</span>
+              ) : null}
             </TooltipTrigger>
             <TooltipContent sideOffset={8}>
               {item.name}
@@ -484,16 +422,16 @@ function ListSection({
 }: {
   id: string;
   title: string;
-  items: ProfilePageContent["experience"];
+  items: TimelineItem[];
   actionLabel?: string;
 }) {
   return (
     <FrameSection id={id} title={title} actionLabel={actionLabel}>
-      <div>
+      <div className="divide-y divide-(--line)">
         {items.map((item, index) => (
           <article
             key={`${title}-${item.title}-${index}`}
-            className={`profile-row ${index > 0 ? "border-t border-(--line)" : ""}`}
+            className="profile-row"
           >
             <p className="profile-kicker">{item.period}</p>
             <div>
@@ -503,6 +441,14 @@ function ListSection({
           </article>
         ))}
       </div>
+    </FrameSection>
+  );
+}
+
+function ExperienceSection({ content }: { content: ProfilePageContent }) {
+  return (
+    <FrameSection id="experience" title="Experience">
+      <WorkExperience experiences={content.experience} />
     </FrameSection>
   );
 }
@@ -635,16 +581,13 @@ export function ProfileSheet({ content }: ProfileSheetProps) {
 
       <SectionSeparator />
       <OverviewSection content={content} />
+      <MiniSeparator />
       <SocialLinkRail content={content} />
       <SectionSeparator />
 
       <AboutSection content={content} />
       <MiniSeparator />
-      <TestimonialsSection content={content} />
-      <MiniSeparator />
       <GitHubContributionsSection content={content} />
-      <SectionSeparator />
-      <SponsorsSection content={content} />
       <SectionSeparator />
       <StackSection content={content} />
       <SectionSeparator />
@@ -666,18 +609,9 @@ export function ProfileSheet({ content }: ProfileSheetProps) {
         columns="lg:grid-cols-2"
       />
       <SectionSeparator />
-      <ListSection id="experience" title="Experience" items={content.experience} />
+      <ExperienceSection content={content} />
       <SectionSeparator />
       <ListSection id="projects" title="Projects" items={content.projects} actionLabel="See All" />
-      <SectionSeparator />
-      <ListSection id="awards" title="Awards" items={content.awards} actionLabel="Full List" />
-      <SectionSeparator />
-      <ListSection
-        id="certifications"
-        title="Certifications"
-        items={content.certifications}
-        actionLabel="Verify"
-      />
       <SectionSeparator />
       <BookmarksSection items={content.bookmarks} />
       <SectionSeparator />

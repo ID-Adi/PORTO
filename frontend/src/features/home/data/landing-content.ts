@@ -232,16 +232,36 @@ export const homePageContent: ProfilePageContent = {
   ],
   experience: [
     {
-      period: "2025 — Now",
-      title: "Building PORTO",
-      detail:
-        "Designing and implementing a documentation-driven frontend foundation for a portfolio and internal skill system.",
-    },
-    {
-      period: "2023 — 2025",
-      title: "Frontend Product Work",
-      detail:
-        "Worked on modular UI systems, landing surfaces, and admin-facing interfaces with a strong focus on maintainability.",
+      id: "porto",
+      companyName: "PORTO",
+      companyWebsite: "https://porto.dev",
+      isCurrentEmployer: true,
+      positions: [
+        {
+          id: "building-porto",
+          title: "Building PORTO",
+          employmentPeriod: {
+            start: "2025",
+          },
+          employmentType: "Product Build",
+          description:
+            "Designing and implementing a documentation-driven frontend foundation for a portfolio and internal skill system.",
+          skills: ["Next.js", "Tailwind CSS", "shadcn/ui", "Design System"],
+          isExpanded: true,
+        },
+        {
+          id: "frontend-product-work",
+          title: "Frontend Product Work",
+          employmentPeriod: {
+            start: "2023",
+            end: "2025",
+          },
+          employmentType: "Frontend",
+          description:
+            "Worked on modular UI systems, landing surfaces, and admin-facing interfaces with a strong focus on maintainability.",
+          skills: ["React", "TypeScript", "UI Systems", "Maintainability"],
+        },
+      ],
     },
   ],
   projects: [

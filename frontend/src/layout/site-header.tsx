@@ -88,7 +88,7 @@ export function SiteHeader() {
                 href={item.href}
                 aria-current={isActive(item.href) ? "page" : undefined}
                 className={cn(
-                  "flex min-w-0 items-center justify-center border-line px-1 font-mono text-[10px] font-medium tracking-[0.08em] uppercase transition-colors sm:text-[11px]",
+                  "flex min-w-0 items-center justify-center border-line px-1 font-mono text-[10px] font-medium tracking-[0.08em] uppercase transition-[background-color,color] sm:text-[11px]",
                   index > 0 ? "border-l" : "",
                   isActive(item.href)
                     ? "bg-muted/60 text-foreground"

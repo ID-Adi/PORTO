@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@hono/node-server':
+        specifier: ^2.0.0
+        version: 2.0.0(hono@4.12.15)
       '@hono/trpc-server':
         specifier: ^0.4.2
         version: 0.4.2(@trpc/server@11.16.0(typescript@6.0.3))(hono@4.12.15)
@@ -579,6 +582,12 @@ packages:
     cpu: [x64]
     os: [win32]
 
+  '@hono/node-server@2.0.0':
+    resolution: {integrity: sha512-n3GfHwwCvHCkGmOwKfxUPOlbfzuO64Sbc5XC4NGPIXxkuOnJrdgExdRKmHfF924r914WRJPT397GdqLvdYTeyQ==}
+    engines: {node: '>=20'}
+    peerDependencies:
+      hono: ^4
+
   '@hono/trpc-server@0.4.2':
     resolution: {integrity: sha512-3TDrc42CZLgcTFkXQba+y7JlRWRiyw1AqhLqztWyNS2IFT+3bHld0lxKdGBttCtGKHYx0505dM67RMazjhdZqw==}
     engines: {node: '>=16.0.0'}
@@ -1144,6 +1153,10 @@ snapshots:
 
   '@esbuild/win32-x64@0.27.7':
     optional: true
+
+  '@hono/node-server@2.0.0(hono@4.12.15)':
+    dependencies:
+      hono: 4.12.15
 
   '@hono/trpc-server@0.4.2(@trpc/server@11.16.0(typescript@6.0.3))(hono@4.12.15)':
     dependencies:

@@ -42,8 +42,9 @@ export function SiteFooterInteractiveLogotype() {
           >
             <text
               x="50%"
-              y="62%"
+              y={VIEWBOX_HEIGHT}
               textAnchor="middle"
+              dominantBaseline="text-after-edge"
               fontFamily="var(--font-pixel-square), var(--font-mono), monospace"
               fontSize="240"
               fontWeight="700"

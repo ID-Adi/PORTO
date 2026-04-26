@@ -11,7 +11,7 @@ export function SocialLogoTile({ src, alt }: SocialLogoTileProps) {
   return (
     <div className="relative size-8 shrink-0">
       <Image
-        className="rounded-lg select-none corner-squircle supports-corner-shape:rounded-[50%]"
+        className="rounded-lg select-none"
         src={src}
         alt={alt}
         width={32}
@@ -19,7 +19,7 @@ export function SocialLogoTile({ src, alt }: SocialLogoTileProps) {
         quality={100}
         unoptimized
       />
-      <div className="pointer-events-none absolute inset-0 rounded-lg ring-1 ring-black/10 corner-squircle ring-inset dark:ring-white/15 supports-corner-shape:rounded-[50%]" />
+      <div className="pointer-events-none absolute inset-0 rounded-lg ring-1 ring-black/10 ring-inset dark:ring-white/15" />
     </div>
   );
 }

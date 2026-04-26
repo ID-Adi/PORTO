@@ -25,6 +25,9 @@
     "paths": {
       "@/*": [
         "./src/*"
+      ],
+      "@porto/api": [
+        "../backend/src/trpc/routers/_app.ts"
       ]
     }
   },
