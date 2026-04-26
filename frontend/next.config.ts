@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import type { NextConfig } from "next";
 
 const rootDirectory = path.dirname(fileURLToPath(import.meta.url));
+const workspaceRoot = path.resolve(rootDirectory, "..");
 
 const nextConfig: NextConfig = {
   allowedDevOrigins: ["127.0.0.1"],
@@ -16,9 +17,10 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  outputFileTracingRoot: workspaceRoot,
   reactStrictMode: true,
   turbopack: {
-    root: rootDirectory,
+    root: workspaceRoot,
   },
 };
 
