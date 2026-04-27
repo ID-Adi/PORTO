@@ -1,12 +1,21 @@
+# Dependencies
 node_modules/
+
+# Build outputs
 dist/
 build/
 .turbo/
 
+# TypeScript
+*.tsbuildinfo
+
+# Environment
 .env
 .env.*
 !.env.example
 
+# Logs
 *.log
-*.tsbuildinfo
+
+# OS
 .DS_Store

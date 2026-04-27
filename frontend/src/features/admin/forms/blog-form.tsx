@@ -7,68 +7,68 @@ import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { normalizeImageUrl } from "@/lib/image-url";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import {
   TextAreaField,
   TextField,
 } from "@/features/admin/components/form-field";
 
-type ProjectFormState = {
+type BlogFormState = {
   title: string;
   slug: string;
   description: string;
-  detail: string;
-  period: string;
-  imageUrl: string;
-  url: string;
-  repoUrl: string;
-  sortOrder: number;
+  content: string;
+  meta: string;
+  coverUrl: string;
+  published: boolean;
+  publishedAt: string;
 };
 
-const empty: ProjectFormState = {
+const empty: BlogFormState = {
   title: "",
   slug: "",
   description: "",
-  detail: "",
-  period: "",
-  imageUrl: "",
-  url: "",
-  repoUrl: "",
-  sortOrder: 0,
+  content: "",
+  meta: "",
+  coverUrl: "",
+  published: false,
+  publishedAt: "",
 };
 
-export function ProjectForm({
+export function BlogForm({
   id,
   initial,
 }: {
   id?: number;
-  initial?: Partial<ProjectFormState>;
+  initial?: Partial<BlogFormState>;
 }) {
   const router = useRouter();
   const utils = trpc.useUtils();
-  const [state, setState] = useState<ProjectFormState>({ ...empty, ...initial });
+  const [state, setState] = useState<BlogFormState>({ ...empty, ...initial });
 
-  const create = trpc.projects.create.useMutation({
+  const create = trpc.blog.create.useMutation({
     onSuccess: () => {
-      toast.success("Project created");
-      utils.projects.list.invalidate();
-      router.push("/admin/projects");
+      toast.success("Post created");
+      utils.blog.list.invalidate();
+      router.push("/admin/blog");
     },
     onError: (err) => toast.error(err.message),
   });
-  const update = trpc.projects.update.useMutation({
+  const update = trpc.blog.update.useMutation({
     onSuccess: () => {
-      toast.success("Project updated");
-      utils.projects.list.invalidate();
-      router.push("/admin/projects");
+      toast.success("Post updated");
+      utils.blog.list.invalidate();
+      router.push("/admin/blog");
     },
     onError: (err) => toast.error(err.message),
   });
 
   const pending = create.isPending || update.isPending;
 
-  function set<K extends keyof ProjectFormState>(
+  function set<K extends keyof BlogFormState>(
     key: K,
-    value: ProjectFormState[K],
+    value: BlogFormState[K],
   ) {
     setState((s) => ({ ...s, [key]: value }));
   }
@@ -79,18 +79,17 @@ export function ProjectForm({
       title: state.title,
       slug: state.slug,
       description: state.description || null,
-      detail: state.detail || null,
-      period: state.period || null,
-      imageUrl: state.imageUrl || null,
-      url: state.url || null,
-      repoUrl: state.repoUrl || null,
-      sortOrder: Number(state.sortOrder) || 0,
+      content: state.content || null,
+      meta: state.meta || null,
+      coverUrl: state.coverUrl || null,
+      published: state.published,
+      publishedAt: state.publishedAt ? new Date(state.publishedAt) : null,
     };
     if (id) update.mutate({ id, data: payload });
     else create.mutate(payload);
   }
 
-  const preview = normalizeImageUrl(state.imageUrl);
+  const preview = normalizeImageUrl(state.coverUrl);
 
   return (
     <form onSubmit={onSubmit} className="grid gap-5 max-w-2xl">
@@ -108,7 +107,6 @@ export function ProjectForm({
           required
           value={state.slug}
           onChange={(e) => set("slug", e.target.value)}
-          hint="URL-friendly id, e.g. portfolio-v2"
         />
       </div>
       <TextField
@@ -118,57 +116,58 @@ export function ProjectForm({
         onChange={(e) => set("description", e.target.value)}
       />
       <TextAreaField
-        label="Detail"
-        name="detail"
-        rows={5}
-        value={state.detail}
-        onChange={(e) => set("detail", e.target.value)}
+        label="Content (Markdown)"
+        name="content"
+        rows={12}
+        value={state.content}
+        onChange={(e) => set("content", e.target.value)}
       />
-      <div className="grid gap-4 sm:grid-cols-2">
-        <TextField
-          label="Period"
-          name="period"
-          value={state.period}
-          onChange={(e) => set("period", e.target.value)}
-          placeholder="2024 — 2025"
-        />
-        <TextField
-          label="Sort order"
-          name="sortOrder"
-          type="number"
-          value={state.sortOrder}
-          onChange={(e) => set("sortOrder", Number(e.target.value))}
-        />
-      </div>
       <TextField
-        label="Image URL"
-        name="imageUrl"
-        value={state.imageUrl}
-        onChange={(e) => set("imageUrl", e.target.value)}
-        hint="Paste a direct image URL or a Google Drive share link (auto-converted)."
+        label="Meta"
+        name="meta"
+        value={state.meta}
+        onChange={(e) => set("meta", e.target.value)}
+        hint="Free-form meta string used in listings."
+      />
+      <TextField
+        label="Cover URL"
+        name="coverUrl"
+        value={state.coverUrl}
+        onChange={(e) => set("coverUrl", e.target.value)}
+        hint="Direct image URL or Google Drive share link."
       />
       {preview ? (
         <div className="rounded-md border border-(--border) bg-(--muted) p-2">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={preview}
-            alt="preview"
+            alt=""
             className="max-h-48 rounded object-contain"
           />
         </div>
       ) : null}
       <div className="grid gap-4 sm:grid-cols-2">
+        <div className="flex items-center justify-between rounded-md border border-(--border) p-3">
+          <div>
+            <Label htmlFor="published" className="cursor-pointer">
+              Published
+            </Label>
+            <p className="text-xs text-(--muted-foreground)">
+              Visible on the public blog
+            </p>
+          </div>
+          <Switch
+            id="published"
+            checked={state.published}
+            onCheckedChange={(v) => set("published", v)}
+          />
+        </div>
         <TextField
-          label="Live URL"
-          name="url"
-          value={state.url}
-          onChange={(e) => set("url", e.target.value)}
-        />
-        <TextField
-          label="Repository URL"
-          name="repoUrl"
-          value={state.repoUrl}
-          onChange={(e) => set("repoUrl", e.target.value)}
+          label="Published at"
+          name="publishedAt"
+          type="datetime-local"
+          value={state.publishedAt}
+          onChange={(e) => set("publishedAt", e.target.value)}
         />
       </div>
       <div className="flex gap-2">
@@ -177,12 +176,12 @@ export function ProjectForm({
           disabled={pending}
           className="bg-(--primary) text-(--primary-foreground) hover:bg-(--primary)/90"
         >
-          {pending ? "Saving…" : id ? "Update project" : "Create project"}
+          {pending ? "Saving…" : id ? "Update post" : "Create post"}
         </Button>
         <Button
           type="button"
           variant="outline"
-          onClick={() => router.push("/admin/projects")}
+          onClick={() => router.push("/admin/blog")}
         >
           Cancel
         </Button>

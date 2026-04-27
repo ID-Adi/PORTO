@@ -1,11 +1,40 @@
-node_modules
-.next
-out
-dist
-.turbo
-.DS_Store
-*.log
-.env.local
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+.next/
+out/
+dist/
+build/
+.turbo/
+
+# TypeScript
+*.tsbuildinfo
+
+# Test / coverage
+coverage/
+
+# Environment files (anywhere in repo)
 .env
-frontend/.env.local
-backend/.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Vercel
+.vercel/
+
+# Allow examples
+!.env.example

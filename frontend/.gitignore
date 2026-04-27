@@ -1,1 +1,25 @@
-.vercel
+# Dependencies
+node_modules/
+
+# Build outputs
+.next/
+out/
+.turbo/
+
+# TypeScript
+*.tsbuildinfo
+
+# Test / coverage
+coverage/
+
+# Environment
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Vercel
+.vercel/
+
+# Logs
+*.log
