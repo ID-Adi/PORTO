@@ -36,5 +36,8 @@ Thumbs.db
 # Vercel
 .vercel/
 
+# Kiro CLI workspace settings (MCP config, agents, skills cache, dsb)
+.kiro/
+
 # Allow examples
 !.env.example

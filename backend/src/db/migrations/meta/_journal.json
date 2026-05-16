@@ -15,6 +15,13 @@
       "when": 1777211683553,
       "tag": "0001_vengeful_gertrude_yorkes",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1778091072721,
+      "tag": "0002_abandoned_nextwave",
+      "breakpoints": true
     }
   ]
 }

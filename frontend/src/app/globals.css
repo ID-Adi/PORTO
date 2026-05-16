@@ -54,6 +54,8 @@
   --font-mono: var(--font-geist-mono), "SFMono-Regular", "SF Mono", "Menlo", monospace;
   --font-pixel-square: var(--font-geist-pixel-square), var(--font-geist-mono), monospace;
   --radius: 0;
+  --code: oklch(0.985 0 0);
+  --code-foreground: oklch(0.141 0.005 285.823);
 }
 
 .dark {
@@ -89,6 +91,8 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(0.274 0.006 286.033);
   --sidebar-ring: oklch(0.552 0.016 285.938);
+  --code: oklch(0.21 0.006 285.885);
+  --code-foreground: oklch(0.985 0 0);
 }
 
 * {
@@ -176,7 +180,7 @@ a {
   content: "";
   position: absolute;
   left: -100vw;
-  z-index: -1;
+  z-index: 0;
   width: 200vw;
   height: 1px;
   background: var(--line);
@@ -227,7 +231,7 @@ a {
   position: absolute;
   bottom: 0;
   left: -100vw;
-  z-index: -1;
+  z-index: 0;
   width: 200vw;
   height: 1px;
   background: var(--line);
@@ -239,7 +243,7 @@ a {
   position: absolute;
   top: 0;
   left: -100vw;
-  z-index: -1;
+  z-index: 0;
   width: 200vw;
   height: 1px;
   background: var(--line);
@@ -499,6 +503,8 @@ a {
   --radius-2xl: 0;
   --radius-3xl: 0;
   --radius-4xl: 0;
+  --color-code: var(--code);
+  --color-code-foreground: var(--code-foreground);
 }
 
 @layer base {
@@ -512,6 +518,30 @@ a {
 
   body {
     @apply bg-background text-foreground;
+  }
+
+@keyframes show-top-mask {
+  to {
+    --top-mask-height: var(--mask-height);
+    }
+  }
+
+@keyframes hide-bottom-mask {
+  to {
+    --bottom-mask-height: 0px;
+    }
+  }
+
+@keyframes show-left-mask {
+  to {
+    --left-mask-width: var(--mask-width);
+    }
+  }
+
+@keyframes hide-right-mask {
+  to {
+    --right-mask-width: 0px;
+    }
   }
 }
 
@@ -585,4 +615,80 @@ a {
   background: var(--background);
   color: var(--foreground);
   min-height: 100vh;
+}
+@property --top-mask-height {
+    syntax: "<length>";
+    inherits: true;
+    initial-value: 0px;
+}
+@property --bottom-mask-height {
+    syntax: "<length>";
+    inherits: true;
+    initial-value: 64px;
+}
+@property --left-mask-width {
+    syntax: "<length>";
+    inherits: true;
+    initial-value: 0px;
+}
+@property --right-mask-width {
+    syntax: "<length>";
+    inherits: true;
+    initial-value: 64px;
+}
+
+@utility scroll-fade-effect-y {
+    --mask-height: 64px;
+    --mask-offset-top: 0px;
+    --mask-offset-bottom: 0px;
+    --scroll-buffer: 2rem;
+    mask-image: linear-gradient(to top, transparent, black 90%), linear-gradient(to bottom, transparent 0%, black 100%), linear-gradient(black, black);
+    mask-size: 100% var(--top-mask-height), 100% var(--bottom-mask-height), 100% 100%;
+    mask-repeat: no-repeat, no-repeat, no-repeat;
+    mask-position: 0 var(--mask-offset-top), 0 calc(100% - var(--mask-offset-bottom)), 0 0;
+    mask-composite: exclude;
+    animation-name: show-top-mask, hide-bottom-mask;
+    animation-timeline: scroll(self), scroll(self);
+    animation-range: 0 var(--scroll-buffer), calc(100% - var(--scroll-buffer)) 100%;
+    animation-fill-mode: both;
+}
+
+@utility scroll-fade-effect-x {
+    --mask-width: 64px;
+    --mask-offset-left: 0px;
+    --mask-offset-right: 0px;
+    --scroll-buffer: 2rem;
+    mask-image: linear-gradient(to left, transparent, black 90%), linear-gradient(to right, transparent 0%, black 100%), linear-gradient(black, black);
+    mask-size: var(--left-mask-width) 100%, var(--right-mask-width) 100%, 100% 100%;
+    mask-repeat: no-repeat, no-repeat, no-repeat;
+    mask-position: var(--mask-offset-left) 0, calc(100% - var(--mask-offset-right)) 0, 0 0;
+    mask-composite: exclude;
+    animation-name: show-left-mask, hide-right-mask;
+    animation-timeline: scroll(self inline), scroll(self inline);
+    animation-range: 0 var(--scroll-buffer), calc(100% - var(--scroll-buffer)) 100%;
+    animation-fill-mode: both;
+}
+
+@property --top-mask-height {
+    syntax: "<length>";
+    inherits: true;
+    initial-value: 0px;
+}
+
+@property --bottom-mask-height {
+    syntax: "<length>";
+    inherits: true;
+    initial-value: 64px;
+}
+
+@property --left-mask-width {
+    syntax: "<length>";
+    inherits: true;
+    initial-value: 0px;
+}
+
+@property --right-mask-width {
+    syntax: "<length>";
+    inherits: true;
+    initial-value: 64px;
 }

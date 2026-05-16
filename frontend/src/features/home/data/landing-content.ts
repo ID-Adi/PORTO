@@ -68,12 +68,12 @@ export const homePageContent: ProfilePageContent = {
     { left: { icon: "code", value: "Design Engineer @ PORTO" } },
     { left: { icon: "lightbulb", value: "Founder @ PORTO" } },
     {
-      left: { icon: "mapPin", value: "Makassar, Indonesia" },
+      left: { icon: "mapPin", value: "Banjarbaru, Indonesia" },
       right: { icon: "clock", value: "Asia/Makassar", kind: "time", note: "WITA" },
     },
     {
-      left: { icon: "phone", value: "+62 812 345 6789", copyable: true },
-      right: { icon: "mail", value: "hello@porto.dev", copyable: true },
+      left: { icon: "phone", value: "+62 858 2080 0495", copyable: true },
+      right: { icon: "mail", value: "contact@pawa.dev", copyable: true },
     },
     {
       left: { icon: "link", value: "porto.dev" },
@@ -109,8 +109,10 @@ export const homePageContent: ProfilePageContent = {
     },
   ],
   about: [
-    "PORTO is being reshaped into a technical editorial profile surface: thin borders, compressed hierarchy, and a layout that feels engineered rather than decorated.",
-    "The refactor follows the structural logic from chanhdai.com as closely as possible while keeping the content, identity, and subject matter rooted in PORTO.",
+    "Content Creator sekaligus Full Stack Developer dengan 3 tahun pengalaman di perusahaan distributor — mengelola dua ranah yang berbeda namun saling memperkuat: kreativitas visual dan rekayasa perangkat lunak.",
+    "Di sisi kreatif, saya mengelola iklan digital (TikTok Ads, Google Ads, Meta Ads), branding, kerjasama eksternal, serta produksi video dan desain grafis. Latar belakang pendidikan DKV menjadi pondasi kuat dalam membangun identitas visual yang efektif dan komunikatif.",
+    "Di bidang IT, saya membangun sistem ERP perusahaan dari nol — satu database yang terintegrasi antara web dan mobile. Sistem ini mencakup alur bisnis lengkap: penjualan, persediaan, pembelian, perpajakan, laporan keuangan, kalkulasi HPP, hingga audit. Kerangka logika bisnis dikembangkan mengacu pada sistem Accurate.",
+    "Pekerja keras, selalu up to date dengan perkembangan teknologi, dan aktif memanfaatkan AI dalam keseharian.",
   ],
   testimonials: [
     {
@@ -191,27 +193,27 @@ export const homePageContent: ProfilePageContent = {
     { name: "Playwright", slug: "playwright" },
     { name: "Vercel", slug: "vercel" },
   ],
-  components: [
+  skills: [
     {
       title: "Profile Header Grid",
       description:
         "A boxed profile intro using split rows, monospaced meta labels, and rail-aligned borders.",
       meta: "Header / Foundation",
-      hrefLabel: "Open component",
+      hrefLabel: "Open skill",
     },
     {
       title: "Data-Heavy Section Sheets",
       description:
         "Sections read like compact product sheets: readable, structured, and intentionally dense.",
       meta: "Section / Content",
-      hrefLabel: "Open component",
+      hrefLabel: "Open skill",
     },
     {
       title: "Editorial Card Previews",
       description:
         "Dark preview blocks balance the otherwise light monochrome canvas and mirror the reference rhythm.",
       meta: "Card / Showcase",
-      hrefLabel: "Open component",
+      hrefLabel: "Open skill",
     },
   ],
   blog: [
@@ -266,22 +268,80 @@ export const homePageContent: ProfilePageContent = {
   ],
   projects: [
     {
-      period: "01",
-      title: "Editorial Homepage System",
-      detail:
-        "Reframed the homepage from generic marketing sections into a compact profile sheet inspired by chanhdai.com.",
+      title: "PORTO — Personal Portfolio System",
+      period: "01.2025 – ∞",
+      href: "https://github.com/user/porto",
+      description:
+        "A monolith portfolio built with Next.js 16, Tailwind CSS v4, and shadcn/ui. Designed as a compact editorial profile sheet with strict visual boundaries.",
+      highlights: [
+        "Monochrome editorial design system with disciplined spacing and thin borders",
+        "Modular monolith structure: app/ for routing, modules/ for domain, shared/ for reusable UI",
+        "Playwright-driven visual QA with before/after snapshots",
+        "Lighthouse score 95+ across all categories",
+      ],
+      tags: ["Next.js", "TypeScript", "Tailwind CSS", "shadcn/ui", "Vercel"],
     },
     {
-      period: "02",
-      title: "Monolith with strict UI boundaries",
-      detail:
-        "Kept route composition in app/, domain work in modules/, and reusable UI inside shared/components.",
+      title: "Internal Design Token Engine",
+      period: "06.2024 – 12.2024",
+      description:
+        "A token-based design system engine that generates consistent spacing, color, and typography scales from a single config source.",
+      highlights: [
+        "Reduced design inconsistencies by 80% across 12 product screens",
+        "Auto-generated Tailwind config from Figma token exports",
+        "Supported dark mode, responsive scaling, and brand theming from one source",
+      ],
+      tags: ["Design Systems", "TypeScript", "Tailwind CSS", "Figma API"],
     },
     {
-      period: "03",
-      title: "Playwright-driven visual QA",
-      detail:
-        "Used before/after snapshots as a working loop instead of hoping the browser agrees later. Browser dulu, ego belakangan 😄",
+      title: "Real-time Dashboard Platform",
+      period: "03.2024 – 08.2024",
+      href: "https://example.com/dashboard",
+      description:
+        "WebSocket-powered analytics dashboard serving 5k+ concurrent users with sub-200ms update latency.",
+      highlights: [
+        "Handled 5k concurrent WebSocket connections with horizontal scaling",
+        "Built custom charting layer on top of D3 for real-time data streams",
+        "Reduced initial load time from 4.2s to 1.1s via code splitting and lazy hydration",
+      ],
+      tags: ["React", "WebSocket", "D3.js", "Node.js", "Redis"],
+    },
+    {
+      title: "E-Commerce Checkout Rebuild",
+      period: "01.2024 – 05.2024",
+      description:
+        "Complete rewrite of a legacy checkout flow, improving conversion rate by 23% through UX simplification and performance optimization.",
+      highlights: [
+        "Conversion rate improved from 2.1% to 2.6% (+23%)",
+        "Reduced checkout steps from 5 to 2 with progressive disclosure",
+        "Integrated 3 payment gateways with unified error handling",
+      ],
+      tags: ["Next.js", "Stripe", "A/B Testing", "UX"],
+    },
+    {
+      title: "CLI Deployment Tool",
+      period: "09.2023 – 02.2024",
+      href: "https://github.com/user/deploy-cli",
+      description:
+        "A zero-config CLI tool for deploying containerized apps to AWS ECS with built-in rollback and health checks.",
+      highlights: [
+        "Zero-config deployment with convention-based defaults",
+        "Built-in rollback on failed health checks within 30s window",
+        "Supported multi-region deployments with traffic shifting",
+      ],
+      tags: ["CLI", "Node.js", "AWS ECS", "Docker", "Open Source"],
+    },
+    {
+      title: "Component Library — Radix Primitives",
+      period: "04.2023 – 08.2023",
+      description:
+        "Accessible component library built on Radix UI primitives with full keyboard navigation and ARIA compliance.",
+      highlights: [
+        "40+ components with full keyboard and screen reader support",
+        "Published to internal npm registry, adopted by 3 product teams",
+        "Reduced UI development time by ~35% across teams",
+      ],
+      tags: ["React", "Radix UI", "Accessibility", "Storybook"],
     },
   ],
   awards: [

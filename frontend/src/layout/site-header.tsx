@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Search } from "lucide-react";
@@ -9,30 +10,52 @@ import { navItems } from "@/features/home/data/nav-items";
 import { Icons } from "@/layout/icons";
 import { openCommandMenu } from "@/components/common/command-menu";
 import { ThemeToggle } from "@/components/common/theme-toggle";
+import { useHasMounted } from "@/hooks/use-has-mounted";
+import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 
 export function SiteHeader() {
   const pathname = usePathname();
+  const hasMounted = useHasMounted();
+  const settings = trpc.siteSettings.get.useQuery(undefined, {
+    enabled: hasMounted,
+    staleTime: 60_000,
+  });
+  const logoUrl = hasMounted ? (settings.data?.logoUrl ?? null) : null;
 
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname.startsWith(href);
 
   return (
     <>
-      <header className="sticky top-0 z-50 max-w-screen overflow-x-hidden bg-background px-2 pt-2">
-        <div className="screen-line-top screen-line-bottom page-frame relative border-x border-y border-line bg-background before:z-1 after:z-1">
+      <header className="screen-line-bottom sticky top-0 z-50 max-w-screen overflow-x-hidden bg-background px-2 pt-2">
+        <div className="screen-line-top page-frame relative border-x border-line bg-background before:z-1 after:z-1">
           <div className="flex h-12 items-center justify-between gap-2 px-2 sm:gap-4">
             <Link
               href="/"
               aria-label="Home"
-              className="flex h-8 items-center border-r border-line pr-3 font-mono text-[12px] font-bold tracking-[0.24em] transition-opacity hover:opacity-80"
+              className="flex h-8 items-center gap-2 border-r border-line pr-3 font-mono text-[12px] font-bold tracking-[0.24em] transition-opacity hover:opacity-80"
             >
-              PORTO
-              <span className="ml-1 text-muted-foreground">/&gt;</span>
+              {logoUrl ? (
+                <Image
+                  src={logoUrl}
+                  alt="Logo"
+                  width={20}
+                  height={20}
+                  className="h-5 w-auto object-contain"
+                  unoptimized
+                  priority
+                />
+              ) : (
+                <div
+                  aria-hidden
+                  className="h-5 w-5 border border-line bg-[repeating-linear-gradient(45deg,var(--color-line)_0,var(--color-line)_1px,transparent_1px,transparent_4px)]"
+                />
+              )}
             </Link>
 
             <div className="ml-auto flex items-center">
-              <div className="hidden items-center md:flex">
+              <div className="hidden items-center border-r border-line pr-2 md:flex">
                 <Button
                   variant="ghost"
                   size="sm"
@@ -53,12 +76,10 @@ export function SiteHeader() {
                 </Button>
               </div>
 
-              <div className="mx-2 hidden h-4 w-px bg-line md:block" />
-
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-8 gap-2 border-none px-2 font-mono text-[12px] font-medium hover:bg-transparent"
+                className="h-8 gap-2 border-r border-line border-none px-2 font-mono text-[12px] font-medium hover:bg-transparent"
                 asChild
               >
                 <a
@@ -66,13 +87,12 @@ export function SiteHeader() {
                   target="_blank"
                   rel="noopener noreferrer"
                   aria-label="GitHub"
+                  className="border-r border-line pr-2"
                 >
                   <Icons.gitHub className="size-4" />
                   <span className="hidden md:inline-block">1.6k</span>
                 </a>
               </Button>
-
-              <div className="mx-2 h-4 w-px bg-line" />
 
               <ThemeToggle />
             </div>

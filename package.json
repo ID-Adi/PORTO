@@ -7,6 +7,8 @@
     "dev:frontend": "pnpm --dir frontend dev",
     "build:frontend": "pnpm --dir frontend build",
     "lint:frontend": "pnpm --dir frontend lint",
+    "clean:frontend": "pnpm --dir frontend clean",
+    "fresh:frontend": "pnpm --dir frontend fresh",
     "db:up": "docker compose up -d",
     "db:down": "docker compose down",
     "install:backend": "pnpm --dir backend install",

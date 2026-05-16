@@ -19,15 +19,20 @@ export default function AdminLoginPage() {
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setPending(true);
-    const { error } = await authClient.signIn.email({ email, password });
-    setPending(false);
-    if (error) {
-      toast.error(error.message ?? "Sign-in failed");
-      return;
+    try {
+      const { error } = await authClient.signIn.email({ email, password });
+      if (error) {
+        toast.error(error.message ?? "Sign-in failed");
+        return;
+      }
+      toast.success("Signed in");
+      router.push("/admin");
+      router.refresh();
+    } catch {
+      toast.error("Cannot reach the auth server. Check backend and CORS.");
+    } finally {
+      setPending(false);
     }
-    toast.success("Signed in");
-    router.push("/admin");
-    router.refresh();
   }
 
   return (

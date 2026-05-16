@@ -30,6 +30,16 @@ export const blogRouter = router({
         .limit(1);
       return row ?? null;
     }),
+  bySlug: publicProcedure
+    .input(z.object({ slug: z.string() }))
+    .query(async ({ input }) => {
+      const [row] = await db
+        .select()
+        .from(blogPosts)
+        .where(eq(blogPosts.slug, input.slug))
+        .limit(1);
+      return row ?? null;
+    }),
   create: protectedProcedure.input(blogInput).mutation(async ({ input }) => {
     const [row] = await db.insert(blogPosts).values(input).returning();
     return row;

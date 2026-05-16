@@ -12,3 +12,4 @@ export * from "./contact-messages.js";
 export * from "./media.js";
 export * from "./tags.js";
 export * from "./skills.js";
+export * from "./site-settings.js";

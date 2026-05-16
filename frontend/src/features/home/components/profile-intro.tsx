@@ -1,10 +1,14 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useMemo, useState } from "react";
+import { motion } from "motion/react";
+import { useMemo } from "react";
 
 import type { ProfilePageContent } from "@/types/content";
 import { PronounceButton } from "@/components/common/pronounce-button";
+import { TextFlip } from "@/components/text-flip";
+import { useHasMounted } from "@/hooks/use-has-mounted";
+import { trpc } from "@/lib/trpc";
 
 type ProfileIntroProps = Pick<
   ProfilePageContent,
@@ -49,58 +53,26 @@ function VerifiedIcon(props: React.ComponentProps<"svg">) {
   );
 }
 
-function RotatingSubtitle({
+function HeroFlip({
   flipSentences,
   title,
 }: Pick<ProfileIntroProps, "flipSentences" | "title">) {
   const items = useMemo(() => {
-    if (flipSentences.length > 0) {
-      return flipSentences;
-    }
-
+    if (flipSentences.length > 0) return flipSentences;
     return [title];
   }, [flipSentences, title]);
 
-  const [index, setIndex] = useState(0);
-  const [isReducedMotion, setIsReducedMotion] = useState(false);
-
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return undefined;
-    }
-
-    const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const updateMotionPreference = () => setIsReducedMotion(mediaQuery.matches);
-
-    updateMotionPreference();
-    mediaQuery.addEventListener("change", updateMotionPreference);
-
-    return () =>
-      mediaQuery.removeEventListener("change", updateMotionPreference);
-  }, []);
-
-  useEffect(() => {
-    if (items.length <= 1 || isReducedMotion) {
-      return undefined;
-    }
-
-    const interval = window.setInterval(() => {
-      setIndex((current) => (current + 1) % items.length);
-    }, 1800);
-
-    return () => window.clearInterval(interval);
-  }, [isReducedMotion, items]);
-
   return (
     <div className="relative flex h-full items-center overflow-hidden">
-      <span
-        key={items[index]}
-        className={`inline-block font-pixel-square text-sm text-balance text-(--muted-foreground) transition-all duration-300 ease-out ${
-          isReducedMotion ? "translate-y-0 opacity-100" : "translate-y-[-1px] opacity-100"
-        }`}
+      <TextFlip
+        as={motion.span}
+        className="font-pixel-square text-sm text-balance text-(--muted-foreground)"
+        interval={1.8}
       >
-        {items[index]}
-      </span>
+        {items.map((item) => (
+          <span key={item}>{item}</span>
+        ))}
+      </TextFlip>
     </div>
   );
 }
@@ -112,11 +84,21 @@ export function ProfileIntro({
   pronunciationText,
   title,
 }: ProfileIntroProps) {
+  const hasMounted = useHasMounted();
+  const settings = trpc.siteSettings.get.useQuery(undefined, {
+    enabled: hasMounted,
+    staleTime: 60_000,
+  });
+  const displayName = hasMounted ? (settings.data?.profileName ?? name) : name;
+  const displayTitle = hasMounted
+    ? (settings.data?.profileTitle ?? title)
+    : title;
+
   return (
     <div className="screen-line-bottom flex border-x border-(--line)">
       <div className="shrink-0 border-r border-(--line)">
         <div className="mx-0.5 my-0.75">
-          <InteractiveAvatar avatarUrl={avatarUrl} name={name} />
+          <InteractiveAvatar avatarUrl={avatarUrl} name={displayName} />
         </div>
       </div>
 
@@ -136,16 +118,16 @@ export function ProfileIntro({
         <div className="border-t border-(--line)">
           <div className="flex min-w-0 items-center gap-2 pl-4">
             <h1 className="min-w-0 flex-1 line-clamp-1 -translate-y-px text-3xl font-semibold tracking-tight">
-              {name}
+              {displayName}
             </h1>
             <VerifiedIcon className="size-4.5 text-sky-500 select-none" />
             {pronunciationText ? (
-              <PronounceButton name={name} />
+              <PronounceButton name={displayName} />
             ) : null}
           </div>
 
           <div className="h-12.5 border-t border-(--line) py-1 pl-4 sm:h-9">
-            <RotatingSubtitle flipSentences={flipSentences} title={title} />
+            <HeroFlip flipSentences={flipSentences} title={displayTitle} />
           </div>
         </div>
       </div>

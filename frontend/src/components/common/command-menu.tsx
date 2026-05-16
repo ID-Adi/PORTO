@@ -90,12 +90,12 @@ export function CommandMenu({ content }: CommandMenuProps) {
 
   const componentItems = useMemo<MenuItem[]>(
     () =>
-      content.components.map((item) => ({
+      content.skills.map((item) => ({
         label: item.title,
-        href: "#components",
+        href: "#skills",
         keywords: [item.meta, item.description],
       })),
-    [content.components]
+    [content.skills]
   );
 
   const writingItems = useMemo<MenuItem[]>(
@@ -167,7 +167,7 @@ export function CommandMenu({ content }: CommandMenuProps) {
           ))}
         </CommandGroup>
 
-        <CommandGroup heading="Components">
+        <CommandGroup heading="Skills">
           {componentItems.map((item) => (
             <CommandItem
               key={item.label}

@@ -1,7 +1,12 @@
+"use client";
+
+import { useState } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import {
   ArrowUpRight,
   Bookmark,
+  ChevronDown,
   Clock,
   Code,
   Lightbulb,
@@ -14,6 +19,11 @@ import {
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { Separator as UiSeparator } from "@/components/ui/separator";
 import { WorkExperience } from "@/components/common/work-experience";
 import {
@@ -30,7 +40,7 @@ import {
   PanelTitleSup,
 } from "@/layout/panel";
 import { Icons } from "@/layout/icons";
-import type { ProfilePageContent, TimelineItem } from "@/types/content";
+import type { ProfilePageContent, ProjectEntry, TimelineItem } from "@/types/content";
 import { CopyButton } from "@/components/common/copy-button";
 
 import { ContributionGraph } from "../components/contribution-graph";
@@ -59,16 +69,20 @@ const overviewIconMap: Record<string, React.ElementType> = {
   user: User,
 };
 
+// Icons8 modern colored social icons. Style "color" preserves brand color
+// recognition; 96px source scales down crisply to the 32px tile.
+const icons8 = (slug: string) => `https://img.icons8.com/color/96/${slug}.png`;
+
 const socialBrands: Record<
   string,
   { src: string }
 > = {
-  X: { src: "/social-links/x.svg" },
-  GitHub: { src: "/social-links/github.svg" },
-  LinkedIn: { src: "/social-links/linkedin.svg" },
+  X: { src: icons8("twitterx--v2") },
+  GitHub: { src: icons8("github--v1") },
+  LinkedIn: { src: icons8("linkedin") },
   "daily.dev": { src: "/social-links/dailydev.svg" },
-  Discord: { src: "/social-links/discord.svg" },
-  YouTube: { src: "/social-links/youtube.svg" },
+  Discord: { src: icons8("discord-logo") },
+  YouTube: { src: icons8("youtube-play") },
 };
 
 function ProfileCover({ monogram }: { monogram: string }) {
@@ -310,15 +324,73 @@ function SocialLinkItem({
   );
 }
 
+const CREATIVE_TOOLS = [
+  "Premiere Pro", "After Effects", "CapCut", "Illustrator", "Photoshop",
+  "TikTok Ads", "Google Ads", "Meta Ads",
+];
+
+const ENGINEERING_TOOLS = [
+  "Next.js", "Node.js", "Prisma", "Flutter", "ERP Systems",
+];
+
+function AboutDomainTag({ label }: { label: string }) {
+  return (
+    <span className="inline-flex items-center rounded-sm border border-(--line) bg-muted px-1.5 py-0.5 font-mono text-[11px] text-(--muted-foreground)">
+      {label}
+    </span>
+  );
+}
+
+function AboutDomainLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="font-mono text-[10px] uppercase tracking-widest text-(--muted-foreground)/50">
+      {children}
+    </p>
+  );
+}
+
 function AboutSection({ content }: { content: ProfilePageContent }) {
+  const [lead, creativeText, engineeringText, closing] = content.about;
+
   return (
     <FrameSection id="about" title="About">
-      <PanelContent className="space-y-4">
-        {content.about.map((paragraph) => (
-          <p key={paragraph} className="font-mono text-[13px] leading-7 text-(--muted-foreground)">
-            {paragraph}
+      <PanelContent className="space-y-5">
+        <p className="text-[13.5px] leading-7 font-medium tracking-[-0.01em] text-(--foreground)">
+          {lead}
+        </p>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-3 rounded-sm border border-(--line) bg-muted/30 p-4">
+            <AboutDomainLabel>Creative</AboutDomainLabel>
+            <p className="font-mono text-[12px] leading-6 text-(--muted-foreground)">
+              {creativeText}
+            </p>
+            <div className="flex flex-wrap gap-1.5 pt-1">
+              {CREATIVE_TOOLS.map((tool) => (
+                <AboutDomainTag key={tool} label={tool} />
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-3 rounded-sm border border-(--line) bg-muted/30 p-4">
+            <AboutDomainLabel>Engineering</AboutDomainLabel>
+            <p className="font-mono text-[12px] leading-6 text-(--muted-foreground)">
+              {engineeringText}
+            </p>
+            <div className="flex flex-wrap gap-1.5 pt-1">
+              {ENGINEERING_TOOLS.map((tool) => (
+                <AboutDomainTag key={tool} label={tool} />
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3 border-t border-dashed border-(--line) pt-4">
+          <div className="h-1 w-1 shrink-0 rounded-full bg-(--muted-foreground)/40" />
+          <p className="font-mono text-[12px] leading-6 text-(--muted-foreground) italic">
+            {closing}
           </p>
-        ))}
+        </div>
       </PanelContent>
     </FrameSection>
   );
@@ -374,7 +446,7 @@ function CardGridSection({
 }: {
   id: string;
   title: string;
-  items: ProfilePageContent["components"] | ProfilePageContent["blog"];
+  items: ProfilePageContent["skills"] | ProfilePageContent["blog"];
   actionLabel?: string;
   count?: number;
   columns: string;
@@ -389,7 +461,7 @@ function CardGridSection({
               index > 0 ? "border-t border-(--line) lg:border-t-0 lg:border-l" : ""
             }`}
           >
-            {id === "components" ? (
+            {id === "skills" ? (
               <div className="surface-hatch flex aspect-[1.7/1] items-end border border-(--line) bg-zinc-950 px-3 py-3 text-white">
                 <div>
                   <p className="profile-kicker text-white/50">{item.meta}</p>
@@ -400,16 +472,142 @@ function CardGridSection({
               <p className="profile-kicker">{item.meta}</p>
             )}
 
-            {id !== "components" ? (
+            {id !== "skills" ? (
               <h3 className="mt-1 text-sm font-medium tracking-[-0.03em]">{item.title}</h3>
             ) : null}
             <p className="mt-3 text-[12px] leading-6 text-(--muted-foreground)">{item.description}</p>
-            <button className="profile-link mt-3" type="button">
-              {item.hrefLabel}
-            </button>
+            {id === "skills" ? (
+              <Link href="/skills" className="profile-link mt-3 inline-block">
+                {item.hrefLabel}
+              </Link>
+            ) : (
+              <button className="profile-link mt-3" type="button">
+                {item.hrefLabel}
+              </button>
+            )}
           </article>
         ))}
       </div>
+    </FrameSection>
+  );
+}
+
+function ProjectIcon() {
+  return (
+    <div className="relative size-10 shrink-0 overflow-hidden rounded-full border border-(--line) bg-zinc-950">
+      <svg className="absolute inset-0 size-full opacity-40" aria-hidden="true">
+        <pattern
+          id="project-hatch"
+          width="4"
+          height="4"
+          patternUnits="userSpaceOnUse"
+          patternTransform="rotate(45)"
+        >
+          <line x1="0" y1="0" x2="0" y2="4" stroke="white" strokeWidth="1" />
+        </pattern>
+        <rect width="100%" height="100%" fill="url(#project-hatch)" />
+      </svg>
+    </div>
+  );
+}
+
+function ProjectRow({ item }: { item: ProjectEntry }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <div className="border-b border-(--line)">
+        <div className="flex items-center gap-4 px-4 py-4 sm:px-5">
+          <ProjectIcon />
+          <div className="h-10 border-l border-dotted border-(--line)" />
+          <div className="min-w-0 flex-1">
+            <h3 className="text-sm font-medium tracking-[-0.03em]">{item.title}</h3>
+            <p className="mt-0.5 font-mono text-xs text-(--muted-foreground)">{item.period}</p>
+          </div>
+          <div className="flex shrink-0 items-center gap-1">
+            {item.href && (
+              <a
+                href={item.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex size-8 items-center justify-center rounded-md text-(--muted-foreground) transition-colors hover:text-(--foreground)"
+              >
+                <Link2 className="size-4" />
+              </a>
+            )}
+            <CollapsibleTrigger className="inline-flex size-8 items-center justify-center rounded-md text-(--muted-foreground) transition-colors hover:text-(--foreground)">
+              <ChevronDown
+                className={cn("size-4 transition-transform", open && "rotate-180")}
+              />
+            </CollapsibleTrigger>
+          </div>
+        </div>
+
+        <CollapsibleContent>
+          <div className="border-t border-(--line) px-4 py-5 sm:px-5 sm:pl-[4.5rem]">
+            <p className="text-sm leading-relaxed text-(--muted-foreground)">
+              {item.description}
+            </p>
+            {item.highlights.length > 0 && (
+              <ul className="mt-4 space-y-2">
+                {item.highlights.map((h) => (
+                  <li key={h} className="flex gap-2 text-sm leading-relaxed">
+                    <span className="mt-2 size-1.5 shrink-0 rounded-full bg-(--foreground)" />
+                    <span>{h}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {item.tags.length > 0 && (
+              <div className="mt-5 flex flex-wrap gap-2">
+                {item.tags.map((tag) => (
+                  <span
+                    key={tag}
+                    className="rounded-full border border-(--line) px-3 py-0.5 font-mono text-xs text-(--muted-foreground)"
+                  >
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        </CollapsibleContent>
+      </div>
+    </Collapsible>
+  );
+}
+
+function ProjectsSection({ content }: { content: ProfilePageContent }) {
+  const INITIAL_COUNT = 4;
+  const [showAll, setShowAll] = useState(false);
+  const visible = showAll ? content.projects : content.projects.slice(0, INITIAL_COUNT);
+
+  return (
+    <FrameSection
+      id="projects"
+      title="Projects"
+      count={content.projects.length}
+      actionLabel="See All"
+    >
+      <div>
+        {visible.map((item) => (
+          <ProjectRow key={item.title} item={item} />
+        ))}
+      </div>
+      {content.projects.length > INITIAL_COUNT && (
+        <div className="flex justify-center border-t border-(--line) py-4">
+          <button
+            type="button"
+            onClick={() => setShowAll(!showAll)}
+            className="inline-flex items-center gap-2 rounded-full border border-(--line) bg-(--background) px-5 py-2 text-sm font-medium transition-colors hover:bg-(--muted)"
+          >
+            {showAll ? "Show Less" : "Show More"}
+            <ChevronDown
+              className={cn("size-4 transition-transform", showAll && "rotate-180")}
+            />
+          </button>
+        </div>
+      )}
     </FrameSection>
   );
 }
@@ -592,11 +790,11 @@ export function ProfileSheet({ content }: ProfileSheetProps) {
       <StackSection content={content} />
       <SectionSeparator />
       <CardGridSection
-        id="components"
-        title="Components"
-        items={content.components}
-        count={content.components.length}
-        actionLabel="All Components"
+        id="skills"
+        title="Skills"
+        items={content.skills}
+        count={content.skills.length}
+        actionLabel="All Skills"
         columns="lg:grid-cols-3"
       />
       <SectionSeparator />
@@ -611,7 +809,7 @@ export function ProfileSheet({ content }: ProfileSheetProps) {
       <SectionSeparator />
       <ExperienceSection content={content} />
       <SectionSeparator />
-      <ListSection id="projects" title="Projects" items={content.projects} actionLabel="See All" />
+      <ProjectsSection content={content} />
       <SectionSeparator />
       <BookmarksSection items={content.bookmarks} />
       <SectionSeparator />

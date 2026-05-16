@@ -9,10 +9,18 @@ import { appRouter } from "./trpc/routers/_app.js";
 
 const app = new Hono();
 
+const allowedOrigins = new Set(
+  [
+    "http://localhost:3000",
+    "http://localhost:3001",
+    process.env.FRONTEND_URL,
+  ].filter(Boolean),
+);
+
 app.use(
   "*",
   cors({
-    origin: "http://localhost:3000",
+    origin: (origin) => (allowedOrigins.has(origin) ? origin : null),
     credentials: true,
     allowHeaders: ["Content-Type", "Authorization"],
     allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],

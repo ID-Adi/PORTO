@@ -11,6 +11,7 @@ import {
   LogOut,
   Mail,
   Menu,
+  Settings,
   Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -32,6 +33,7 @@ const navItems = [
   { href: "/admin/blog", label: "Blog", icon: BookOpen },
   { href: "/admin/experience", label: "Experience", icon: Briefcase },
   { href: "/admin/contact", label: "Contact", icon: Mail },
+  { href: "/admin/site-settings", label: "Site Settings", icon: Settings },
 ];
 
 function NavList({

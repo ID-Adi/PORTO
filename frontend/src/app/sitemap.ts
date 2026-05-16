@@ -3,7 +3,7 @@ import type { MetadataRoute } from "next";
 import { siteConfig } from "@/config/site";
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const staticRoutes = ["/", "/#components", "/#projects", "/#writing", "/#partners"];
+  const staticRoutes = ["/", "/#skills", "/#projects", "/#writing", "/#partners"];
   const blogSlugs: string[] = [];
 
   return [

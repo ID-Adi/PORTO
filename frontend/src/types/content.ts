@@ -61,6 +61,15 @@ export type TimelineItem = {
   bookmarkedAt?: string;
 };
 
+export type ProjectEntry = {
+  title: string;
+  period: string;
+  href?: string;
+  description: string;
+  highlights: string[];
+  tags: string[];
+};
+
 export type ProfilePageContent = {
   monogram: string;
   name: string;
@@ -77,10 +86,10 @@ export type ProfilePageContent = {
   contributions: ContributionGraphData;
   sponsors: SponsorItem[];
   stack: StackItem[];
-  components: ShowcaseCard[];
+  skills: ShowcaseCard[];
   blog: ShowcaseCard[];
   experience: ExperienceItemType[];
-  projects: TimelineItem[];
+  projects: ProjectEntry[];
   awards: TimelineItem[];
   certifications: TimelineItem[];
   bookmarks: TimelineItem[];
