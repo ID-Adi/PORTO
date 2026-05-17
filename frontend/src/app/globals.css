@@ -2,6 +2,8 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
+@plugin "@tailwindcss/typography";
+
 @custom-variant dark (&:where(.dark, .dark *));
 @custom-variant supports-corner-shape {
   @supports (corner-shape: initial) {
@@ -691,4 +693,210 @@ a {
     syntax: "<length>";
     inherits: true;
     initial-value: 64px;
+}
+/* =========================================================
+ * MDXEditor — override warna agar match monokrom PORTO
+ * ========================================================= */
+.mdx-editor {
+  --baseBg: var(--background);
+  --baseBgSubtle: var(--muted);
+  --baseBgHover: var(--muted);
+  --baseBgActive: var(--accent);
+  --baseBorder: var(--line);
+  --baseBorderHover: var(--border);
+  --baseLine: var(--line);
+  --baseText: var(--foreground);
+  --baseTextContrast: var(--foreground);
+  --baseTextSubtle: var(--muted-foreground);
+  --accentBase: var(--primary);
+  --accentBgSubtle: color-mix(in oklab, var(--primary) 12%, transparent);
+  --accentBgHover: color-mix(in oklab, var(--primary) 16%, transparent);
+  --accentBgActive: color-mix(in oklab, var(--primary) 20%, transparent);
+  --accentBorder: var(--primary);
+  --accentText: var(--primary);
+  --accentTextContrast: var(--primary-foreground);
+  --font-body: var(--font-sans);
+  --font-mono: var(--font-mono);
+  --radius-base: 0px;
+  --radius-medium: 0px;
+  --radius-large: 0px;
+  color: var(--foreground);
+}
+
+.mdx-editor *,
+.mdx-editor *::before,
+.mdx-editor *::after {
+  border-radius: 0 !important;
+}
+
+.mdx-editor [role="toolbar"],
+.mdx-editor .mdx-toolbar {
+  border-bottom: 1px solid var(--line);
+  background: var(--background);
+}
+
+.mdx-editor button.mdx-tool-btn {
+  padding: 6px;
+  border-radius: 0;
+  color: var(--muted-foreground);
+  background: transparent;
+}
+.mdx-editor button.mdx-tool-btn:hover {
+  background: var(--muted);
+  color: var(--foreground);
+}
+
+.mdx-editor [data-editor-type] .cm-editor {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+
+/* =========================================================
+ * Code blocks — highlight.js (sync, react-markdown compatible)
+ * Custom theme yang flip via class .dark (mengikuti app theme,
+ * bukan OS preference).
+ * ========================================================= */
+.prose pre {
+  margin: 1.25rem 0;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  padding: 0.75rem 1rem;
+  overflow-x: auto;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.prose pre code,
+.prose pre code.hljs {
+  background: transparent;
+  padding: 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--foreground);
+  display: block;
+}
+
+/* --- LIGHT palette (default) --- */
+.hljs-comment,
+.hljs-quote {
+  color: #6a737d;
+  font-style: italic;
+}
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-subst,
+.hljs-doctag {
+  color: #d73a49;
+}
+.hljs-number,
+.hljs-literal,
+.hljs-variable,
+.hljs-template-variable {
+  color: #005cc5;
+}
+.hljs-string,
+.hljs-regexp,
+.hljs-addition,
+.hljs-attribute,
+.hljs-meta-string {
+  color: #032f62;
+}
+.hljs-title,
+.hljs-section,
+.hljs-selector-id,
+.hljs-built_in,
+.hljs-builtin-name,
+.hljs-class .hljs-title,
+.hljs-type {
+  color: #6f42c1;
+}
+.hljs-symbol,
+.hljs-bullet,
+.hljs-link,
+.hljs-meta,
+.hljs-selector-attr,
+.hljs-selector-pseudo {
+  color: #005cc5;
+}
+.hljs-tag,
+.hljs-name,
+.hljs-attr {
+  color: #22863a;
+}
+.hljs-deletion {
+  color: #b31d28;
+  background-color: #ffeef0;
+}
+.hljs-emphasis {
+  font-style: italic;
+}
+.hljs-strong {
+  font-weight: 600;
+}
+
+/* --- DARK palette (app theme dark) --- */
+html.dark .hljs-comment,
+html.dark .hljs-quote {
+  color: #8b949e;
+}
+html.dark .hljs-keyword,
+html.dark .hljs-selector-tag,
+html.dark .hljs-subst,
+html.dark .hljs-doctag {
+  color: #ff7b72;
+}
+html.dark .hljs-number,
+html.dark .hljs-literal,
+html.dark .hljs-variable,
+html.dark .hljs-template-variable {
+  color: #79c0ff;
+}
+html.dark .hljs-string,
+html.dark .hljs-regexp,
+html.dark .hljs-addition,
+html.dark .hljs-attribute,
+html.dark .hljs-meta-string {
+  color: #a5d6ff;
+}
+html.dark .hljs-title,
+html.dark .hljs-section,
+html.dark .hljs-selector-id,
+html.dark .hljs-built_in,
+html.dark .hljs-builtin-name,
+html.dark .hljs-class .hljs-title,
+html.dark .hljs-type {
+  color: #d2a8ff;
+}
+html.dark .hljs-symbol,
+html.dark .hljs-bullet,
+html.dark .hljs-link,
+html.dark .hljs-meta,
+html.dark .hljs-selector-attr,
+html.dark .hljs-selector-pseudo {
+  color: #79c0ff;
+}
+html.dark .hljs-tag,
+html.dark .hljs-name,
+html.dark .hljs-attr {
+  color: #7ee787;
+}
+html.dark .hljs-deletion {
+  color: #ffdcd7;
+  background-color: rgba(248, 81, 73, 0.15);
+}
+
+/* Heading anchor (rehype-autolink-headings behavior=append) */
+.prose .heading-anchor {
+  margin-left: 0.5rem;
+  color: var(--muted-foreground);
+  opacity: 0;
+  text-decoration: none;
+  font-weight: 400;
+}
+.prose .heading-anchor::before {
+  content: "#";
+}
+.prose :where(h1, h2, h3, h4, h5, h6):hover .heading-anchor {
+  opacity: 1;
 }

@@ -6,16 +6,25 @@ import { ChevronDown, Link2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { SiteShell } from "@/layout/site-shell";
+import { trpc } from "@/lib/trpc";
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 
-import { projects } from "./data";
-import type { ProjectItem } from "./types";
-
 const INITIAL_COUNT = 4;
+
+type Project = {
+  id: number;
+  title: string;
+  description: string | null;
+  period: string | null;
+  url: string | null;
+  repoUrl: string | null;
+  highlights: string[];
+  tags: string[];
+};
 
 function ProjectIcon() {
   return (
@@ -36,8 +45,9 @@ function ProjectIcon() {
   );
 }
 
-function ProjectRow({ item }: { item: ProjectItem }) {
+function ProjectRow({ item }: { item: Project }) {
   const [open, setOpen] = useState(false);
+  const href = item.url ?? item.repoUrl ?? undefined;
 
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
@@ -46,12 +56,14 @@ function ProjectRow({ item }: { item: ProjectItem }) {
           <ProjectIcon />
           <div className="min-w-0 flex-1">
             <h3 className="text-sm font-medium tracking-[-0.03em]">{item.title}</h3>
-            <p className="mt-0.5 font-mono text-xs text-(--muted-foreground)">{item.period}</p>
+            {item.period ? (
+              <p className="mt-0.5 font-mono text-xs text-(--muted-foreground)">{item.period}</p>
+            ) : null}
           </div>
           <div className="flex shrink-0 items-center gap-1">
-            {item.href && (
+            {href && (
               <Link
-                href={item.href}
+                href={href}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex size-8 items-center justify-center rounded-md text-(--muted-foreground) transition-colors hover:text-(--foreground)"
@@ -69,9 +81,11 @@ function ProjectRow({ item }: { item: ProjectItem }) {
 
         <CollapsibleContent>
           <div className="border-t border-(--line) px-4 py-5 sm:px-5 sm:pl-[4.5rem]">
-            <p className="text-sm leading-relaxed text-(--muted-foreground)">
-              {item.description}
-            </p>
+            {item.description ? (
+              <p className="text-sm leading-relaxed text-(--muted-foreground)">
+                {item.description}
+              </p>
+            ) : null}
             {item.highlights.length > 0 && (
               <ul className="mt-4 space-y-2">
                 {item.highlights.map((h) => (
@@ -103,12 +117,14 @@ function ProjectRow({ item }: { item: ProjectItem }) {
 
 export default function ProjectsPage() {
   const [showAll, setShowAll] = useState(false);
+  const { data, isLoading } = trpc.projects.list.useQuery();
+  const projects = data ?? [];
   const visible = showAll ? projects : projects.slice(0, INITIAL_COUNT);
 
   return (
     <SiteShell>
       <div className="page-frame border-x border-(--line)">
-        <section className="screen-line-top screen-line-bottom">
+        <section>
           <header className="screen-line-bottom px-4 py-6 sm:px-5">
             <h1 className="text-3xl font-semibold tracking-tight">
               Projects
@@ -118,25 +134,37 @@ export default function ProjectsPage() {
             </h1>
           </header>
 
-          <div>
-            {visible.map((item) => (
-              <ProjectRow key={item.title} item={item} />
-            ))}
-          </div>
-
-          {projects.length > INITIAL_COUNT && (
-            <div className="flex justify-center py-5">
-              <button
-                type="button"
-                onClick={() => setShowAll(!showAll)}
-                className="inline-flex items-center gap-2 rounded-full border border-(--line) bg-(--background) px-5 py-2 text-sm font-medium transition-colors hover:bg-(--muted)"
-              >
-                {showAll ? "Show Less" : "Show More"}
-                <ChevronDown
-                  className={cn("size-4 transition-transform", showAll && "rotate-180")}
-                />
-              </button>
+          {isLoading ? (
+            <div className="flex items-center justify-center py-24">
+              <span className="font-mono text-xs text-(--muted-foreground)">Loading…</span>
             </div>
+          ) : projects.length === 0 ? (
+            <div className="flex items-center justify-center py-24">
+              <span className="text-sm text-(--muted-foreground)">Belum ada project.</span>
+            </div>
+          ) : (
+            <>
+              <div>
+                {visible.map((item) => (
+                  <ProjectRow key={item.id} item={item} />
+                ))}
+              </div>
+
+              {projects.length > INITIAL_COUNT && (
+                <div className="flex justify-center py-5">
+                  <button
+                    type="button"
+                    onClick={() => setShowAll(!showAll)}
+                    className="inline-flex items-center gap-2 rounded-full border border-(--line) bg-(--background) px-5 py-2 text-sm font-medium transition-colors hover:bg-(--muted)"
+                  >
+                    {showAll ? "Show Less" : "Show More"}
+                    <ChevronDown
+                      className={cn("size-4 transition-transform", showAll && "rotate-180")}
+                    />
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </section>
       </div>

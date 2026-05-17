@@ -5,6 +5,7 @@ export const socials = pgTable("socials", {
   label: text("label").notNull(),
   href: text("href").notNull(),
   detail: text("detail"),
+  iconUrl: text("icon_url"),
   sortOrder: integer("sort_order").notNull().default(0),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),

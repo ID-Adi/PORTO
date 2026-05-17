@@ -10,6 +10,7 @@ export * from "./socials.js";
 export * from "./sponsors.js";
 export * from "./contact-messages.js";
 export * from "./media.js";
+export * from "./profile-overview.js";
 export * from "./tags.js";
 export * from "./skills.js";
 export * from "./site-settings.js";

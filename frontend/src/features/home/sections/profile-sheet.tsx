@@ -1,12 +1,10 @@
 "use client";
 
-import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import {
   ArrowUpRight,
   Bookmark,
-  ChevronDown,
   Clock,
   Code,
   Lightbulb,
@@ -19,13 +17,7 @@ import {
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
 import { Separator as UiSeparator } from "@/components/ui/separator";
-import { WorkExperience } from "@/components/common/work-experience";
 import {
   Tooltip,
   TooltipContent,
@@ -40,7 +32,8 @@ import {
   PanelTitleSup,
 } from "@/layout/panel";
 import { Icons } from "@/layout/icons";
-import type { ProfilePageContent, ProjectEntry, TimelineItem } from "@/types/content";
+import type { ProfilePageContent, ReadingItem, TimelineItem } from "@/types/content";
+import { trpc } from "@/lib/trpc";
 import { CopyButton } from "@/components/common/copy-button";
 
 import { ContributionGraph } from "../components/contribution-graph";
@@ -52,7 +45,13 @@ import {
   OverviewItemLink,
 } from "../components/overview-item";
 import { ProfileIntro } from "../components/profile-intro";
-import { SocialLogoTile } from "../components/social-logo-tile";
+
+import { BlogShowcaseSection } from "./blog-showcase-section";
+import { ProjectsSection as DbProjectsSection } from "./projects-section";
+import { SkillsSection as DbSkillsSection } from "./skills-section";
+import { ExperienceSection as DbExperienceSection } from "./experience-section";
+import { OverviewDbSection } from "./overview-section";
+import { SocialRailDbSection } from "./social-rail-section";
 
 type ProfileSheetProps = {
   content: ProfilePageContent;
@@ -73,7 +72,7 @@ const overviewIconMap: Record<string, React.ElementType> = {
 // recognition; 96px source scales down crisply to the 32px tile.
 const icons8 = (slug: string) => `https://img.icons8.com/color/96/${slug}.png`;
 
-const socialBrands: Record<
+export const socialBrands: Record<
   string,
   { src: string }
 > = {
@@ -110,9 +109,23 @@ function MiniSeparator() {
   return <div className="profile-mini-divider" aria-hidden />;
 }
 
-function SectionAction({ actionLabel }: { actionLabel?: string }) {
+function SectionAction({
+  actionLabel,
+  actionHref,
+}: {
+  actionLabel?: string;
+  actionHref?: string;
+}) {
   if (!actionLabel) {
     return null;
+  }
+
+  if (actionHref) {
+    return (
+      <Button asChild className="profile-pill border-none" variant="ghost" size="sm">
+        <Link href={actionHref}>{actionLabel}</Link>
+      </Button>
+    );
   }
 
   return (
@@ -122,7 +135,7 @@ function SectionAction({ actionLabel }: { actionLabel?: string }) {
   );
 }
 
-function RailSection({
+export function RailSection({
   id,
   title,
   children,
@@ -141,12 +154,13 @@ function RailSection({
   );
 }
 
-function FrameSection({
+export function FrameSection({
   id,
   title,
   count,
   children,
   actionLabel,
+  actionHref,
   description,
 }: {
   id?: string;
@@ -154,6 +168,7 @@ function FrameSection({
   count?: number;
   children: React.ReactNode;
   actionLabel?: string;
+  actionHref?: string;
   description?: string;
 }) {
   return (
@@ -164,7 +179,7 @@ function FrameSection({
             {title}
             {typeof count === "number" ? <PanelTitleSup>({count})</PanelTitleSup> : null}
           </PanelTitle>
-          <SectionAction actionLabel={actionLabel} />
+          <SectionAction actionLabel={actionLabel} actionHref={actionHref} />
         </div>
         {description ? <PanelDescription>{description}</PanelDescription> : null}
       </PanelHeader>
@@ -173,7 +188,7 @@ function FrameSection({
   );
 }
 
-function OverviewCell({
+export function OverviewCell({
   icon,
   value,
   kind,
@@ -193,7 +208,7 @@ function OverviewCell({
   let contentNode: React.ReactNode;
 
   if (kind === "time") {
-    contentNode = <LiveClock />;
+    contentNode = <LiveClock timeZone={value} label={note ?? ""} />;
   } else if (href) {
     contentNode = (
       <OverviewItemLink
@@ -227,7 +242,7 @@ function OverviewCell({
   );
 }
 
-function OverviewLeadRow({
+export function OverviewLeadRow({
   icon,
   value,
 }: {
@@ -245,82 +260,6 @@ function OverviewLeadRow({
         {value}
       </OverviewItemContent>
     </OverviewItem>
-  );
-}
-
-function OverviewSection({ content }: { content: ProfilePageContent }) {
-  const leadRows = content.overview.slice(0, 2).map((row) => row.left);
-  const compactRows = content.overview
-    .slice(2)
-    .flatMap((row) => [row.left, row.right])
-    .filter((item): item is NonNullable<typeof item> => Boolean(item));
-
-  return (
-    <RailSection id="overview" title="Overview">
-      <PanelContent className="space-y-2.5">
-        {leadRows.map((item, index) => (
-          <OverviewLeadRow key={`${item.icon}-${index}`} {...item} />
-        ))}
-
-        <div className="grid gap-x-4 gap-y-2.5 sm:grid-cols-2">
-          {compactRows.map((item, index) => (
-            <OverviewCell key={`${item.icon}-${index}`} {...item} />
-          ))}
-        </div>
-      </PanelContent>
-    </RailSection>
-  );
-}
-
-function SocialLinkRail({ content }: { content: ProfilePageContent }) {
-  return (
-    <RailSection
-      id="socials"
-      title="Social Links"
-      className="after:content-none"
-    >
-      <div className="relative">
-        <div className="pointer-events-none absolute inset-0 -z-1 grid grid-cols-2 gap-2 md:grid-cols-3">
-          <div className="border-r border-line" />
-          <div className="border-l border-line md:border-x" />
-          <div className="border-l border-line max-md:hidden" />
-        </div>
-
-        <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
-          {content.socials.map((item) => (
-            <SocialLinkItem key={item.label} item={item} />
-          ))}
-        </div>
-      </div>
-    </RailSection>
-  );
-}
-
-function SocialLinkItem({
-  item,
-}: {
-  item: ProfilePageContent["socials"][number];
-}) {
-  const brandConfig = socialBrands[item.label];
-
-  return (
-    <a
-      href={item.href}
-      target="_blank"
-      rel="noopener"
-      className={cn(
-        "social-link-grid-item flex cursor-pointer items-center gap-4 p-4 pr-2 transition-[background-color] ease-out hover:bg-accent-muted"
-      )}
-    >
-      <SocialLogoTile
-        src={brandConfig?.src ?? "/social-links/github.svg"}
-        alt={item.label}
-      />
-
-      <h3 className="flex-1 font-medium">{item.label}</h3>
-
-      <ArrowUpRight className="size-4 text-muted-foreground" />
-    </a>
   );
 }
 
@@ -436,219 +375,23 @@ function StackSection({ content }: { content: ProfilePageContent }) {
   );
 }
 
-function CardGridSection({
-  id,
-  title,
-  items,
-  actionLabel,
-  count,
-  columns,
-}: {
-  id: string;
-  title: string;
-  items: ProfilePageContent["skills"] | ProfilePageContent["blog"];
-  actionLabel?: string;
-  count?: number;
-  columns: string;
-}) {
-  return (
-    <FrameSection id={id} title={title} count={count} actionLabel={actionLabel}>
-      <div className={cn("grid gap-0", columns)}>
-        {items.map((item, index) => (
-          <article
-            key={item.title}
-            className={`px-4 py-4 sm:px-5 ${
-              index > 0 ? "border-t border-(--line) lg:border-t-0 lg:border-l" : ""
-            }`}
-          >
-            {id === "skills" ? (
-              <div className="surface-hatch flex aspect-[1.7/1] items-end border border-(--line) bg-zinc-950 px-3 py-3 text-white">
-                <div>
-                  <p className="profile-kicker text-white/50">{item.meta}</p>
-                  <p className="mt-1 text-sm font-medium tracking-[-0.03em]">{item.title}</p>
-                </div>
-              </div>
-            ) : (
-              <p className="profile-kicker">{item.meta}</p>
-            )}
-
-            {id !== "skills" ? (
-              <h3 className="mt-1 text-sm font-medium tracking-[-0.03em]">{item.title}</h3>
-            ) : null}
-            <p className="mt-3 text-[12px] leading-6 text-(--muted-foreground)">{item.description}</p>
-            {id === "skills" ? (
-              <Link href="/skills" className="profile-link mt-3 inline-block">
-                {item.hrefLabel}
-              </Link>
-            ) : (
-              <button className="profile-link mt-3" type="button">
-                {item.hrefLabel}
-              </button>
-            )}
-          </article>
-        ))}
-      </div>
-    </FrameSection>
-  );
-}
-
-function ProjectIcon() {
-  return (
-    <div className="relative size-10 shrink-0 overflow-hidden rounded-full border border-(--line) bg-zinc-950">
-      <svg className="absolute inset-0 size-full opacity-40" aria-hidden="true">
-        <pattern
-          id="project-hatch"
-          width="4"
-          height="4"
-          patternUnits="userSpaceOnUse"
-          patternTransform="rotate(45)"
-        >
-          <line x1="0" y1="0" x2="0" y2="4" stroke="white" strokeWidth="1" />
-        </pattern>
-        <rect width="100%" height="100%" fill="url(#project-hatch)" />
-      </svg>
-    </div>
-  );
-}
-
-function ProjectRow({ item }: { item: ProjectEntry }) {
-  const [open, setOpen] = useState(false);
-
-  return (
-    <Collapsible open={open} onOpenChange={setOpen}>
-      <div className="border-b border-(--line)">
-        <div className="flex items-center gap-4 px-4 py-4 sm:px-5">
-          <ProjectIcon />
-          <div className="h-10 border-l border-dotted border-(--line)" />
-          <div className="min-w-0 flex-1">
-            <h3 className="text-sm font-medium tracking-[-0.03em]">{item.title}</h3>
-            <p className="mt-0.5 font-mono text-xs text-(--muted-foreground)">{item.period}</p>
-          </div>
-          <div className="flex shrink-0 items-center gap-1">
-            {item.href && (
-              <a
-                href={item.href}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex size-8 items-center justify-center rounded-md text-(--muted-foreground) transition-colors hover:text-(--foreground)"
-              >
-                <Link2 className="size-4" />
-              </a>
-            )}
-            <CollapsibleTrigger className="inline-flex size-8 items-center justify-center rounded-md text-(--muted-foreground) transition-colors hover:text-(--foreground)">
-              <ChevronDown
-                className={cn("size-4 transition-transform", open && "rotate-180")}
-              />
-            </CollapsibleTrigger>
-          </div>
-        </div>
-
-        <CollapsibleContent>
-          <div className="border-t border-(--line) px-4 py-5 sm:px-5 sm:pl-[4.5rem]">
-            <p className="text-sm leading-relaxed text-(--muted-foreground)">
-              {item.description}
-            </p>
-            {item.highlights.length > 0 && (
-              <ul className="mt-4 space-y-2">
-                {item.highlights.map((h) => (
-                  <li key={h} className="flex gap-2 text-sm leading-relaxed">
-                    <span className="mt-2 size-1.5 shrink-0 rounded-full bg-(--foreground)" />
-                    <span>{h}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-            {item.tags.length > 0 && (
-              <div className="mt-5 flex flex-wrap gap-2">
-                {item.tags.map((tag) => (
-                  <span
-                    key={tag}
-                    className="rounded-full border border-(--line) px-3 py-0.5 font-mono text-xs text-(--muted-foreground)"
-                  >
-                    {tag}
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
-        </CollapsibleContent>
-      </div>
-    </Collapsible>
-  );
-}
-
-function ProjectsSection({ content }: { content: ProfilePageContent }) {
-  const INITIAL_COUNT = 4;
-  const [showAll, setShowAll] = useState(false);
-  const visible = showAll ? content.projects : content.projects.slice(0, INITIAL_COUNT);
-
-  return (
-    <FrameSection
-      id="projects"
-      title="Projects"
-      count={content.projects.length}
-      actionLabel="See All"
-    >
-      <div>
-        {visible.map((item) => (
-          <ProjectRow key={item.title} item={item} />
-        ))}
-      </div>
-      {content.projects.length > INITIAL_COUNT && (
-        <div className="flex justify-center border-t border-(--line) py-4">
-          <button
-            type="button"
-            onClick={() => setShowAll(!showAll)}
-            className="inline-flex items-center gap-2 rounded-full border border-(--line) bg-(--background) px-5 py-2 text-sm font-medium transition-colors hover:bg-(--muted)"
-          >
-            {showAll ? "Show Less" : "Show More"}
-            <ChevronDown
-              className={cn("size-4 transition-transform", showAll && "rotate-180")}
-            />
-          </button>
-        </div>
-      )}
-    </FrameSection>
-  );
-}
-
-function ListSection({
-  id,
-  title,
-  items,
-  actionLabel,
-}: {
-  id: string;
-  title: string;
-  items: TimelineItem[];
-  actionLabel?: string;
-}) {
-  return (
-    <FrameSection id={id} title={title} actionLabel={actionLabel}>
-      <div className="divide-y divide-(--line)">
-        {items.map((item, index) => (
-          <article
-            key={`${title}-${item.title}-${index}`}
-            className="profile-row"
-          >
-            <p className="profile-kicker">{item.period}</p>
-            <div>
-              <h3 className="text-sm font-medium tracking-[-0.03em]">{item.title}</h3>
-              <p className="mt-1 text-[12px] leading-6 text-(--muted-foreground)">{item.detail}</p>
-            </div>
-          </article>
-        ))}
-      </div>
-    </FrameSection>
-  );
-}
-
-function ExperienceSection({ content }: { content: ProfilePageContent }) {
-  return (
-    <FrameSection id="experience" title="Experience">
-      <WorkExperience experiences={content.experience} />
-    </FrameSection>
-  );
+function timelineToReading(item: TimelineItem): ReadingItem {
+  let domain = item.author ?? "PORTO";
+  if (item.href?.startsWith("http")) {
+    try {
+      domain = new URL(item.href).hostname.replace(/^www\./, "");
+    } catch {
+      // keep author fallback
+    }
+  }
+  return {
+    title: item.title,
+    excerpt: item.detail,
+    link: item.href ?? "#reading",
+    domain,
+    createdAt: item.bookmarkedAt ?? item.period,
+    tags: [],
+  };
 }
 
 function BookmarksSection({
@@ -656,18 +399,25 @@ function BookmarksSection({
 }: {
   items: TimelineItem[];
 }) {
+  const fallback = items.map(timelineToReading);
+  const { data } = trpc.bookmarks.list.useQuery(undefined, {
+    placeholderData: fallback,
+    staleTime: 5 * 60 * 1000,
+  });
+  const reading = data && data.length > 0 ? data : fallback;
+
   return (
     <FrameSection
-      id="bookmarks"
-      title="Bookmarks"
-      count={items.length}
+      id="reading"
+      title="Currently Reading"
+      count={reading.length}
       actionLabel="Read More"
     >
       <div>
-        {items.map((item, index) => (
+        {reading.map((item, index) => (
           <div
-            key={`bookmark-${item.title}-${index}`}
-            className={index < items.length - 1 ? "border-b border-(--line)" : ""}
+            key={`reading-${item.link}-${index}`}
+            className={index < reading.length - 1 ? "border-b border-(--line)" : ""}
           >
             <BookmarkItem item={item} />
           </div>
@@ -677,9 +427,9 @@ function BookmarksSection({
   );
 }
 
-function BookmarkItem({ item }: { item: TimelineItem }) {
-  const dateLabel = formatBookmarkDate(item.bookmarkedAt ?? item.period);
-  const href = item.href ?? "#bookmarks";
+function BookmarkItem({ item }: { item: ReadingItem }) {
+  const dateLabel = formatBookmarkDate(item.createdAt);
+  const href = item.link;
   const isExternal = href.startsWith("http");
 
   return (
@@ -707,17 +457,19 @@ function BookmarkItem({ item }: { item: TimelineItem }) {
           {item.title}
         </h3>
 
-        <p className="text-[12px] leading-5 text-(--muted-foreground)">
-          {item.detail}
-        </p>
+        {item.excerpt ? (
+          <p className="line-clamp-2 text-[12px] leading-5 text-(--muted-foreground)">
+            {item.excerpt}
+          </p>
+        ) : null}
 
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[11px] text-(--muted-foreground)">
-          <span>{item.author ?? "PORTO"}</span>
+          <span>{item.domain || "PORTO"}</span>
           <UiSeparator
             className="h-3 bg-(--line)"
             orientation="vertical"
           />
-          <time dateTime={item.bookmarkedAt ?? item.period}>{dateLabel}</time>
+          <time dateTime={item.createdAt}>{dateLabel}</time>
         </div>
       </div>
 
@@ -766,11 +518,14 @@ function formatOverviewValue(icon: string, value: string) {
 }
 
 export function ProfileSheet({ content }: ProfileSheetProps) {
+  const settings = trpc.siteSettings.get.useQuery();
+  const avatarUrl = settings.data?.avatarUrl || content.avatarUrl;
+
   return (
     <div className="*:[[id]]:scroll-mt-24">
       <ProfileCover monogram={content.monogram} />
       <ProfileIntro
-        avatarUrl={content.avatarUrl}
+        avatarUrl={avatarUrl}
         flipSentences={content.flipSentences}
         name={content.name}
         pronunciationText={content.pronunciationText}
@@ -778,9 +533,9 @@ export function ProfileSheet({ content }: ProfileSheetProps) {
       />
 
       <SectionSeparator />
-      <OverviewSection content={content} />
+      <OverviewDbSection />
       <MiniSeparator />
-      <SocialLinkRail content={content} />
+      <SocialRailDbSection />
       <SectionSeparator />
 
       <AboutSection content={content} />
@@ -789,27 +544,13 @@ export function ProfileSheet({ content }: ProfileSheetProps) {
       <SectionSeparator />
       <StackSection content={content} />
       <SectionSeparator />
-      <CardGridSection
-        id="skills"
-        title="Skills"
-        items={content.skills}
-        count={content.skills.length}
-        actionLabel="All Skills"
-        columns="lg:grid-cols-3"
-      />
+      <DbSkillsSection />
       <SectionSeparator />
-      <CardGridSection
-        id="writing"
-        title="Blog"
-        items={content.blog}
-        count={content.blog.length}
-        actionLabel="All Posts"
-        columns="lg:grid-cols-2"
-      />
+      <BlogShowcaseSection />
       <SectionSeparator />
-      <ExperienceSection content={content} />
+      <DbExperienceSection />
       <SectionSeparator />
-      <ProjectsSection content={content} />
+      <DbProjectsSection />
       <SectionSeparator />
       <BookmarksSection items={content.bookmarks} />
       <SectionSeparator />

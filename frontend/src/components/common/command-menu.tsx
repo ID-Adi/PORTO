@@ -7,7 +7,6 @@ import {
   Hash,
   Layers3,
   Moon,
-  Search,
   Sun,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -16,6 +15,7 @@ import { useHotkeys } from "react-hotkeys-hook";
 import type { ProfilePageContent } from "@/types/content";
 import { navItems } from "@/features/home/data/nav-items";
 import { useTheme } from "@/context/theme-provider";
+import { trpc } from "@/lib/trpc";
 import {
   CommandDialog,
   CommandEmpty,
@@ -88,35 +88,41 @@ export function CommandMenu({ content }: CommandMenuProps) {
     []
   );
 
+  const { data: skillsData } = trpc.skills.list.useQuery();
   const componentItems = useMemo<MenuItem[]>(
     () =>
-      content.skills.map((item) => ({
-        label: item.title,
+      (skillsData ?? []).map((item) => ({
+        label: item.name,
         href: "#skills",
-        keywords: [item.meta, item.description],
+        keywords: [item.category, item.description ?? ""],
       })),
-    [content.skills]
+    [skillsData],
   );
+
+  const { data: blogPosts } = trpc.blog.list.useQuery();
 
   const writingItems = useMemo<MenuItem[]>(
     () =>
-      content.blog.map((item) => ({
-        label: item.title,
-        href: "#writing",
-        keywords: [item.meta, item.description],
-      })),
-    [content.blog]
+      (blogPosts ?? [])
+        .filter((post) => post.published)
+        .map((post) => ({
+          label: post.title,
+          href: `/blog/${post.slug}`,
+          keywords: [post.meta ?? "", post.description ?? ""],
+        })),
+    [blogPosts]
   );
 
+  const { data: socialsData } = trpc.socials.list.useQuery();
   const socialItems = useMemo<MenuItem[]>(
     () =>
-      content.socials.map((item) => ({
+      (socialsData ?? []).map((item) => ({
         label: item.label,
         href: item.href,
         external: true,
-        keywords: [item.detail],
+        keywords: [item.detail ?? ""],
       })),
-    [content.socials]
+    [socialsData],
   );
 
   const themeItems = useMemo<MenuItem[]>(

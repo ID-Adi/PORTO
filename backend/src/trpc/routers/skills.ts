@@ -1,4 +1,4 @@
-import { desc, eq } from "drizzle-orm";
+import { asc, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "../../db/index.js";
@@ -7,10 +7,10 @@ import { protectedProcedure, publicProcedure, router } from "../init.js";
 
 const skillInput = z.object({
   name: z.string().min(1),
-  category: z.enum(["frontend", "backend", "tooling", "other"]).default("other"),
-  level: z
-    .enum(["beginner", "intermediate", "advanced", "expert"])
-    .default("intermediate"),
+  category: z.string().default("other"),
+  level: z.number().int().min(1).max(5).default(3),
+  description: z.string().nullish(),
+  years: z.number().int().min(0).nullish(),
   iconUrl: z.string().nullish(),
   sortOrder: z.number().int().default(0),
 });
@@ -20,7 +20,7 @@ export const skillsRouter = router({
     return db
       .select()
       .from(skills)
-      .orderBy(skills.sortOrder, desc(skills.createdAt));
+      .orderBy(asc(skills.sortOrder), desc(skills.createdAt));
   }),
   byId: publicProcedure
     .input(z.object({ id: z.number().int() }))

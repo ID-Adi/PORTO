@@ -1,7 +1,7 @@
 "use client";
 
 import type { Dispatch, ReactNode, SetStateAction } from "react";
-import { createContext, useContext, useLayoutEffect, useState } from "react";
+import { createContext, useContext, useLayoutEffect, useRef, useState } from "react";
 
 type Theme = "light" | "dark";
 
@@ -17,11 +17,35 @@ type ThemeProviderProps = {
   children: ReactNode;
 };
 
+function disableTransitionsBriefly() {
+  const style = document.createElement("style");
+  style.setAttribute("data-disable-transitions", "true");
+  style.appendChild(
+    document.createTextNode(
+      "*,*::before,*::after{transition:none!important;animation:none!important}",
+    ),
+  );
+  document.head.appendChild(style);
+  // Force a reflow so the rule applies before the theme class flips.
+  void document.body.offsetHeight;
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      style.remove();
+    });
+  });
+}
+
 export function ThemeProvider({ children }: ThemeProviderProps) {
-  const [theme, setTheme] = useState<Theme>("dark");
+  const [theme, setTheme] = useState<Theme>("light");
+  const isFirstRunRef = useRef(true);
 
   useLayoutEffect(() => {
     const root = document.documentElement;
+
+    if (!isFirstRunRef.current) {
+      disableTransitionsBriefly();
+    }
+    isFirstRunRef.current = false;
 
     root.classList.toggle("dark", theme === "dark");
     root.dataset.theme = theme;

@@ -1,18 +1,28 @@
 "use client";
 
 import { useState } from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 import { trpc } from "@/lib/trpc";
-import { normalizeImageUrl } from "@/lib/image-url";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import {
-  TextAreaField,
-  TextField,
-} from "@/features/admin/components/form-field";
+import { Field, TextField } from "@/features/admin/components/form-field";
+import { MediaPickerField } from "@/features/admin/components/media-picker-field";
+
+const MarkdownEditor = dynamic(
+  () => import("@/features/admin/components/markdown-editor"),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-[400px] items-center justify-center border border-(--line) text-sm text-(--muted-foreground)">
+        Memuat editor…
+      </div>
+    ),
+  },
+);
 
 type BlogFormState = {
   title: string;
@@ -73,6 +83,7 @@ export function BlogForm({
     setState((s) => ({ ...s, [key]: value }));
   }
 
+
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     const payload = {
@@ -89,10 +100,8 @@ export function BlogForm({
     else create.mutate(payload);
   }
 
-  const preview = normalizeImageUrl(state.coverUrl);
-
   return (
-    <form onSubmit={onSubmit} className="grid gap-5 max-w-2xl">
+    <form onSubmit={onSubmit} className="grid max-w-3xl gap-5">
       <div className="grid gap-4 sm:grid-cols-2">
         <TextField
           label="Title"
@@ -115,13 +124,12 @@ export function BlogForm({
         value={state.description}
         onChange={(e) => set("description", e.target.value)}
       />
-      <TextAreaField
-        label="Content (Markdown)"
-        name="content"
-        rows={12}
-        value={state.content}
-        onChange={(e) => set("content", e.target.value)}
-      />
+      <Field label="Content (Markdown)" htmlFor="content">
+        <MarkdownEditor
+          value={state.content}
+          onChange={(v) => set("content", v)}
+        />
+      </Field>
       <TextField
         label="Meta"
         name="meta"
@@ -129,23 +137,12 @@ export function BlogForm({
         onChange={(e) => set("meta", e.target.value)}
         hint="Free-form meta string used in listings."
       />
-      <TextField
-        label="Cover URL"
-        name="coverUrl"
+      <MediaPickerField
+        label="Cover image"
         value={state.coverUrl}
-        onChange={(e) => set("coverUrl", e.target.value)}
-        hint="Direct image URL or Google Drive share link."
+        onChange={(v) => set("coverUrl", v)}
+        hint="Pilih dari library, upload baru, atau paste URL."
       />
-      {preview ? (
-        <div className="rounded-md border border-(--border) bg-(--muted) p-2">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={preview}
-            alt=""
-            className="max-h-48 rounded object-contain"
-          />
-        </div>
-      ) : null}
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="flex items-center justify-between rounded-md border border-(--border) p-3">
           <div>

@@ -28,10 +28,21 @@ export default function EditExperiencePage({
         <ExperienceForm
           id={numericId}
           initial={{
-            period: query.data.period,
-            title: query.data.title,
-            detail: query.data.detail ?? "",
+            name: query.data.name,
+            website: query.data.website ?? "",
+            location: query.data.location ?? "",
+            logoUrl: query.data.logoUrl ?? "",
+            isCurrent: query.data.isCurrent,
             sortOrder: query.data.sortOrder,
+            positions: query.data.positions.map((p) => ({
+              title: p.title,
+              employmentType: p.employmentType ?? "",
+              period: p.period ?? "",
+              description: p.description ?? "",
+              achievements: (p.achievements ?? []).join("\n"),
+              technologies: (p.technologies ?? []).join(", "),
+              sortOrder: p.sortOrder,
+            })),
           }}
         />
       )}

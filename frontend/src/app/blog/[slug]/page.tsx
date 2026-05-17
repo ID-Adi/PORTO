@@ -5,6 +5,11 @@ import { useMemo } from "react";
 import ReactMarkdown from "react-markdown";
 import { ArrowLeft, Calendar } from "lucide-react";
 import Link from "next/link";
+import GithubSlugger from "github-slugger";
+import remarkGfm from "remark-gfm";
+import rehypeSlug from "rehype-slug";
+import rehypeAutolinkHeadings from "rehype-autolink-headings";
+import rehypeHighlight from "rehype-highlight";
 
 import { SiteShell } from "@/layout/site-shell";
 import { trpc } from "@/lib/trpc";
@@ -14,28 +19,40 @@ import { TOCMinimap, type TOCItemType } from "@/components/toc-minimap";
 function extractTOC(markdown: string): TOCItemType[] {
   const headingRegex = /^(#{2,4})\s+(.+)$/gm;
   const items: TOCItemType[] = [];
+  const slugger = new GithubSlugger();
   let match;
   while ((match = headingRegex.exec(markdown)) !== null) {
     const depth = match[1].length;
     const title = match[2].trim();
-    const url = `#${slugify(title)}`;
+    const url = `#${slugger.slug(title)}`;
     items.push({ title, url, depth });
   }
   return items;
 }
 
-function slugify(text: string) {
-  return text.toLowerCase().replace(/[^\w\s-]/g, "").replace(/\s+/g, "-");
-}
+const remarkPlugins = [remarkGfm];
+const rehypePlugins = [
+  rehypeSlug,
+  [
+    rehypeAutolinkHeadings,
+    {
+      behavior: "append",
+      properties: {
+        className: ["heading-anchor"],
+        ariaHidden: true,
+        tabIndex: -1,
+      },
+    },
+  ],
+  [rehypeHighlight, { detect: true, ignoreMissing: true }],
+] as React.ComponentProps<typeof ReactMarkdown>["rehypePlugins"];
 
 export default function BlogPostPage() {
   const { slug } = useParams<{ slug: string }>();
   const { data: post, isLoading } = trpc.blog.bySlug.useQuery({ slug });
 
-  const toc = useMemo(
-    () => (post?.content ? extractTOC(post.content) : []),
-    [post?.content],
-  );
+  const content = post?.content ?? "";
+  const toc = useMemo(() => (content ? extractTOC(content) : []), [content]);
 
   if (isLoading) {
     return (
@@ -69,7 +86,7 @@ export default function BlogPostPage() {
   return (
     <SiteShell>
       <div className="page-frame border-x border-(--line)">
-        <article className="screen-line-top screen-line-bottom">
+        <article>
           {/* Back link */}
           <div className="screen-line-bottom px-4 py-3 sm:px-5">
             <Link
@@ -118,27 +135,14 @@ export default function BlogPostPage() {
               {post.content ? (
                 <div className="prose prose-sm prose-zinc max-w-none dark:prose-invert prose-headings:font-heading prose-headings:tracking-tight prose-h2:mt-8 prose-h2:text-lg prose-h3:mt-6 prose-h3:text-base prose-p:leading-relaxed prose-pre:rounded-none prose-pre:border prose-pre:border-(--line) prose-pre:bg-(--surface) prose-code:text-xs prose-li:leading-relaxed">
                   <ReactMarkdown
+                    remarkPlugins={remarkPlugins}
+                    rehypePlugins={rehypePlugins}
                     components={{
-                      h2: ({ children, ...props }) => (
-                        <h2 id={slugify(String(children))} {...props}>
-                          {children}
-                        </h2>
-                      ),
-                      h3: ({ children, ...props }) => (
-                        <h3 id={slugify(String(children))} {...props}>
-                          {children}
-                        </h3>
-                      ),
-                      h4: ({ children, ...props }) => (
-                        <h4 id={slugify(String(children))} {...props}>
-                          {children}
-                        </h4>
-                      ),
                       pre: ({ children, ...props }) => (
                         <div className="group/code relative">
                           <pre {...props}>{children}</pre>
                           <CopyButton
-                            className="absolute right-2 top-2 size-7 opacity-0 transition-opacity group-hover/code:opacity-100"
+                            className="absolute top-2 right-2 size-7 opacity-0 transition-opacity group-hover/code:opacity-100"
                             size="icon"
                             variant="ghost"
                             text={() => {
@@ -152,7 +156,7 @@ export default function BlogPostPage() {
                       ),
                     }}
                   >
-                    {post.content}
+                    {content}
                   </ReactMarkdown>
                 </div>
               ) : (
