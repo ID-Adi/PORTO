@@ -89,7 +89,7 @@ export function AdminShell({
   async function handleLogout() {
     await authClient.signOut();
     toast.success("Signed out");
-    router.push("/admin/login");
+    router.push("/login");
   }
 
   return (

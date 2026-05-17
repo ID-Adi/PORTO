@@ -5,5 +5,5 @@ export const siteConfig = {
   url: "https://porto.dev",
   ogImage: "/avatar.png",
   creator: "@porto",
-  githubUsername: "prasetya",
+  githubUsername: "ID-Adi",
 };

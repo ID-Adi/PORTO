@@ -22,7 +22,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
 
   if (!session?.user) {
     if (typeof window !== "undefined") {
-      router.replace("/admin/login");
+      router.replace("/login");
     }
     return null;
   }
@@ -39,7 +39,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           type="button"
           onClick={async () => {
             await authClient.signOut();
-            router.push("/admin/login");
+            router.push("/login");
           }}
           className="text-sm text-(--primary) underline"
         >
