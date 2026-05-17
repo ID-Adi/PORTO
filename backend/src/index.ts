@@ -13,7 +13,7 @@ const allowedOrigins = new Set(
   [
     "http://localhost:3000",
     "http://localhost:3001",
-    process.env.FRONTEND_URL,
+    ...(process.env.FRONTEND_URL?.split(",").map((s) => s.trim()) ?? []),
   ].filter(Boolean),
 );
 
