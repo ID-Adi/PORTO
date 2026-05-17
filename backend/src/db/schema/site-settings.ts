@@ -5,5 +5,6 @@ export const siteSettings = pgTable("site_settings", {
   profileName: text("profile_name").notNull(),
   profileTitle: text("profile_title").notNull(),
   logoUrl: text("logo_url"),
+  avatarUrl: text("avatar_url"),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

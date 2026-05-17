@@ -8,6 +8,8 @@ import {
   Briefcase,
   FolderKanban,
   LayoutDashboard,
+  LayoutList,
+  Link2,
   LogOut,
   Mail,
   Menu,
@@ -28,6 +30,8 @@ import { cn } from "@/lib/utils";
 
 const navItems = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true },
+  { href: "/admin/overview", label: "Overview", icon: LayoutList },
+  { href: "/admin/socials", label: "Socials", icon: Link2 },
   { href: "/admin/projects", label: "Projects", icon: FolderKanban },
   { href: "/admin/skills", label: "Skills", icon: Sparkles },
   { href: "/admin/blog", label: "Blog", icon: BookOpen },

@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import { writeFile, mkdir } from "node:fs/promises";
 import path from "node:path";
 
+import { createTRPCClient, httpBatchLink } from "@trpc/client";
+import type { AppRouter } from "@porto/api";
+
 const BACKEND_URL =
   process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:4001";
 const ADMIN_EMAIL = process.env.NEXT_PUBLIC_ADMIN_EMAIL;
@@ -25,6 +28,17 @@ async function getSession(req: Request) {
   return (await res.json()) as { user?: { email?: string } } | null;
 }
 
+function backendClient(cookie: string) {
+  return createTRPCClient<AppRouter>({
+    links: [
+      httpBatchLink({
+        url: `${BACKEND_URL}/api/trpc`,
+        headers: () => ({ cookie }),
+      }),
+    ],
+  });
+}
+
 function sanitizeFilename(name: string) {
   const base = path.basename(name).replace(/[^a-zA-Z0-9._-]+/g, "-");
   return base.slice(0, 80) || "file";
@@ -41,6 +55,7 @@ export async function POST(req: Request) {
 
   const form = await req.formData();
   const file = form.get("file");
+  const alt = (form.get("alt") as string | null) ?? null;
 
   if (!(file instanceof File)) {
     return NextResponse.json({ error: "Missing file" }, { status: 400 });
@@ -66,5 +81,22 @@ export async function POST(req: Request) {
   const buffer = Buffer.from(await file.arrayBuffer());
   await writeFile(filepath, buffer);
 
-  return NextResponse.json({ url: `/uploads/${filename}` });
+  const url = `/uploads/${filename}`;
+  const cookie = req.headers.get("cookie") ?? "";
+  const client = backendClient(cookie);
+
+  try {
+    const row = await client.media.create.mutate({
+      filename,
+      url,
+      mimeType: file.type,
+      size: file.size,
+      alt,
+      uploadedBy: session.user.email ?? null,
+    });
+    return NextResponse.json(row);
+  } catch (err) {
+    console.error("media.create failed", err);
+    return NextResponse.json({ url, filename }, { status: 200 });
+  }
 }

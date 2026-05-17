@@ -9,7 +9,12 @@
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
     "db:seed:admin": "tsx --env-file=.env src/scripts/seed-admin.ts",
-    "db:seed:site": "tsx --env-file=.env src/scripts/seed-site-settings.ts"
+    "db:seed:site": "tsx --env-file=.env src/scripts/seed-site-settings.ts",
+    "db:seed:projects": "tsx --env-file=.env src/scripts/seed-projects.ts",
+    "db:seed:skills": "tsx --env-file=.env src/scripts/seed-skills.ts",
+    "db:seed:experience": "tsx --env-file=.env src/scripts/seed-experience.ts",
+    "db:seed:socials": "tsx --env-file=.env src/scripts/seed-socials.ts",
+    "db:seed:overview": "tsx --env-file=.env src/scripts/seed-profile-overview.ts"
   },
   "dependencies": {
     "@hono/node-server": "^2.0.0",

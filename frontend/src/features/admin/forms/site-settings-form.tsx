@@ -1,42 +1,43 @@
 "use client";
 
-import Image from "next/image";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
 import {
   TextAreaField,
   TextField,
 } from "@/features/admin/components/form-field";
+import { MediaPickerField } from "@/features/admin/components/media-picker-field";
 
 type SiteSettingsState = {
   profileName: string;
   profileTitle: string;
   logoUrl: string | null;
+  avatarUrl: string | null;
 };
 
 const empty: SiteSettingsState = {
   profileName: "",
   profileTitle: "",
   logoUrl: null,
+  avatarUrl: null,
 };
 
 export function SiteSettingsForm() {
   const utils = trpc.useUtils();
   const query = trpc.siteSettings.get.useQuery();
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [state, setState] = useState<SiteSettingsState>(empty);
-  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     if (query.data) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setState({
         profileName: query.data.profileName,
         profileTitle: query.data.profileTitle,
         logoUrl: query.data.logoUrl ?? null,
+        avatarUrl: query.data.avatarUrl ?? null,
       });
     }
   }, [query.data]);
@@ -56,35 +57,13 @@ export function SiteSettingsForm() {
     setState((s) => ({ ...s, [key]: value }));
   }
 
-  async function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    setUploading(true);
-    try {
-      const body = new FormData();
-      body.append("file", file);
-      const res = await fetch("/api/upload", { method: "POST", body });
-      const json = await res.json();
-      if (!res.ok) {
-        throw new Error(json.error ?? "Upload failed");
-      }
-      set("logoUrl", json.url as string);
-      toast.success("Logo uploaded");
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Upload failed");
-    } finally {
-      setUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = "";
-    }
-  }
-
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     update.mutate({
       profileName: state.profileName,
       profileTitle: state.profileTitle,
       logoUrl: state.logoUrl,
+      avatarUrl: state.avatarUrl,
     });
   }
 
@@ -114,54 +93,24 @@ export function SiteSettingsForm() {
         hint="Subtitle under the name. Used as fallback when no flip sentences play."
       />
 
-      <div className="space-y-1.5">
-        <Label htmlFor="logo">Header logo</Label>
-        <p className="text-xs text-(--muted-foreground)">
-          PNG / JPG / SVG / WebP. Max 2MB. Appears to the left of the
-          &quot;PORTO /&gt;&quot; brand text.
-        </p>
-        <div className="flex items-center gap-3">
-          <input
-            ref={fileInputRef}
-            id="logo"
-            type="file"
-            accept="image/png,image/jpeg,image/webp,image/svg+xml,image/gif"
-            onChange={handleFileChange}
-            disabled={uploading}
-            className="block w-full text-sm text-(--muted-foreground) file:mr-3 file:rounded-md file:border file:border-(--border) file:bg-(--muted) file:px-3 file:py-1.5 file:text-sm file:font-medium hover:file:bg-(--accent)"
-          />
-          {state.logoUrl ? (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => set("logoUrl", null)}
-            >
-              Remove
-            </Button>
-          ) : null}
-        </div>
-        {state.logoUrl ? (
-          <div className="mt-2 flex items-center gap-3 rounded-md border border-(--border) bg-(--muted) p-3">
-            <Image
-              src={state.logoUrl}
-              alt="Logo preview"
-              width={48}
-              height={48}
-              className="h-12 w-auto rounded object-contain"
-              unoptimized
-            />
-            <span className="font-mono text-xs text-(--muted-foreground) break-all">
-              {state.logoUrl}
-            </span>
-          </div>
-        ) : null}
-      </div>
+      <MediaPickerField
+        label="Profile photo"
+        value={state.avatarUrl ?? ""}
+        onChange={(v) => set("avatarUrl", v || null)}
+        hint="Foto profil yang tampil di hero home (Profile Intro). Square recommended."
+      />
+
+      <MediaPickerField
+        label="Header logo"
+        value={state.logoUrl ?? ""}
+        onChange={(v) => set("logoUrl", v || null)}
+        hint="PNG/JPG/SVG/WebP, max 2MB. Tampil di kiri brand text di header."
+      />
 
       <div className="flex gap-2">
         <Button
           type="submit"
-          disabled={update.isPending || uploading}
+          disabled={update.isPending}
           className="bg-(--primary) text-(--primary-foreground) hover:bg-(--primary)/90"
         >
           {update.isPending ? "Saving…" : "Save settings"}

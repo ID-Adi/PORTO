@@ -34,6 +34,8 @@ export default function EditProjectPage({
             imageUrl: query.data.imageUrl ?? "",
             url: query.data.url ?? "",
             repoUrl: query.data.repoUrl ?? "",
+            highlights: (query.data.highlights ?? []).join("\n"),
+            tags: (query.data.tags ?? []).join(", "),
             sortOrder: query.data.sortOrder,
           }}
         />

@@ -22,6 +22,41 @@
       "when": 1778091072721,
       "tag": "0002_abandoned_nextwave",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1778942992465,
+      "tag": "0003_same_lilith",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1778952541633,
+      "tag": "0004_swift_spiral",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1778952886375,
+      "tag": "0005_cultured_radioactive_man",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1778994822107,
+      "tag": "0006_narrow_wallflower",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1779032169164,
+      "tag": "0007_tan_senator_kelly",
+      "breakpoints": true
     }
   ]
 }

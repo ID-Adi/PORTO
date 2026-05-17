@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 import { trpc } from "@/lib/trpc";
-import { normalizeImageUrl } from "@/lib/image-url";
+import { MediaPickerField } from "@/features/admin/components/media-picker-field";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import {
@@ -15,15 +15,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { TextField } from "@/features/admin/components/form-field";
-
-type Category = "frontend" | "backend" | "tooling" | "other";
-type Level = "beginner" | "intermediate" | "advanced" | "expert";
+import {
+  TextAreaField,
+  TextField,
+} from "@/features/admin/components/form-field";
 
 type SkillFormState = {
   name: string;
-  category: Category;
-  level: Level;
+  category: string;
+  level: number;
+  description: string;
+  years: number | "";
   iconUrl: string;
   sortOrder: number;
 };
@@ -31,7 +33,9 @@ type SkillFormState = {
 const empty: SkillFormState = {
   name: "",
   category: "other",
-  level: "intermediate",
+  level: 3,
+  description: "",
+  years: "",
   iconUrl: "",
   sortOrder: 0,
 };
@@ -78,7 +82,9 @@ export function SkillForm({
     const payload = {
       name: state.name,
       category: state.category,
-      level: state.level,
+      level: Math.min(5, Math.max(1, Number(state.level) || 3)),
+      description: state.description || null,
+      years: state.years === "" ? null : Number(state.years),
       iconUrl: state.iconUrl || null,
       sortOrder: Number(state.sortOrder) || 0,
     };
@@ -86,10 +92,8 @@ export function SkillForm({
     else create.mutate(payload);
   }
 
-  const preview = normalizeImageUrl(state.iconUrl);
-
   return (
-    <form onSubmit={onSubmit} className="grid gap-5 max-w-2xl">
+    <form onSubmit={onSubmit} className="grid max-w-2xl gap-5">
       <TextField
         label="Name"
         name="name"
@@ -97,12 +101,12 @@ export function SkillForm({
         value={state.name}
         onChange={(e) => set("name", e.target.value)}
       />
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-4 sm:grid-cols-3">
         <div className="space-y-1.5">
           <Label htmlFor="category">Category</Label>
           <Select
             value={state.category}
-            onValueChange={(v) => set("category", v as Category)}
+            onValueChange={(v) => set("category", v)}
           >
             <SelectTrigger id="category">
               <SelectValue />
@@ -110,42 +114,47 @@ export function SkillForm({
             <SelectContent>
               <SelectItem value="frontend">Frontend</SelectItem>
               <SelectItem value="backend">Backend</SelectItem>
-              <SelectItem value="tooling">Tooling</SelectItem>
+              <SelectItem value="devops">DevOps &amp; Cloud</SelectItem>
+              <SelectItem value="tools">Tools &amp; Workflow</SelectItem>
+              <SelectItem value="architecture">Architecture &amp; Patterns</SelectItem>
               <SelectItem value="other">Other</SelectItem>
             </SelectContent>
           </Select>
         </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="level">Level</Label>
-          <Select
-            value={state.level}
-            onValueChange={(v) => set("level", v as Level)}
-          >
-            <SelectTrigger id="level">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="beginner">Beginner</SelectItem>
-              <SelectItem value="intermediate">Intermediate</SelectItem>
-              <SelectItem value="advanced">Advanced</SelectItem>
-              <SelectItem value="expert">Expert</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+        <TextField
+          label="Level (1-5)"
+          name="level"
+          type="number"
+          min={1}
+          max={5}
+          value={state.level}
+          onChange={(e) => set("level", Number(e.target.value))}
+        />
+        <TextField
+          label="Years"
+          name="years"
+          type="number"
+          min={0}
+          value={state.years}
+          onChange={(e) =>
+            set("years", e.target.value === "" ? "" : Number(e.target.value))
+          }
+        />
       </div>
-      <TextField
-        label="Icon URL"
-        name="iconUrl"
-        value={state.iconUrl}
-        onChange={(e) => set("iconUrl", e.target.value)}
-        hint="Optional. Direct image URL or Google Drive share link."
+      <TextAreaField
+        label="Description"
+        name="description"
+        rows={3}
+        value={state.description}
+        onChange={(e) => set("description", e.target.value)}
+        hint="Singkat: stack/area/penekanan apa yang dikuasai."
       />
-      {preview ? (
-        <div className="rounded-md border border-(--border) bg-(--muted) p-2">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={preview} alt="" className="size-12 object-contain" />
-        </div>
-      ) : null}
+      <MediaPickerField
+        label="Icon"
+        value={state.iconUrl}
+        onChange={(v) => set("iconUrl", v)}
+        hint="Pilih dari library, upload baru, atau paste URL."
+      />
       <TextField
         label="Sort order"
         name="sortOrder"

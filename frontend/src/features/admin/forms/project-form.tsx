@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 import { trpc } from "@/lib/trpc";
-import { normalizeImageUrl } from "@/lib/image-url";
+import { MediaPickerField } from "@/features/admin/components/media-picker-field";
 import { Button } from "@/components/ui/button";
 import {
   TextAreaField,
@@ -21,6 +21,8 @@ type ProjectFormState = {
   imageUrl: string;
   url: string;
   repoUrl: string;
+  highlights: string;
+  tags: string;
   sortOrder: number;
 };
 
@@ -33,6 +35,8 @@ const empty: ProjectFormState = {
   imageUrl: "",
   url: "",
   repoUrl: "",
+  highlights: "",
+  tags: "",
   sortOrder: 0,
 };
 
@@ -75,6 +79,14 @@ export function ProjectForm({
 
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    const highlights = state.highlights
+      .split("\n")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const tags = state.tags
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
     const payload = {
       title: state.title,
       slug: state.slug,
@@ -84,16 +96,16 @@ export function ProjectForm({
       imageUrl: state.imageUrl || null,
       url: state.url || null,
       repoUrl: state.repoUrl || null,
+      highlights,
+      tags,
       sortOrder: Number(state.sortOrder) || 0,
     };
     if (id) update.mutate({ id, data: payload });
     else create.mutate(payload);
   }
 
-  const preview = normalizeImageUrl(state.imageUrl);
-
   return (
-    <form onSubmit={onSubmit} className="grid gap-5 max-w-2xl">
+    <form onSubmit={onSubmit} className="grid max-w-2xl gap-5">
       <div className="grid gap-4 sm:grid-cols-2">
         <TextField
           label="Title"
@@ -140,23 +152,27 @@ export function ProjectForm({
           onChange={(e) => set("sortOrder", Number(e.target.value))}
         />
       </div>
-      <TextField
-        label="Image URL"
-        name="imageUrl"
+      <MediaPickerField
+        label="Image"
         value={state.imageUrl}
-        onChange={(e) => set("imageUrl", e.target.value)}
-        hint="Paste a direct image URL or a Google Drive share link (auto-converted)."
+        onChange={(v) => set("imageUrl", v)}
+        hint="Pilih dari library, upload baru, atau paste URL."
       />
-      {preview ? (
-        <div className="rounded-md border border-(--border) bg-(--muted) p-2">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={preview}
-            alt="preview"
-            className="max-h-48 rounded object-contain"
-          />
-        </div>
-      ) : null}
+      <TextAreaField
+        label="Highlights"
+        name="highlights"
+        rows={5}
+        value={state.highlights}
+        onChange={(e) => set("highlights", e.target.value)}
+        hint="Satu bullet per baris."
+      />
+      <TextField
+        label="Tags"
+        name="tags"
+        value={state.tags}
+        onChange={(e) => set("tags", e.target.value)}
+        hint="Pisahkan dengan koma. Contoh: Next.js, TypeScript, Tailwind"
+      />
       <div className="grid gap-4 sm:grid-cols-2">
         <TextField
           label="Live URL"

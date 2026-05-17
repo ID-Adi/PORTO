@@ -15,7 +15,7 @@ export default function ExperienceListPage() {
   const list = trpc.experiences.list.useQuery();
   const remove = trpc.experiences.remove.useMutation({
     onSuccess: () => {
-      toast.success("Experience deleted");
+      toast.success("Company deleted");
       utils.experiences.list.invalidate();
     },
     onError: (err) => toast.error(err.message),
@@ -32,7 +32,7 @@ export default function ExperienceListPage() {
             className="bg-(--primary) text-(--primary-foreground) hover:bg-(--primary)/90"
           >
             <Link href="/admin/experience/new">
-              <Plus className="size-4" /> New experience
+              <Plus className="size-4" /> New company
             </Link>
           </Button>
         }
@@ -41,25 +41,45 @@ export default function ExperienceListPage() {
         rows={list.data}
         columns={[
           {
-            key: "period",
-            header: "Period",
-            render: (row) => (
-              <span className="font-mono text-xs">{row.period}</span>
-            ),
-          },
-          {
-            key: "title",
-            header: "Title",
+            key: "name",
+            header: "Company",
             render: (row) => (
               <div>
-                <div className="font-medium">{row.title}</div>
-                {row.detail ? (
-                  <div className="text-xs text-(--muted-foreground) line-clamp-1">
-                    {row.detail}
-                  </div>
+                <div className="font-medium">{row.name}</div>
+                {row.location ? (
+                  <div className="text-xs text-(--muted-foreground)">{row.location}</div>
                 ) : null}
               </div>
             ),
+          },
+          {
+            key: "positions",
+            header: "Positions",
+            render: (row) => (
+              <div className="space-y-0.5">
+                {row.positions.map((p) => (
+                  <div key={p.id} className="text-xs">
+                    <span className="font-medium">{p.title}</span>
+                    {p.period ? (
+                      <span className="text-(--muted-foreground)"> · {p.period}</span>
+                    ) : null}
+                  </div>
+                ))}
+                {row.positions.length === 0 ? (
+                  <span className="text-xs italic text-(--muted-foreground)">No positions</span>
+                ) : null}
+              </div>
+            ),
+          },
+          {
+            key: "current",
+            header: "Current",
+            render: (row) =>
+              row.isCurrent ? (
+                <span className="font-mono text-[10px] uppercase tracking-wider text-(--foreground)">YES</span>
+              ) : (
+                <span className="text-(--muted-foreground)">—</span>
+              ),
           },
           {
             key: "sort",
@@ -78,7 +98,7 @@ export default function ExperienceListPage() {
                   </Link>
                 </Button>
                 <DeleteButton
-                  label={row.title}
+                  label={row.name}
                   onConfirm={() => remove.mutate({ id: row.id })}
                   pending={remove.isPending}
                 />

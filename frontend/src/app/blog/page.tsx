@@ -15,7 +15,7 @@ export default function BlogPage() {
   return (
     <SiteShell>
       <div className="page-frame border-x border-(--line)">
-        <section className="screen-line-top screen-line-bottom">
+        <section>
           <header className="screen-line-bottom px-4 py-6 sm:px-5">
             <span className="profile-kicker mb-2 block">03 / Blog</span>
             <h1 className="font-heading text-3xl font-semibold tracking-tight sm:text-4xl">
@@ -45,7 +45,7 @@ export default function BlogPage() {
                   key={post.id}
                   href={`/blog/${post.slug}`}
                   className={cn(
-                    "group flex flex-col gap-1 border-b border-(--line) px-4 py-5 transition-colors hover:bg-(--muted)/50 sm:px-5",
+                    "group flex flex-col gap-1 border-b border-(--line) px-4 py-5 transition-colors last:border-b-0 hover:bg-(--muted)/50 sm:px-5",
                   )}
                 >
                   <h2 className="text-sm font-medium tracking-[-0.03em] group-hover:underline">

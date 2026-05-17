@@ -11,6 +11,7 @@ const settingsInput = z.object({
   profileName: z.string().min(1),
   profileTitle: z.string().min(1),
   logoUrl: z.string().nullish(),
+  avatarUrl: z.string().nullish(),
 });
 
 export const siteSettingsRouter = router({
@@ -40,6 +41,7 @@ export const siteSettingsRouter = router({
             profileName: input.profileName ?? "",
             profileTitle: input.profileTitle ?? "",
             logoUrl: input.logoUrl ?? null,
+            avatarUrl: input.avatarUrl ?? null,
           })
           .returning();
         return row;

@@ -6,9 +6,6 @@ import { trpc } from "@/lib/trpc";
 import { SkillForm } from "@/features/admin/forms/skill-form";
 import { PageHeader } from "@/features/admin/components/page-header";
 
-type Category = "frontend" | "backend" | "tooling" | "other";
-type Level = "beginner" | "intermediate" | "advanced" | "expert";
-
 export default function EditSkillPage({
   params,
 }: {
@@ -30,8 +27,10 @@ export default function EditSkillPage({
           id={numericId}
           initial={{
             name: query.data.name,
-            category: query.data.category as Category,
-            level: query.data.level as Level,
+            category: query.data.category,
+            level: query.data.level,
+            description: query.data.description ?? "",
+            years: query.data.years ?? "",
             iconUrl: query.data.iconUrl ?? "",
             sortOrder: query.data.sortOrder,
           }}

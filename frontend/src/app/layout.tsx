@@ -75,15 +75,15 @@ const personJsonLd = {
     "@type": "Organization",
     name: "PORTO",
   },
-  sameAs: homePageContent.socials.map((item) => item.href),
 };
 
 export default function RootLayout({ children }: RootLayoutProps) {
   return (
     <html
       lang="en"
-      className={`${fontVariables} dark`}
-      data-theme="dark"
+      className={fontVariables}
+      data-theme="light"
+      style={{ colorScheme: "light" }}
       suppressHydrationWarning
     >
       <head>
