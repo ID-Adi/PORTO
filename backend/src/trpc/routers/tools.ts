@@ -8,6 +8,8 @@ import { z } from "zod";
 
 import { db } from "../../db/index.js";
 import { toolGeneration } from "../../db/schema/index.js";
+import { publicUrl } from "../../lib/public-url.js";
+import { TOOLS_UPLOAD_DIR } from "../../lib/uploads-dir.js";
 import { authenticatedProcedure, router } from "../init.js";
 
 const KIND = z.enum(["image", "video"]);
@@ -16,18 +18,6 @@ const IMAGE_ASPECT_RATIOS = ["1:1", "4:5", "3:4", "16:9", "9:16"] as const;
 const ALLOWED_MIME = new Set(["image/png", "image/jpeg", "image/webp"]);
 const MAX_BYTES = 5 * 1024 * 1024;
 const N8N_TIMEOUT_MS = 90_000;
-
-// Directory tujuan: frontend/public/uploads/tools (relatif terhadap cwd backend
-// saat dev `pnpm dev:backend` = backend/; saat Docker = /app). Selalu resolve
-// dulu untuk path containment.
-const TOOLS_UPLOAD_DIR = path.resolve(
-  process.cwd(),
-  "..",
-  "frontend",
-  "public",
-  "uploads",
-  "tools",
-);
 
 function ensureContained(filePath: string) {
   const resolved = path.resolve(filePath);
@@ -191,7 +181,7 @@ export const toolsRouter = router({
 
       return {
         id: row.id,
-        url: fileUrl,
+        url: publicUrl(fileUrl),
         mimeType,
         requestId,
         createdAt: row.createdAt,
@@ -212,7 +202,8 @@ export const toolsRouter = router({
         )
         .orderBy(desc(toolGeneration.createdAt))
         .limit(50);
-      return rows;
+      // DB simpan relative path; response kirim absolute via PUBLIC_BACKEND_URL.
+      return rows.map((row) => ({ ...row, fileUrl: publicUrl(row.fileUrl) }));
     }),
 
   deleteMyEntry: authenticatedProcedure

@@ -34,6 +34,7 @@ import {
   DiffSourceToggleWrapper,
 } from "@mdxeditor/editor";
 
+import { BACKEND_URL } from "@/lib/backend-url";
 import { cn } from "@/lib/utils";
 
 import { MediaPicker } from "./media-picker";
@@ -57,7 +58,7 @@ export default function MarkdownEditor({
   const imageUploadHandler = useCallback(async (file: File) => {
     const form = new FormData();
     form.append("file", file);
-    const res = await fetch("/api/upload", {
+    const res = await fetch(`${BACKEND_URL}/api/upload`, {
       method: "POST",
       body: form,
       credentials: "include",

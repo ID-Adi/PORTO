@@ -7,15 +7,9 @@ import { z } from "zod";
 
 import { db } from "../../db/index.js";
 import { media } from "../../db/schema/index.js";
+import { publicUrl } from "../../lib/public-url.js";
+import { UPLOADS_DIR } from "../../lib/uploads-dir.js";
 import { protectedProcedure, publicProcedure, router } from "../init.js";
-
-const uploadsDir = path.resolve(
-  process.cwd(),
-  "..",
-  "frontend",
-  "public",
-  "uploads",
-);
 
 const mediaInput = z.object({
   filename: z.string().min(1),
@@ -28,9 +22,18 @@ const mediaInput = z.object({
   uploadedBy: z.string().nullish(),
 });
 
+type MediaRow = typeof media.$inferSelect;
+
+function withPublicUrl(row: MediaRow): MediaRow & { url: string } {
+  // url di DB selalu relative ("/uploads/..."), tapi setelah publicUrl()
+  // hasilnya selalu string (passthrough kalau PUBLIC_BACKEND_URL kosong).
+  return { ...row, url: publicUrl(row.url) as string };
+}
+
 export const mediaRouter = router({
   list: publicProcedure.query(async () => {
-    return db.select().from(media).orderBy(desc(media.createdAt));
+    const rows = await db.select().from(media).orderBy(desc(media.createdAt));
+    return rows.map(withPublicUrl);
   }),
   byId: publicProcedure
     .input(z.object({ id: z.number().int() }))
@@ -40,11 +43,11 @@ export const mediaRouter = router({
         .from(media)
         .where(eq(media.id, input.id))
         .limit(1);
-      return row ?? null;
+      return row ? withPublicUrl(row) : null;
     }),
   create: protectedProcedure.input(mediaInput).mutation(async ({ input }) => {
     const [row] = await db.insert(media).values(input).returning();
-    return row;
+    return withPublicUrl(row);
   }),
   updateAlt: protectedProcedure
     .input(z.object({ id: z.number().int(), alt: z.string().nullish() }))
@@ -54,7 +57,7 @@ export const mediaRouter = router({
         .set({ alt: input.alt ?? null })
         .where(eq(media.id, input.id))
         .returning();
-      return row;
+      return withPublicUrl(row);
     }),
   remove: protectedProcedure
     .input(z.object({ id: z.number().int() }))
@@ -67,10 +70,10 @@ export const mediaRouter = router({
 
       if (row?.url?.startsWith("/uploads/")) {
         const filename = path.basename(row.url);
-        const filePath = path.resolve(uploadsDir, filename);
+        const filePath = path.resolve(UPLOADS_DIR, filename);
         if (
-          filePath !== uploadsDir &&
-          filePath.startsWith(uploadsDir + path.sep)
+          filePath !== UPLOADS_DIR &&
+          filePath.startsWith(UPLOADS_DIR + path.sep)
         ) {
           await fs.unlink(filePath).catch(() => {
             // file already missing — proceed with row delete

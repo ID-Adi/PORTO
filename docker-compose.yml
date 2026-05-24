@@ -51,6 +51,11 @@ services:
       # the n8n-pawa-net network that this backend also joins.
       DATABASE_URL: ${BACKEND_DATABASE_URL:?BACKEND_DATABASE_URL required (set in root .env, e.g. postgresql://porto:PASS@porto-postgres:5432/porto_db)}
       NODE_ENV: production
+    volumes:
+      # File dinamis (admin uploads + tools generations) — persisten lintas
+      # container restart. Backend serve /uploads/* via Hono serveStatic.
+      - porto_uploads:/app/public/uploads
 
 volumes:
   postgres_data:
+  porto_uploads:

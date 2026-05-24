@@ -1,9 +1,11 @@
 import { serve } from "@hono/node-server";
+import { serveStatic } from "@hono/node-server/serve-static";
 import { trpcServer } from "@hono/trpc-server";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 
 import { auth } from "./auth/index.js";
+import { uploadRoute } from "./routes/upload.js";
 import { createTRPCContext } from "./trpc/init.js";
 import { appRouter } from "./trpc/routers/_app.js";
 
@@ -29,11 +31,26 @@ app.use(
 
 app.on(["GET", "POST"], "/api/auth/**", (c) => auth.handler(c.req.raw));
 
+app.route("/api/upload", uploadRoute);
+
 app.use(
   "/api/trpc/*",
   trpcServer({
     router: appRouter,
     createContext: (_opts, c) => createTRPCContext({ req: c.req.raw }),
+  }),
+);
+
+// Serve file dinamis (admin uploads + tools generations) dari volume Docker
+// yang di-mount ke /app/public/uploads. Filename pakai UUID jadi konten
+// immutable — aman cache panjang.
+app.use(
+  "/uploads/*",
+  serveStatic({
+    root: "./public",
+    onFound: (_path, c) => {
+      c.header("Cache-Control", "public, max-age=31536000, immutable");
+    },
   }),
 );
 

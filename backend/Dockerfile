@@ -16,6 +16,11 @@ USER root
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
+# Direktori untuk file dinamis (admin uploads + tools generations).
+# Di compose, volume `porto_uploads` di-mount ke /app/public/uploads supaya
+# data persist lintas container restart.
+RUN mkdir -p /app/public/uploads/tools && chown -R node:node /app/public
+
 USER node
 
 ENV NODE_ENV=production

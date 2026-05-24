@@ -4,6 +4,7 @@ import { useState, useRef, useCallback } from "react";
 import { Trash2, UploadCloud, Link as LinkIcon, ImageIcon } from "lucide-react";
 import { toast } from "sonner";
 
+import { BACKEND_URL } from "@/lib/backend-url";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -54,7 +55,7 @@ export function MediaPicker({ open, onOpenChange, onSelect }: MediaPickerProps) 
     try {
       const form = new FormData();
       form.append("file", file);
-      const res = await fetch("/api/upload", {
+      const res = await fetch(`${BACKEND_URL}/api/upload`, {
         method: "POST",
         body: form,
         credentials: "include",
