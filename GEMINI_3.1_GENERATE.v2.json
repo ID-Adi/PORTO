@@ -1,0 +1,382 @@
+{
+  "name": "GEMINI 3.1 GENERATE v2",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        28400,
+        20240
+      ],
+      "id": "300cdf7f-6394-4b3b-8975-8607f2758126",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "porto-tools-image",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        28400,
+        20480
+      ],
+      "id": "8c2ad19a-5e0d-4fe6-8a3e-2f9c7e0b1ab1",
+      "name": "Webhook (PORTO)",
+      "webhookId": "porto-tools-image",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_WITH_HEADER_AUTH_CREDENTIAL_ID",
+          "name": "X-PORTO-Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "projectId",
+              "name": "projectId",
+              "value": "={{ $env.GCP_PROJECT_ID || 'project-8fa51551-4f6c-4ff6-8b7' }}",
+              "type": "string"
+            },
+            {
+              "id": "accessToken",
+              "name": "accessToken",
+              "value": "={{ $env.GCP_ACCESS_TOKEN }}",
+              "type": "string"
+            },
+            {
+              "id": "prompt",
+              "name": "prompt",
+              "value": "Generate a premium product image on a clean studio background. High detail, realistic lighting, sharp focus.",
+              "type": "string"
+            },
+            {
+              "id": "aspectRatio",
+              "name": "aspectRatio",
+              "value": "1:1",
+              "type": "string"
+            },
+            {
+              "id": "source",
+              "name": "source",
+              "value": "manual",
+              "type": "string"
+            },
+            {
+              "id": "requestId",
+              "name": "requestId",
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "ecd58ce4-0e63-47ec-aadd-969f7d3db9fd",
+      "name": "Manual Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        28720,
+        20240
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "projectId",
+              "name": "projectId",
+              "value": "={{ $env.GCP_PROJECT_ID || 'project-8fa51551-4f6c-4ff6-8b7' }}",
+              "type": "string"
+            },
+            {
+              "id": "accessToken",
+              "name": "accessToken",
+              "value": "={{ $env.GCP_ACCESS_TOKEN }}",
+              "type": "string"
+            },
+            {
+              "id": "prompt",
+              "name": "prompt",
+              "value": "={{ $json.body.prompt }}",
+              "type": "string"
+            },
+            {
+              "id": "aspectRatio",
+              "name": "aspectRatio",
+              "value": "={{ $json.body.aspectRatio || '1:1' }}",
+              "type": "string"
+            },
+            {
+              "id": "source",
+              "name": "source",
+              "value": "porto-web",
+              "type": "string"
+            },
+            {
+              "id": "requestId",
+              "name": "requestId",
+              "value": "={{ $json.body.requestId }}",
+              "type": "string"
+            },
+            {
+              "id": "userEmail",
+              "name": "userEmail",
+              "value": "={{ $json.body.userEmail }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "f1a4b820-2cfc-4d3f-b9d8-1c5e8d6a7e91",
+      "name": "Webhook Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        28720,
+        20480
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://aiplatform.googleapis.com/v1/projects/{{$json.projectId}}/locations/global/publishers/google/models/gemini-3.1-flash-image-preview:generateContent",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$json.accessToken}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { contents: [{ role: 'user', parts: [{ text: $json.prompt }] }], generationConfig: { responseModalities: ['TEXT', 'IMAGE'], imageConfig: { aspectRatio: $json.aspectRatio } } } }}",
+        "options": {}
+      },
+      "id": "4797d898-0d47-4e9c-89df-c9c80608da33",
+      "name": "Vertex Gemini 3.1 Image",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        29040,
+        20360
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const upstream = $('Vertex Gemini 3.1 Image').first().json;\nconst sourceItem = $input.first().json;\n\nconst parts = upstream?.candidates?.[0]?.content?.parts ?? [];\nconst imagePart = parts.find((part) => part.inlineData?.data || part.inline_data?.data);\nconst textPart = parts.find((part) => part.text);\n\nif (!imagePart) {\n  throw new Error('Tidak ada output image dari Gemini response. Cek prompt, quota, token, dan responseModalities.');\n}\n\nconst inlineData = imagePart.inlineData ?? imagePart.inline_data;\nconst mimeType = inlineData.mimeType ?? inlineData.mime_type ?? 'image/png';\nconst extension = mimeType.includes('jpeg') || mimeType.includes('jpg') ? 'jpg' : (mimeType.includes('webp') ? 'webp' : 'png');\n\nreturn [{\n  json: {\n    model: 'gemini-3.1-flash-image-preview',\n    mimeType,\n    text: textPart?.text ?? '',\n    source: sourceItem.source || 'manual',\n    requestId: sourceItem.requestId || '',\n    aspectRatio: sourceItem.aspectRatio || '1:1',\n  },\n  binary: {\n    image: {\n      data: inlineData.data,\n      mimeType,\n      fileName: `gemini-3-1-output.${extension}`,\n      fileExtension: extension,\n    },\n  },\n}];"
+      },
+      "id": "1860134b-66be-4ad0-a34f-510d111282e0",
+      "name": "Convert Image to Binary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        29296,
+        20360
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "source-porto-web",
+                    "leftValue": "={{ $json.source }}",
+                    "rightValue": "porto-web",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "porto-web"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra",
+          "renameFallbackOutput": "manual"
+        }
+      },
+      "id": "5b3e2d31-9d4a-4f12-9c4e-6b4ff2a0a1c8",
+      "name": "Route by source",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        29552,
+        20360
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: true, requestId: $json.requestId, mimeType: $json.mimeType, imageBase64: $binary.image.data, text: $json.text || '' } }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "a92f0d4e-7b6c-4d1a-b8a3-3e1c9f8d2b07",
+      "name": "Respond to Webhook (PORTO)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        29840,
+        20240
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "sendPhoto",
+        "chatId": "-5092441681",
+        "binaryData": true,
+        "binaryPropertyName": "image",
+        "additionalFields": {
+          "caption": "={{ $json.text || 'Generated with Gemini 3.1 Flash Image Preview' }}"
+        }
+      },
+      "id": "d7e05e8f-aed9-439a-9b38-20b39a1f0d91",
+      "name": "Send Image to Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        29840,
+        20480
+      ],
+      "webhookId": "71dad319-6647-4ddd-9f6c-8180b932ddd3",
+      "credentials": {
+        "telegramApi": {
+          "id": "3gYAxmwP0n3XfvEN",
+          "name": "Telegram account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Manual Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook (PORTO)": {
+      "main": [
+        [
+          {
+            "node": "Webhook Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Config": {
+      "main": [
+        [
+          {
+            "node": "Vertex Gemini 3.1 Image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook Config": {
+      "main": [
+        [
+          {
+            "node": "Vertex Gemini 3.1 Image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Vertex Gemini 3.1 Image": {
+      "main": [
+        [
+          {
+            "node": "Convert Image to Binary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert Image to Binary": {
+      "main": [
+        [
+          {
+            "node": "Route by source",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by source": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook (PORTO)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Image to Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "8dcb294d-fc73-4b69-84aa-283e665253a6",
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "instanceId": "046877728b8f4e2565f8aab7d97c482d69443e5d7de38d0701c1be9f87bfef5b"
+  },
+  "id": "I7lkeFnnbHg0nPGP_v2",
+  "tags": []
+}

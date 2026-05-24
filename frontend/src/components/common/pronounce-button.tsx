@@ -12,12 +12,18 @@ import { cn } from "@/lib/utils";
 
 type PronounceButtonProps = {
   name: string;
+  pronunciationText: string;
 };
 
-export function PronounceButton({ name }: PronounceButtonProps) {
+export function PronounceButton({
+  name,
+  pronunciationText,
+}: PronounceButtonProps) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [hasError, setHasError] = useState(false);
+  const [showText, setShowText] = useState(false);
 
   const ensureAudio = () => {
     if (audioRef.current) {
@@ -42,7 +48,19 @@ export function PronounceButton({ name }: PronounceButtonProps) {
     return audio;
   };
 
+  const revealText = () => {
+    setShowText(true);
+    if (hideTimerRef.current) {
+      clearTimeout(hideTimerRef.current);
+    }
+    hideTimerRef.current = setTimeout(() => {
+      setShowText(false);
+    }, 2800);
+  };
+
   const handleClick = async () => {
+    revealText();
+
     const audio = ensureAudio();
 
     if (hasError) {
@@ -61,6 +79,9 @@ export function PronounceButton({ name }: PronounceButtonProps) {
 
   useEffect(() => {
     return () => {
+      if (hideTimerRef.current) {
+        clearTimeout(hideTimerRef.current);
+      }
       if (!audioRef.current) {
         return;
       }
@@ -72,13 +93,14 @@ export function PronounceButton({ name }: PronounceButtonProps) {
   }, []);
 
   return (
+    <span className="inline-flex items-center gap-1.5">
     <Tooltip>
       <TooltipTrigger asChild>
         <button
           type="button"
           onClick={() => void handleClick()}
           className="inline-flex h-8 w-8 items-center justify-center text-(--muted-foreground) transition-colors hover:text-(--foreground) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--ring)"
-          aria-label={`Pronounce ${name}`}
+          aria-label={`Lafalkan ${name}`}
         >
           {isPlaying && !hasError ? (
             <span className="flex items-end gap-0.5" aria-hidden>
@@ -99,8 +121,20 @@ export function PronounceButton({ name }: PronounceButtonProps) {
         </button>
       </TooltipTrigger>
       <TooltipContent sideOffset={8}>
-        {hasError ? "Audio unavailable" : "Pronounce name"}
+        {hasError ? "Audio tidak tersedia" : "Lafalkan nama"}
       </TooltipContent>
     </Tooltip>
+      <span
+        aria-live="polite"
+        className={cn(
+          "pointer-events-none inline-flex items-center font-mono text-xs tracking-wide text-(--muted-foreground) transition-all duration-300 ease-out",
+          showText
+            ? "max-w-[14rem] translate-x-0 opacity-100"
+            : "max-w-0 -translate-x-1 overflow-hidden opacity-0"
+        )}
+      >
+        <span className="whitespace-nowrap">{pronunciationText}</span>
+      </span>
+    </span>
   );
 }

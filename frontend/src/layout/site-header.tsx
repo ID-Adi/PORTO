@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Search } from "lucide-react";
+import { Home as HomeIcon, Search, Wrench } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { navItems } from "@/features/home/data/nav-items";
@@ -25,6 +25,13 @@ export function SiteHeader() {
 
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname.startsWith(href);
+
+  const quickLinks = [
+    { href: "/", label: "Home", icon: HomeIcon },
+    { href: "/tools", label: "Tools", icon: Wrench },
+  ] as const;
+
+  const railItems = navItems.filter((item) => item.href !== "/");
 
   return (
     <>
@@ -53,6 +60,29 @@ export function SiteHeader() {
                 />
               )}
             </Link>
+
+            <div className="flex items-center border-r border-line pr-1">
+              {quickLinks.map(({ href, label, icon: Icon }) => {
+                const active = isActive(href);
+                return (
+                  <Link
+                    key={href}
+                    href={href}
+                    aria-current={active ? "page" : undefined}
+                    aria-label={label}
+                    className={cn(
+                      "inline-flex h-8 items-center gap-2 px-2 font-mono text-[12px] font-medium transition-[background-color,color]",
+                      active
+                        ? "bg-muted/60 text-foreground"
+                        : "text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+                    )}
+                  >
+                    <Icon className="size-3.5" aria-hidden />
+                    <span className="hidden md:inline">{label}</span>
+                  </Link>
+                );
+              })}
+            </div>
 
             <div className="ml-auto flex items-center">
               <div className="hidden items-center border-r border-line pr-2 md:flex">
@@ -100,9 +130,9 @@ export function SiteHeader() {
 
           <nav
             aria-label="Primary navigation"
-            className="grid h-8 grid-cols-6 border-t border-line"
+            className="grid h-8 grid-cols-5 border-t border-line"
           >
-            {navItems.map((item, index) => (
+            {railItems.map((item, index) => (
               <Link
                 key={item.href}
                 href={item.href}
