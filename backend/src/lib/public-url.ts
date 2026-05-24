@@ -7,7 +7,7 @@ const BASE = process.env.PUBLIC_BACKEND_URL?.replace(/\/$/, "") ?? "";
  * (mis. `porto-api.pawa.my.id`); semua file harus dirujuk lewat host backend.
  *
  * Dev mode (`PUBLIC_BACKEND_URL` kosong) → passthrough relatif supaya
- * sama-origin tetap jalan dari `localhost:3000` ke `localhost:4001` lewat
+ * sama-origin tetap jalan dari `localhost:3000` ke `localhost:4002` lewat
  * proxy/dev rewrites (atau langsung relative kalau backend serve frontend).
  *
  * URL absolut (https://...) di input akan di-passthrough utuh — supaya

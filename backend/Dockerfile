@@ -24,10 +24,10 @@ RUN mkdir -p /app/public/uploads/tools && chown -R node:node /app/public
 USER node
 
 ENV NODE_ENV=production
-EXPOSE 4001
+EXPOSE 4002
 
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
-  CMD wget -qO- http://localhost:4001/ >/dev/null 2>&1 || exit 1
+  CMD wget -qO- http://localhost:4002/ >/dev/null 2>&1 || exit 1
 
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 CMD ["pnpm", "exec", "tsx", "src/index.ts"]

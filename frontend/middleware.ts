@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 const BACKEND_URL =
-  process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:4001";
+  process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:4002";
 
 type SessionPayload = {
   user?: { email?: string | null } | null;

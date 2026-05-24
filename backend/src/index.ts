@@ -56,7 +56,7 @@ app.use(
 
 app.get("/", (c) => c.json({ status: "ok" }));
 
-const port = Number(process.env.PORT) || 4001;
+const port = Number(process.env.PORT) || 4002;
 serve({ fetch: app.fetch, port }, (info) => {
   console.log(`Backend running on http://localhost:${info.port}`);
 });
