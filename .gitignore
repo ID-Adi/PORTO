@@ -39,5 +39,10 @@ Thumbs.db
 # Kiro CLI workspace settings (MCP config, agents, skills cache, dsb)
 .kiro/
 
+# N8N workflow exports — sering memuat access token / credential live.
+# File v2 (yang sanitized via $env.*) di-allow lewat exception di bawah.
+GEMINI_3.1_GENERATE.json
+*.workflow.secret.json
+
 # Allow examples
 !.env.example

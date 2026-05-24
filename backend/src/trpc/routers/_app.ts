@@ -9,6 +9,7 @@ import { projectsRouter } from "./projects.js";
 import { siteSettingsRouter } from "./site-settings.js";
 import { skillsRouter } from "./skills.js";
 import { socialsRouter } from "./socials.js";
+import { toolsRouter } from "./tools.js";
 
 export const appRouter = router({
   projects: projectsRouter,
@@ -21,6 +22,7 @@ export const appRouter = router({
   profileOverview: profileOverviewRouter,
   socials: socialsRouter,
   bookmarks: bookmarksRouter,
+  tools: toolsRouter,
 });
 
 export type AppRouter = typeof appRouter;

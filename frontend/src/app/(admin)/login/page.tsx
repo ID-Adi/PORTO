@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { LogIn } from "lucide-react";
 import { toast } from "sonner";
 
@@ -10,8 +10,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-export default function AdminLoginPage() {
+function safeRedirect(target: string | null): string {
+  if (!target) return "/admin";
+  // Hanya izinkan relative path internal supaya tidak open-redirect.
+  if (!target.startsWith("/") || target.startsWith("//")) return "/admin";
+  return target;
+}
+
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirectTo = safeRedirect(searchParams.get("redirect"));
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [pending, setPending] = useState(false);
@@ -26,7 +35,7 @@ export default function AdminLoginPage() {
         return;
       }
       toast.success("Signed in");
-      router.push("/admin");
+      router.push(redirectTo);
       router.refresh();
     } catch {
       toast.error("Cannot reach the auth server. Check backend and CORS.");
@@ -82,5 +91,19 @@ export default function AdminLoginPage() {
         </form>
       </div>
     </div>
+  );
+}
+
+export default function AdminLoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center text-sm text-(--muted-foreground)">
+          Loading…
+        </div>
+      }
+    >
+      <LoginForm />
+    </Suspense>
   );
 }

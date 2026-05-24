@@ -9,6 +9,45 @@ const rootDirectory = path.dirname(fileURLToPath(import.meta.url));
 // project root, dan output file tracing inklusif untuk monorepo deploy.
 const workspaceRoot = path.resolve(rootDirectory, "..");
 
+const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:4001";
+
+const connectSrc = [
+  "'self'",
+  backendUrl,
+  "https://api.github.com",
+  "https://*.pawa.my.id",
+].join(" ");
+
+const csp = [
+  "default-src 'self'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+  "object-src 'none'",
+  "img-src 'self' data: blob: https://cdn.simpleicons.org https://img.icons8.com",
+  "font-src 'self' data:",
+  "style-src 'self' 'unsafe-inline'",
+  // Next.js menyuntikkan inline bootstrap script & runtime; unsafe-inline tetap
+  // dibutuhkan sampai migrasi ke nonce-based CSP.
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+  `connect-src ${connectSrc}`,
+].join("; ");
+
+const securityHeaders = [
+  { key: "X-Content-Type-Options", value: "nosniff" },
+  { key: "X-Frame-Options", value: "DENY" },
+  { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+  {
+    key: "Strict-Transport-Security",
+    value: "max-age=63072000; includeSubDomains; preload",
+  },
+  {
+    key: "Permissions-Policy",
+    value: "camera=(), microphone=(), geolocation=(), interest-cohort=()",
+  },
+  { key: "Content-Security-Policy", value: csp },
+];
+
 const nextConfig: NextConfig = {
   allowedDevOrigins: ["127.0.0.1"],
   images: {
@@ -28,6 +67,14 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   turbopack: {
     root: workspaceRoot,
+  },
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: securityHeaders,
+      },
+    ];
   },
 };
 

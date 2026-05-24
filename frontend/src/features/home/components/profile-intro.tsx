@@ -116,14 +116,19 @@ export function ProfileIntro({
         </div>
 
         <div className="border-t border-(--line)">
-          <div className="flex min-w-0 items-center gap-2 pl-4">
-            <h1 className="min-w-0 flex-1 line-clamp-1 -translate-y-px text-3xl font-semibold tracking-tight">
-              {displayName}
-            </h1>
-            <VerifiedIcon className="size-4.5 text-sky-500 select-none" />
-            {pronunciationText ? (
-              <PronounceButton name={displayName} />
-            ) : null}
+          <div className="flex min-w-0 items-center gap-2 pl-4 pr-2">
+            <div className="flex min-w-0 items-center gap-1.5">
+              <h1 className="min-w-0 line-clamp-1 -translate-y-px text-3xl font-semibold tracking-tight">
+                {displayName}
+              </h1>
+              <VerifiedIcon className="size-4.5 shrink-0 text-sky-500 select-none" />
+              {pronunciationText ? (
+                <PronounceButton
+                  name={displayName}
+                  pronunciationText={pronunciationText}
+                />
+              ) : null}
+            </div>
           </div>
 
           <div className="h-12.5 border-t border-(--line) py-1 pl-4 sm:h-9">

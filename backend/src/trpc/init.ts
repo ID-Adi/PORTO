@@ -24,3 +24,15 @@ export const protectedProcedure = t.procedure.use(({ ctx, next }) => {
   }
   return next({ ctx: { ...ctx, session: ctx.session } });
 });
+
+/**
+ * Hanya require sesi valid (tanpa admin gating). Dipakai oleh fitur user-level
+ * seperti /tools generate, di mana siapa saja yang login (admin atau non-admin)
+ * boleh memakai tapi setiap resource di-scope per `userId`.
+ */
+export const authenticatedProcedure = t.procedure.use(({ ctx, next }) => {
+  if (!ctx.session?.user) {
+    throw new TRPCError({ code: "UNAUTHORIZED", message: "Not signed in" });
+  }
+  return next({ ctx: { ...ctx, session: ctx.session } });
+});

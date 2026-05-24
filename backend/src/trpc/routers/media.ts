@@ -1,6 +1,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 
+import { TRPCError } from "@trpc/server";
 import { desc, eq } from "drizzle-orm";
 import { z } from "zod";
 
@@ -8,9 +9,17 @@ import { db } from "../../db/index.js";
 import { media } from "../../db/schema/index.js";
 import { protectedProcedure, publicProcedure, router } from "../init.js";
 
+const uploadsDir = path.resolve(
+  process.cwd(),
+  "..",
+  "frontend",
+  "public",
+  "uploads",
+);
+
 const mediaInput = z.object({
   filename: z.string().min(1),
-  url: z.string().min(1),
+  url: z.string().regex(/^\/uploads\/[A-Za-z0-9._-]+$/, "Invalid url path"),
   mimeType: z.string().nullish(),
   size: z.number().int().nullish(),
   width: z.number().int().nullish(),
@@ -57,16 +66,21 @@ export const mediaRouter = router({
         .limit(1);
 
       if (row?.url?.startsWith("/uploads/")) {
-        const filePath = path.join(
-          process.cwd(),
-          "..",
-          "frontend",
-          "public",
-          row.url.replace(/^\//, ""),
-        );
-        await fs.unlink(filePath).catch(() => {
-          // file already missing — proceed with row delete
-        });
+        const filename = path.basename(row.url);
+        const filePath = path.resolve(uploadsDir, filename);
+        if (
+          filePath !== uploadsDir &&
+          filePath.startsWith(uploadsDir + path.sep)
+        ) {
+          await fs.unlink(filePath).catch(() => {
+            // file already missing — proceed with row delete
+          });
+        } else {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Invalid media url",
+          });
+        }
       }
 
       await db.delete(media).where(eq(media.id, input.id));

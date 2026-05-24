@@ -21,7 +21,7 @@ export function AppProviders({ children }: AppProvidersProps) {
           {children}
           <CommandMenu content={homePageContent} />
           <Toaster
-            position="bottom-center"
+            position="top-center"
             toastOptions={{
               unstyled: true,
               classNames: {

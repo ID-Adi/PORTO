@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
-import { writeFile, mkdir } from "node:fs/promises";
+import { writeFile, mkdir, unlink } from "node:fs/promises";
 import path from "node:path";
+import { randomUUID } from "node:crypto";
 
 import { createTRPCClient, httpBatchLink } from "@trpc/client";
 import type { AppRouter } from "@porto/api";
@@ -9,12 +10,13 @@ const BACKEND_URL =
   process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:4001";
 const ADMIN_EMAIL = process.env.NEXT_PUBLIC_ADMIN_EMAIL;
 const MAX_BYTES = 2 * 1024 * 1024;
+// SVG sengaja tidak diizinkan: dapat berisi <script>/event handlers yang
+// dieksekusi sebagai stored XSS bila diakses langsung dari /uploads/*.
 const ALLOWED_MIME = new Set([
   "image/png",
   "image/jpeg",
   "image/jpg",
   "image/webp",
-  "image/svg+xml",
   "image/gif",
 ]);
 
@@ -42,6 +44,10 @@ function backendClient(cookie: string) {
 function sanitizeFilename(name: string) {
   const base = path.basename(name).replace(/[^a-zA-Z0-9._-]+/g, "-");
   return base.slice(0, 80) || "file";
+}
+
+function buildStoredFilename(originalName: string) {
+  return `${randomUUID()}-${sanitizeFilename(originalName)}`;
 }
 
 export async function POST(req: Request) {
@@ -76,7 +82,7 @@ export async function POST(req: Request) {
   const uploadsDir = path.join(process.cwd(), "public", "uploads");
   await mkdir(uploadsDir, { recursive: true });
 
-  const filename = `${Date.now()}-${sanitizeFilename(file.name)}`;
+  const filename = buildStoredFilename(file.name);
   const filepath = path.join(uploadsDir, filename);
   const buffer = Buffer.from(await file.arrayBuffer());
   await writeFile(filepath, buffer);
@@ -96,7 +102,16 @@ export async function POST(req: Request) {
     });
     return NextResponse.json(row);
   } catch (err) {
-    console.error("media.create failed", err);
-    return NextResponse.json({ url, filename }, { status: 200 });
+    console.error(
+      "media.create failed",
+      err instanceof Error ? err.message : String(err),
+    );
+    await unlink(filepath).catch(() => {
+      // file mungkin sudah hilang; abaikan
+    });
+    return NextResponse.json(
+      { error: "Failed to save media record" },
+      { status: 500 },
+    );
   }
 }

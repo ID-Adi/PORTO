@@ -57,7 +57,7 @@ export const homePageContent: ProfilePageContent = {
     "Design Engineer building PORTO with editorial discipline and product-level polish.",
   status: "Open for selected builds",
   metaLine: "text-3xl text-zinc-950 dark:text-zinc-50 font-medium",
-  pronunciationText: "Prasetya Adi Wijaya",
+  pronunciationText: "Pra-sé-tya A-di Wi-ja-ya",
   avatarUrl: "/avatar.png",
   flipSentences: [
     "Building PORTO with editorial discipline.",

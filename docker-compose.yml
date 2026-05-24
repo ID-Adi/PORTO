@@ -11,15 +11,20 @@ services:
     container_name: porto-postgres
     restart: unless-stopped
     ports:
-      - "5433:5432"
+      # Bind ke loopback saja supaya database tidak terekspos ke LAN/VPS.
+      - "127.0.0.1:5433:5432"
     environment:
-      POSTGRES_USER: porto
-      POSTGRES_PASSWORD: porto_secret
-      POSTGRES_DB: porto_db
+      POSTGRES_USER: ${POSTGRES_USER:-porto}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD required (set in root .env)}
+      POSTGRES_DB: ${POSTGRES_DB:-porto_db}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U porto -d porto_db"]
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-porto} -d ${POSTGRES_DB:-porto_db}",
+        ]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -44,7 +49,7 @@ services:
       # Use container_name (porto-postgres) not service name (postgres) to avoid
       # DNS collision with n8n-pawa-postgres which is aliased as "postgres" on
       # the n8n-pawa-net network that this backend also joins.
-      DATABASE_URL: postgresql://porto:porto_secret@porto-postgres:5432/porto_db
+      DATABASE_URL: ${BACKEND_DATABASE_URL:?BACKEND_DATABASE_URL required (set in root .env, e.g. postgresql://porto:PASS@porto-postgres:5432/porto_db)}
       NODE_ENV: production
 
 volumes:
