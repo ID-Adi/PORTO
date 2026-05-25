@@ -1,0 +1,288 @@
+{
+  "name": "PORTO Video Veo (Webhook)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "porto-video-start",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "11111111-1111-1111-1111-111111111111",
+      "name": "Webhook Start (PORTO)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 240],
+      "webhookId": "porto-video-start",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_HEADER_AUTH_ID",
+          "name": "WEBHOOK_TOKEN_PORTO"
+        }
+      },
+      "notes": "Header X-PORTO-Token. Body JSON: { source, requestId, userEmail, userCaption, aspectRatio, firstFrame:{base64,mimeType}, lastFrame?:{base64,mimeType} }."
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body || $input.first().json || {};\nconst firstFrame = body.firstFrame;\nconst lastFrame = body.lastFrame;\n\nif (!firstFrame || !firstFrame.base64 || !firstFrame.mimeType) {\n  throw new Error('Payload tidak memiliki firstFrame.base64 / firstFrame.mimeType');\n}\n\nconst hasLastFrame = Boolean(lastFrame && lastFrame.base64 && lastFrame.mimeType);\nconst userCaption = String(body.userCaption || '').trim();\nconst aspectRatio = String(body.aspectRatio || '9:16').trim();\n\nconst systemIntent = userCaption\n  ? 'User mengirim caption. Pertahankan maksud user; pahami gambar (1 atau 2) sebagai referensi visual; susun prompt video Veo sinematik English.'\n  : 'User tidak mengirim caption. Pahami gambar secara visual; buat ide video otomatis dari objek, suasana, dan konteks.';\nconst frameMode = hasLastFrame\n  ? 'Ada dua gambar referensi: frame pertama (mulai) dan frame terakhir (akhir). Susun prompt video sebagai transisi halus dari gambar pertama ke gambar kedua. Sebutkan kontinuitas subjek, kamera, dan lighting.'\n  : 'Ada satu gambar referensi sebagai frame pertama. Susun prompt video image-to-video dengan kamera & aksi natural.';\n\nconst geminiInstruction = `Kamu adalah AI agent kreatif berbahasa Indonesia yang menyiapkan prompt video untuk Google Veo 3.\n${systemIntent}\n${frameMode}\n\nOutput harus JSON valid saja, tanpa markdown:\n{\n  \\\"image_summary_id\\\": \\\"ringkasan gambar dalam Bahasa Indonesia\\\",\n  \\\"user_intent_id\\\": \\\"maksud user atau auto-generated bila caption kosong\\\",\n  \\\"veo_prompt_en\\\": \\\"prompt final Bahasa Inggris untuk Veo, deskriptif, cinematic, camera movement, subject action, environment, lighting, mood, audio cues\\\",\n  \\\"negative_prompt_en\\\": \\\"hal yang perlu dihindari\\\",\n  \\\"telegram_caption_id\\\": \\\"caption singkat Bahasa Indonesia\\\"\n}\n\nAturan:\n- veo_prompt_en wajib English. Semua value JSON wajib satu baris (tanpa line break mentah).\n- Jangan pakai tanda kutip ganda tidak ter-escape di dalam string.\n- Cocok untuk image-to-video: gerakan kamera natural, aksi halus, tidak merusak objek utama.\n- Hindari klaim palsu, konten berbahaya, wajah orang nyata bila tidak jelas izinnya.\n\nCaption user:\n${userCaption || '(caption kosong, buat ide otomatis dari gambar)'}`;\n\nreturn [{\n  json: {\n    source: body.source || 'porto-web',\n    requestId: body.requestId || `${Date.now()}`,\n    userEmail: body.userEmail || null,\n    userCaption,\n    hasUserCaption: userCaption.length > 0,\n    aspectRatio,\n    hasLastFrame,\n    firstFrameBase64: firstFrame.base64,\n    firstFrameMime: firstFrame.mimeType,\n    lastFrameBase64: hasLastFrame ? lastFrame.base64 : '',\n    lastFrameMime: hasLastFrame ? lastFrame.mimeType : '',\n    projectId: $env.GCP_PROJECT_ID || 'project-8fa51551-4f6c-4ff6-8b7',\n    geminiLocation: 'global',\n    veoLocation: 'us-central1',\n    geminiModel: 'gemini-2.5-pro',\n    veoModel: 'veo-3.0-generate-001',\n    veoDurationSeconds: 8,\n    veoResolution: '720p',\n    veoGenerateAudio: true,\n    geminiInstruction,\n  },\n}];"
+      },
+      "id": "22222222-2222-2222-2222-222222222222",
+      "name": "Parse Payload Start",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [480, 240]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst parts = [{ text: item.geminiInstruction }, { inlineData: { mimeType: item.firstFrameMime, data: item.firstFrameBase64 } }];\nif (item.hasLastFrame) {\n  parts.push({ inlineData: { mimeType: item.lastFrameMime, data: item.lastFrameBase64 } });\n}\nreturn [{\n  json: {\n    ...item,\n    geminiBody: {\n      contents: [{ role: 'user', parts }],\n      generationConfig: { temperature: 0.75, maxOutputTokens: 2500, responseMimeType: 'application/json' },\n    },\n  },\n}];"
+      },
+      "id": "33333333-3333-3333-3333-333333333333",
+      "name": "Build Gemini Body",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [720, 240]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://aiplatform.googleapis.com/v1/projects/{{$json.projectId}}/locations/{{$json.geminiLocation}}/publishers/google/models/{{$json.geminiModel}}:generateContent",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.geminiBody }}",
+        "options": {}
+      },
+      "id": "44444444-4444-4444-4444-444444444444",
+      "name": "Gemini 2.5 Pro",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [960, 240],
+      "credentials": {
+        "googleApi": {
+          "id": "REPLACE_GOOGLE_SA_ID",
+          "name": "Google Service Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const meta = $('Build Gemini Body').first().json;\nconst response = $input.first().json;\n\nfunction stripCodeFence(value) {\n  return String(value || '').replace(/^\\s*```(?:json)?\\s*/i, '').replace(/\\s*```\\s*$/i, '').trim();\n}\nfunction objectLikeText(value) {\n  const cleaned = stripCodeFence(value);\n  const firstBrace = cleaned.indexOf('{');\n  const lastBrace = cleaned.lastIndexOf('}');\n  return firstBrace >= 0 && lastBrace > firstBrace ? cleaned.slice(firstBrace, lastBrace + 1) : cleaned;\n}\n\nif (response.error) throw new Error(response.error.message || JSON.stringify(response.error));\nconst parts = response.candidates?.[0]?.content?.parts || [];\nconst text = parts.map((part) => part.text || '').join('\\n').trim();\nif (!text) throw new Error('Gemini response kosong');\n\nlet parsed;\ntry { parsed = JSON.parse(objectLikeText(text)); }\ncatch (e) { parsed = { veo_prompt_en: stripCodeFence(text), negative_prompt_en: '', telegram_caption_id: 'Video selesai dibuat.' }; }\n\nconst veoPrompt = String(parsed.veo_prompt_en || '').trim();\nif (!veoPrompt) throw new Error('Output Gemini tidak memiliki veo_prompt_en');\n\nreturn [{\n  json: {\n    ...meta,\n    veoPrompt,\n    negativePrompt: String(parsed.negative_prompt_en || 'blurry, distorted, low quality, broken text, extra limbs').trim(),\n    imageSummary: parsed.image_summary_id || '',\n  },\n}];"
+      },
+      "id": "55555555-5555-5555-5555-555555555555",
+      "name": "Parse Gemini Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1200, 240]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nfunction sanitize(value) {\n  let prompt = String(value || '').trim();\n  const replacements = [\n    [/\\b(blood|bloody|gore|gory|corpse|dead body|decapitat\\w*|dismember\\w*)\\b/gi, 'red visual detail'],\n    [/\\b(kill|killing|murder|suicide|self[- ]?harm|harmful injury|stab\\w*|shoot\\w*)\\b/gi, 'dramatic tension'],\n    [/\\b(gun|rifle|pistol|knife|blade|weapon|bomb|explosive|explosion)\\b/gi, 'neutral prop'],\n    [/\\b(nude|naked|sex|sexual|erotic|fetish|porn\\w*)\\b/gi, 'tasteful lifestyle'],\n    [/\\b(child|children|kid|minor|underage)\\b/gi, 'person'],\n    [/\\b(drug|cocaine|heroin|meth|marijuana|weed|narcotic)\\b/gi, 'wellness product'],\n    [/\\b(hate|racist|slur|terrorist|extremist)\\b/gi, 'neutral social context'],\n  ];\n  for (const [pattern, replacement] of replacements) prompt = prompt.replace(pattern, replacement);\n  prompt = prompt.replace(/\\s+/g, ' ').replace(/[\"\"]/g, '\"').replace(/['']/g, \"'\").trim();\n  const safetyPrefix = 'Safe, policy-compliant cinematic video. No violence, no gore, no explicit sexual content, no minors, no weapons, no illegal activity, no hate symbols.';\n  return (safetyPrefix + ' ' + prompt).slice(0, 3000);\n}\n\nconst safePrompt = sanitize(item.veoPrompt);\nconst safeNegative = [\n  item.negativePrompt || '',\n  'violence, gore, blood, weapons, explicit sexual content, nudity, minors, illegal drugs, hate symbols, self harm, realistic injury, disturbing content',\n].filter(Boolean).join(', ');\n\nreturn [{ json: { ...item, veoPromptOriginal: item.veoPrompt, veoPrompt: safePrompt, negativePrompt: safeNegative } }];"
+      },
+      "id": "66666666-6666-6666-6666-666666666666",
+      "name": "Sanitize Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1440, 240]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst instance = {\n  prompt: item.veoPrompt,\n  image: { bytesBase64Encoded: item.firstFrameBase64, mimeType: item.firstFrameMime },\n};\nif (item.hasLastFrame) {\n  instance.lastFrame = { bytesBase64Encoded: item.lastFrameBase64, mimeType: item.lastFrameMime };\n}\nconst veoBody = {\n  instances: [instance],\n  parameters: {\n    sampleCount: 1,\n    durationSeconds: item.veoDurationSeconds,\n    aspectRatio: item.aspectRatio,\n    generateAudio: item.veoGenerateAudio,\n    resolution: item.veoResolution,\n    negativePrompt: item.negativePrompt,\n    personGeneration: 'allow_adult',\n  },\n};\nreturn [{ json: { ...item, veoBody } }];"
+      },
+      "id": "77777777-7777-7777-7777-777777777777",
+      "name": "Build Veo Body",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1680, 240]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://{{$json.veoLocation}}-aiplatform.googleapis.com/v1/projects/{{$json.projectId}}/locations/{{$json.veoLocation}}/publishers/google/models/{{$json.veoModel}}:predictLongRunning",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json; charset=utf-8" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.veoBody }}",
+        "options": {}
+      },
+      "id": "88888888-8888-8888-8888-888888888888",
+      "name": "Veo predictLongRunning",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1920, 240],
+      "credentials": {
+        "googleApi": {
+          "id": "REPLACE_GOOGLE_SA_ID",
+          "name": "Google Service Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const meta = $('Build Veo Body').first().json;\nconst response = $input.first().json;\nif (response.error) throw new Error(response.error.message || JSON.stringify(response.error));\nconst operationName = response.name || response.operationName || response.operation?.name;\nif (!operationName) throw new Error('operationName tidak ditemukan: ' + JSON.stringify(response).slice(0, 1500));\nreturn [{ json: { ok: true, operationName, requestId: meta.requestId, source: meta.source } }];"
+      },
+      "id": "99999999-9999-9999-9999-999999999999",
+      "name": "Extract Operation",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2160, 240]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: true, operationName: $json.operationName, requestId: $json.requestId } }}",
+        "options": { "responseCode": 200 }
+      },
+      "id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+      "name": "Respond Start",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [2400, 240]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "porto-video-status",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+      "name": "Webhook Status (PORTO)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 560],
+      "webhookId": "porto-video-status",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_HEADER_AUTH_ID",
+          "name": "WEBHOOK_TOKEN_PORTO"
+        }
+      },
+      "notes": "Header X-PORTO-Token. Body JSON: { requestId, operationName }."
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body || $input.first().json || {};\nif (!body.operationName) throw new Error('operationName wajib');\nreturn [{\n  json: {\n    requestId: body.requestId || '',\n    operationName: body.operationName,\n    projectId: $env.GCP_PROJECT_ID || 'project-8fa51551-4f6c-4ff6-8b7',\n    veoLocation: 'us-central1',\n    veoModel: 'veo-3.0-generate-001',\n  },\n}];"
+      },
+      "id": "cccccccc-cccc-cccc-cccc-cccccccccccc",
+      "name": "Parse Payload Status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [480, 560]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://{{$json.veoLocation}}-aiplatform.googleapis.com/v1/projects/{{$json.projectId}}/locations/{{$json.veoLocation}}/publishers/google/models/{{$json.veoModel}}:fetchPredictOperation",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json; charset=utf-8" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { operationName: $json.operationName } }}",
+        "options": {}
+      },
+      "id": "dddddddd-dddd-dddd-dddd-dddddddddddd",
+      "name": "Fetch Operation",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [720, 560],
+      "credentials": {
+        "googleApi": {
+          "id": "REPLACE_GOOGLE_SA_ID",
+          "name": "Google Service Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const meta = $('Parse Payload Status').first().json;\nconst response = $input.first().json;\nif (response.error) {\n  return [{ json: { ok: false, done: true, error: response.error.message || JSON.stringify(response.error), requestId: meta.requestId } }];\n}\nconst done = Boolean(response.done);\nconst operationError = response.error || response.response?.error;\nif (operationError) {\n  return [{ json: { ok: false, done: true, error: operationError.message || JSON.stringify(operationError), requestId: meta.requestId } }];\n}\nif (!done) {\n  return [{ json: { ok: true, done: false, requestId: meta.requestId } }];\n}\nconst payload = response.response || response;\nconst videos = payload.videos || payload.generatedVideos || payload.predictions?.[0]?.videos || [];\nconst first = Array.isArray(videos) ? videos[0] : videos;\nconst video = first?.video || first || {};\nconst videoBase64 = video.bytesBase64Encoded || video.data || first?.bytesBase64Encoded;\nconst gcsUri = video.gcsUri || first?.gcsUri;\nif (!videoBase64) {\n  return [{ json: { ok: false, done: true, error: gcsUri ? `Veo mengembalikan gcsUri (${gcsUri}) bukan base64. Hapus storageUri di body Veo.` : 'Veo done tetapi tanpa videoBase64', requestId: meta.requestId } }];\n}\nreturn [{ json: { ok: true, done: true, videoBase64, mimeType: video.mimeType || first?.mimeType || 'video/mp4', requestId: meta.requestId } }];"
+      },
+      "id": "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee",
+      "name": "Normalize Status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [960, 560]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": { "responseCode": 200 }
+      },
+      "id": "ffffffff-ffff-ffff-ffff-ffffffffffff",
+      "name": "Respond Status",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1200, 560]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook Start (PORTO)": {
+      "main": [[{ "node": "Parse Payload Start", "type": "main", "index": 0 }]]
+    },
+    "Parse Payload Start": {
+      "main": [[{ "node": "Build Gemini Body", "type": "main", "index": 0 }]]
+    },
+    "Build Gemini Body": {
+      "main": [[{ "node": "Gemini 2.5 Pro", "type": "main", "index": 0 }]]
+    },
+    "Gemini 2.5 Pro": {
+      "main": [[{ "node": "Parse Gemini Output", "type": "main", "index": 0 }]]
+    },
+    "Parse Gemini Output": {
+      "main": [[{ "node": "Sanitize Prompt", "type": "main", "index": 0 }]]
+    },
+    "Sanitize Prompt": {
+      "main": [[{ "node": "Build Veo Body", "type": "main", "index": 0 }]]
+    },
+    "Build Veo Body": {
+      "main": [[{ "node": "Veo predictLongRunning", "type": "main", "index": 0 }]]
+    },
+    "Veo predictLongRunning": {
+      "main": [[{ "node": "Extract Operation", "type": "main", "index": 0 }]]
+    },
+    "Extract Operation": {
+      "main": [[{ "node": "Respond Start", "type": "main", "index": 0 }]]
+    },
+    "Webhook Status (PORTO)": {
+      "main": [[{ "node": "Parse Payload Status", "type": "main", "index": 0 }]]
+    },
+    "Parse Payload Status": {
+      "main": [[{ "node": "Fetch Operation", "type": "main", "index": 0 }]]
+    },
+    "Fetch Operation": {
+      "main": [[{ "node": "Normalize Status", "type": "main", "index": 0 }]]
+    },
+    "Normalize Status": {
+      "main": [[{ "node": "Respond Status", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "versionId": "1",
+  "meta": { "instanceId": "porto-video-veo-webhook" },
+  "id": "porto-video-veo-webhook",
+  "tags": []
+}

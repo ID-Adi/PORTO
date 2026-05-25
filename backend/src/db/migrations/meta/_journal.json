@@ -64,6 +64,13 @@
       "when": 1779600861666,
       "tag": "0008_tool_generation",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1779675305500,
+      "tag": "0009_naive_madame_masque",
+      "breakpoints": true
     }
   ]
 }
