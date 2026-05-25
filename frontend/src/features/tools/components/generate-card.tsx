@@ -22,6 +22,8 @@ type AspectOption = {
   label: string;
   value: string;
   ratio: number;
+  // Untuk video: ratio yang belum didukung Veo 3 tetap ditampilkan tapi disabled.
+  disabled?: boolean;
 };
 
 type PersistedSession = {
@@ -52,12 +54,13 @@ const ASPECT_OPTIONS: Record<GenerateKind, ReadonlyArray<AspectOption>> = {
     { label: "16:9", value: "16:9", ratio: 16 / 9 },
     { label: "9:16", value: "9:16", ratio: 9 / 16 },
   ],
+  // Veo 3 saat ini hanya support 16:9 dan 9:16. Ratio lain tampil tapi disabled.
   video: [
     { label: "16:9", value: "16:9", ratio: 16 / 9 },
     { label: "9:16", value: "9:16", ratio: 9 / 16 },
-    { label: "1:1", value: "1:1", ratio: 1 },
-    { label: "4:3", value: "4:3", ratio: 4 / 3 },
-    { label: "21:9", value: "21:9", ratio: 21 / 9 },
+    { label: "1:1", value: "1:1", ratio: 1, disabled: true },
+    { label: "4:3", value: "4:3", ratio: 4 / 3, disabled: true },
+    { label: "21:9", value: "21:9", ratio: 21 / 9, disabled: true },
   ],
 };
 
@@ -402,12 +405,7 @@ export function GenerateCard({ kind }: GenerateCardProps) {
       try {
         const result = await generateVideo.mutateAsync({
           prompt,
-          aspectRatio: aspectRatioSnapshot as
-            | "16:9"
-            | "9:16"
-            | "1:1"
-            | "4:3"
-            | "21:9",
+          aspectRatio: aspectRatioSnapshot as "16:9" | "9:16",
           firstFrame: {
             base64: firstFrame.base64,
             mimeType: firstFrame.mimeType,
@@ -667,20 +665,25 @@ export function GenerateCard({ kind }: GenerateCardProps) {
           >
             {aspectOptions.map((option) => {
               const active = session.aspectRatio === option.value;
+              const unsupported = option.disabled === true;
               return (
                 <button
                   key={option.value}
                   type="button"
                   role="radio"
                   aria-checked={active}
+                  aria-disabled={unsupported || undefined}
+                  title={unsupported ? "Belum didukung — segera hadir" : undefined}
                   tabIndex={active ? 0 : -1}
                   onClick={() => setAspectRatio(option.value)}
-                  disabled={isGenerating}
+                  disabled={isGenerating || unsupported}
                   className={cn(
                     "inline-flex h-7 min-w-12 items-center justify-center border px-2 font-mono text-[10px] tracking-[0.12em] uppercase transition-colors",
                     active
                       ? "border-(--foreground) bg-(--foreground) text-(--background)"
                       : "border-(--line) text-(--muted-foreground) hover:border-(--foreground)/40 hover:text-(--foreground)",
+                    unsupported &&
+                      "line-through decoration-(--muted-foreground)/60",
                     "disabled:pointer-events-none disabled:opacity-50",
                   )}
                 >

@@ -19,7 +19,8 @@ const ALLOWED_MIME = new Set(["image/png", "image/jpeg", "image/webp"]);
 const MAX_BYTES = 5 * 1024 * 1024;
 const N8N_TIMEOUT_MS = 90_000;
 
-const VIDEO_ASPECT_RATIOS = ["16:9", "9:16", "1:1", "4:3", "21:9"] as const;
+// Veo 3 hanya mendukung 16:9 dan 9:16 (Vertex AI menolak ratio lain dengan 400).
+const VIDEO_ASPECT_RATIOS = ["16:9", "9:16"] as const;
 const ALLOWED_VIDEO_MIME = new Set(["video/mp4"]);
 const MAX_VIDEO_BYTES = 50 * 1024 * 1024;
 const ALLOWED_FRAME_MIME = ["image/jpeg", "image/png", "image/webp"] as const;
