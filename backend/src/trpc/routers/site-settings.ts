@@ -3,9 +3,20 @@ import { z } from "zod";
 
 import { db } from "../../db/index.js";
 import { siteSettings } from "../../db/schema/index.js";
+import { publicUrl } from "../../lib/public-url.js";
 import { protectedProcedure, publicProcedure, router } from "../init.js";
 
 const SINGLETON_ID = 1;
+
+type SiteSettingsRow = typeof siteSettings.$inferSelect;
+
+function withPublicUrls(row: SiteSettingsRow): SiteSettingsRow {
+  return {
+    ...row,
+    logoUrl: publicUrl(row.logoUrl),
+    avatarUrl: publicUrl(row.avatarUrl),
+  };
+}
 
 const settingsInput = z.object({
   profileName: z.string().min(1),
@@ -21,7 +32,7 @@ export const siteSettingsRouter = router({
       .from(siteSettings)
       .where(eq(siteSettings.id, SINGLETON_ID))
       .limit(1);
-    return row ?? null;
+    return row ? withPublicUrls(row) : null;
   }),
 
   update: protectedProcedure
@@ -44,7 +55,7 @@ export const siteSettingsRouter = router({
             avatarUrl: input.avatarUrl ?? null,
           })
           .returning();
-        return row;
+        return withPublicUrls(row);
       }
 
       const [row] = await db
@@ -52,6 +63,6 @@ export const siteSettingsRouter = router({
         .set({ ...input, updatedAt: new Date() })
         .where(eq(siteSettings.id, SINGLETON_ID))
         .returning();
-      return row;
+      return withPublicUrls(row);
     }),
 });

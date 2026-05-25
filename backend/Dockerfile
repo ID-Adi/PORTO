@@ -8,6 +8,9 @@ RUN chown node:node /app
 COPY --chown=node:node package.json pnpm-lock.yaml ./
 
 USER node
+# Allow trusted dependency postinstall scripts during Docker build (notably esbuild).
+# pnpm 10/11 otherwise fails with ERR_PNPM_IGNORED_BUILDS in non-interactive builds.
+ENV PNPM_CONFIG_DANGEROUSLY_ALLOW_ALL_BUILDS=true
 RUN pnpm install --frozen-lockfile
 
 COPY --chown=node:node . .

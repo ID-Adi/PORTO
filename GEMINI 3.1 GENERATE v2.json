@@ -6,10 +6,10 @@
       "type": "n8n-nodes-base.manualTrigger",
       "typeVersion": 1,
       "position": [
-        28400,
-        20240
+        28992,
+        20176
       ],
-      "id": "300cdf7f-6394-4b3b-8975-8607f2758126",
+      "id": "9181a364-0ab8-4fff-9b66-3cd6e9adba90",
       "name": "When clicking ‘Execute workflow’"
     },
     {
@@ -23,16 +23,16 @@
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
       "position": [
-        28400,
-        20480
+        28992,
+        20416
       ],
-      "id": "8c2ad19a-5e0d-4fe6-8a3e-2f9c7e0b1ab1",
+      "id": "74055aca-c88a-47bf-9bb1-e5a5d79b7863",
       "name": "Webhook (PORTO)",
       "webhookId": "porto-tools-image",
       "credentials": {
         "httpHeaderAuth": {
-          "id": "REPLACE_WITH_HEADER_AUTH_CREDENTIAL_ID",
-          "name": "X-PORTO-Token"
+          "id": "01g3uXA7XaGFLG1P",
+          "name": "WEBHOOK_TOKEN_IMAGE"
         }
       }
     },
@@ -80,13 +80,13 @@
         },
         "options": {}
       },
-      "id": "ecd58ce4-0e63-47ec-aadd-969f7d3db9fd",
+      "id": "5138585b-c3ae-4387-aa82-db02b30067b7",
       "name": "Manual Config",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        28720,
-        20240
+        29312,
+        20176
       ]
     },
     {
@@ -139,19 +139,21 @@
         },
         "options": {}
       },
-      "id": "f1a4b820-2cfc-4d3f-b9d8-1c5e8d6a7e91",
+      "id": "99f16994-e25c-4d6e-9041-f7adeefddabc",
       "name": "Webhook Config",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        28720,
-        20480
+        29312,
+        20416
       ]
     },
     {
       "parameters": {
         "method": "POST",
         "url": "=https://aiplatform.googleapis.com/v1/projects/{{$json.projectId}}/locations/global/publishers/google/models/gemini-3.1-flash-image-preview:generateContent",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleApi",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -170,26 +172,32 @@
         "jsonBody": "={{ { contents: [{ role: 'user', parts: [{ text: $json.prompt }] }], generationConfig: { responseModalities: ['TEXT', 'IMAGE'], imageConfig: { aspectRatio: $json.aspectRatio } } } }}",
         "options": {}
       },
-      "id": "4797d898-0d47-4e9c-89df-c9c80608da33",
+      "id": "a184784f-f933-4b71-979e-5a95e7d88d76",
       "name": "Vertex Gemini 3.1 Image",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        29040,
-        20360
-      ]
+        29632,
+        20304
+      ],
+      "credentials": {
+        "googleApi": {
+          "id": "CUXAdz3sUYVlwc17",
+          "name": "Google Service Account Untuk HTTP"
+        }
+      }
     },
     {
       "parameters": {
-        "jsCode": "const upstream = $('Vertex Gemini 3.1 Image').first().json;\nconst sourceItem = $input.first().json;\n\nconst parts = upstream?.candidates?.[0]?.content?.parts ?? [];\nconst imagePart = parts.find((part) => part.inlineData?.data || part.inline_data?.data);\nconst textPart = parts.find((part) => part.text);\n\nif (!imagePart) {\n  throw new Error('Tidak ada output image dari Gemini response. Cek prompt, quota, token, dan responseModalities.');\n}\n\nconst inlineData = imagePart.inlineData ?? imagePart.inline_data;\nconst mimeType = inlineData.mimeType ?? inlineData.mime_type ?? 'image/png';\nconst extension = mimeType.includes('jpeg') || mimeType.includes('jpg') ? 'jpg' : (mimeType.includes('webp') ? 'webp' : 'png');\n\nreturn [{\n  json: {\n    model: 'gemini-3.1-flash-image-preview',\n    mimeType,\n    text: textPart?.text ?? '',\n    source: sourceItem.source || 'manual',\n    requestId: sourceItem.requestId || '',\n    aspectRatio: sourceItem.aspectRatio || '1:1',\n  },\n  binary: {\n    image: {\n      data: inlineData.data,\n      mimeType,\n      fileName: `gemini-3-1-output.${extension}`,\n      fileExtension: extension,\n    },\n  },\n}];"
+        "jsCode": "const upstream = $('Vertex Gemini 3.1 Image').first().json;\n\nfunction readConfigNode(nodeName) {\n  try {\n    const item = $(nodeName).first().json;\n    return item?.source ? item : null;\n  } catch (error) {\n    return null;\n  }\n}\n\nfunction asObject(value) {\n  return value && typeof value === 'object' && !Array.isArray(value) ? value : null;\n}\n\nfunction asArray(value) {\n  return Array.isArray(value) ? value : [];\n}\n\nfunction firstString(...values) {\n  for (const value of values) {\n    if (typeof value === 'string' && value.trim()) return value.trim();\n  }\n  return '';\n}\n\nfunction collectParts(response) {\n  const candidates = asArray(response?.candidates);\n  const parts = [];\n\n  for (const candidate of candidates) {\n    parts.push(...asArray(candidate?.content?.parts));\n    parts.push(...asArray(candidate?.content?.role?.parts));\n  }\n\n  parts.push(...asArray(response?.content?.parts));\n  parts.push(...asArray(response?.parts));\n\n  return parts.filter(Boolean);\n}\n\nfunction readInlineData(part) {\n  const inlineData = asObject(part?.inlineData) || asObject(part?.inline_data);\n  if (!inlineData) return null;\n\n  const rawData = firstString(inlineData.data, inlineData.imageBase64, inlineData.base64);\n  if (!rawData) return null;\n\n  const dataUrlMatch = rawData.match(/^data:([^;]+);base64,(.+)$/);\n  const mimeType = firstString(\n    inlineData.mimeType,\n    inlineData.mime_type,\n    dataUrlMatch?.[1],\n    'image/png',\n  );\n  const imageBase64 = (dataUrlMatch?.[2] || rawData).replace(/\\s+/g, '');\n\n  return { mimeType, imageBase64 };\n}\n\nfunction isProbablyBase64(value) {\n  return /^[A-Za-z0-9+/]+={0,2}$/.test(value) && value.length % 4 === 0;\n}\n\nfunction extensionFromMime(mimeType) {\n  if (mimeType.includes('jpeg') || mimeType.includes('jpg')) return 'jpg';\n  if (mimeType.includes('webp')) return 'webp';\n  return 'png';\n}\n\nconst sourceItem = readConfigNode('Webhook Config') || readConfigNode('Manual Config') || {};\nconst parts = collectParts(upstream);\nconst imagePart = parts.find((part) => readInlineData(part));\nconst textPart = parts.find((part) => typeof part?.text === 'string' && part.text.trim());\n\nif (!imagePart) {\n  const candidateCount = asArray(upstream?.candidates).length;\n  const partKeys = parts.map((part) => Object.keys(asObject(part) || {}).join('|')).filter(Boolean);\n  throw new Error(\n    'Tidak ada inline image dari Gemini response. candidates=' + candidateCount +\n    '; parts=' + parts.length +\n    '; partKeys=' + (partKeys.join(', ') || 'none') +\n    '. Pastikan responseModalities berisi IMAGE dan model mendukung image output.'\n  );\n}\n\nconst inline = readInlineData(imagePart);\nif (!inline?.imageBase64) {\n  throw new Error('Inline image ditemukan, tetapi field data/base64 kosong.');\n}\n\nif (!isProbablyBase64(inline.imageBase64)) {\n  throw new Error('Inline image data bukan base64 valid. Cek output Gemini/HTTP node.');\n}\n\nconst imageBytes = Buffer.from(inline.imageBase64, 'base64');\nif (!imageBytes.length) {\n  throw new Error('Inline image base64 valid tetapi menghasilkan file kosong.');\n}\n\nconst mimeType = inline.mimeType;\nconst extension = extensionFromMime(mimeType);\nconst requestId = firstString(sourceItem.requestId, $execution.id, Date.now().toString());\n\nreturn [{\n  json: {\n    ok: true,\n    model: 'gemini-3.1-flash-image-preview',\n    mimeType,\n    imageBase64: inline.imageBase64,\n    imageSizeBytes: imageBytes.length,\n    text: textPart?.text ?? '',\n    source: sourceItem.source || 'manual',\n    requestId,\n    aspectRatio: sourceItem.aspectRatio || '1:1',\n    userEmail: sourceItem.userEmail || null,\n  },\n  binary: {\n    image: {\n      data: inline.imageBase64,\n      mimeType,\n      fileName: 'gemini-3-1-output-' + requestId + '.' + extension,\n      fileExtension: extension,\n      fileSize: imageBytes.length,\n    },\n  },\n}];"
       },
-      "id": "1860134b-66be-4ad0-a34f-510d111282e0",
+      "id": "b7a545d7-1ae8-49af-a4f8-67bf068f0e08",
       "name": "Convert Image to Binary",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        29296,
-        20360
+        29888,
+        20304
       ]
     },
     {
@@ -228,49 +236,49 @@
           "renameFallbackOutput": "manual"
         }
       },
-      "id": "5b3e2d31-9d4a-4f12-9c4e-6b4ff2a0a1c8",
+      "id": "8811a762-1864-4cb7-aeba-181387af6499",
       "name": "Route by source",
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3.2,
       "position": [
-        29552,
-        20360
+        30144,
+        20304
       ]
     },
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ { ok: true, requestId: $json.requestId, mimeType: $json.mimeType, imageBase64: $binary.image.data, text: $json.text || '' } }}",
+        "responseBody": "={{ { ok: true, source: $json.source, requestId: $json.requestId, model: $json.model, aspectRatio: $json.aspectRatio, mimeType: $json.mimeType, imageBase64: $json.imageBase64, imageSizeBytes: $json.imageSizeBytes, text: $json.text || '' } }}",
         "options": {
           "responseCode": 200
         }
       },
-      "id": "a92f0d4e-7b6c-4d1a-b8a3-3e1c9f8d2b07",
+      "id": "ce409c00-0980-4c50-bafd-65119501b3cc",
       "name": "Respond to Webhook (PORTO)",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        29840,
-        20240
+        30432,
+        20176
       ]
     },
     {
       "parameters": {
         "operation": "sendPhoto",
-        "chatId": "-5092441681",
+        "chatId": "-1003986112540",
         "binaryData": true,
         "binaryPropertyName": "image",
         "additionalFields": {
           "caption": "={{ $json.text || 'Generated with Gemini 3.1 Flash Image Preview' }}"
         }
       },
-      "id": "d7e05e8f-aed9-439a-9b38-20b39a1f0d91",
+      "id": "91654968-dfe5-4f36-bdfb-dc233d37f5f0",
       "name": "Send Image to Telegram",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        29840,
-        20480
+        30432,
+        20416
       ],
       "webhookId": "71dad319-6647-4ddd-9f6c-8180b932ddd3",
       "credentials": {
@@ -368,15 +376,15 @@
       ]
     }
   },
-  "active": false,
+  "active": true,
   "settings": {
     "executionOrder": "v1"
   },
-  "versionId": "8dcb294d-fc73-4b69-84aa-283e665253a6",
+  "versionId": "7409a46f-7122-4a09-a07d-ad174bb4be0b",
   "meta": {
-    "templateCredsSetupCompleted": false,
+    "templateCredsSetupCompleted": true,
     "instanceId": "046877728b8f4e2565f8aab7d97c482d69443e5d7de38d0701c1be9f87bfef5b"
   },
-  "id": "I7lkeFnnbHg0nPGP_v2",
+  "id": "I7lkeFnnbHg0nPGP",
   "tags": []
 }

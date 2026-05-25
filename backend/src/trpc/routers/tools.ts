@@ -48,6 +48,62 @@ type N8nResponse = {
   error?: string;
 };
 
+function firstJsonItem(value: unknown): unknown {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function readStringRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object"
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function pickString(value: unknown): string | undefined {
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+async function parseN8nResponse(res: Response): Promise<N8nResponse> {
+  const contentType = res.headers.get("content-type") ?? "";
+
+  if (contentType.startsWith("image/")) {
+    const buffer = Buffer.from(await res.arrayBuffer());
+    return {
+      ok: true,
+      mimeType: contentType.split(";")[0],
+      imageBase64: buffer.toString("base64"),
+    };
+  }
+
+  const raw = firstJsonItem(await res.json());
+  const json = readStringRecord(raw);
+  if (!json) {
+    return { ok: false, error: "N8N response JSON tidak valid" };
+  }
+
+  const nestedJson = readStringRecord(json.json);
+  const binary = readStringRecord(json.binary ?? json.$binary);
+  const binaryImage = readStringRecord(binary?.image);
+
+  const imageBase64 =
+    pickString(json.imageBase64) ??
+    pickString(json.base64) ??
+    pickString(json.data) ??
+    pickString(binaryImage?.data);
+  const mimeType =
+    pickString(json.mimeType) ??
+    pickString(binaryImage?.mimeType) ??
+    pickString(nestedJson?.mimeType);
+
+  return {
+    ok: json.ok === true || Boolean(imageBase64),
+    mimeType,
+    imageBase64,
+    text: pickString(json.text) ?? pickString(nestedJson?.text),
+    requestId: pickString(json.requestId) ?? pickString(nestedJson?.requestId),
+    error: pickString(json.error),
+  };
+}
+
 async function callN8n(payload: {
   source: "porto-web";
   prompt: string;
@@ -93,11 +149,13 @@ async function callN8n(payload: {
     });
   }
 
-  const json = (await res.json()) as N8nResponse;
+  const json = await parseN8nResponse(res);
   if (!json.ok || !json.imageBase64 || !json.mimeType) {
     throw new TRPCError({
       code: "INTERNAL_SERVER_ERROR",
-      message: json.error ?? "N8N tidak mengembalikan image",
+      message:
+        json.error ??
+        "N8N tidak mengembalikan imageBase64. Pastikan Respond to Webhook (PORTO) mengembalikan JSON: ok, mimeType, imageBase64.",
     });
   }
   return json;
