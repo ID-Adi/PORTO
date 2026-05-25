@@ -1,0 +1,1 @@
+ALTER TABLE "tool_generation" ADD COLUMN "operation_name" text;

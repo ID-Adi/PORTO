@@ -20,7 +20,8 @@ export const toolGeneration = pgTable("tool_generation", {
   mimeType: text("mime_type"),
   fileSize: integer("file_size"),
   requestId: text("request_id"),
-  status: text("status").notNull().default("success"), // "success" | "error"
+  status: text("status").notNull().default("success"), // "pending" | "success" | "error"
   errorMessage: text("error_message"),
+  operationName: text("operation_name"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });

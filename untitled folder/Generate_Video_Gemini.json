@@ -1,0 +1,1287 @@
+{
+  "name": "Telegram Image to Veo Video AG",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "id": "acedf98c-c3fd-4dd5-b745-4a75c1c2e0ad",
+      "name": "📥 Trigger Gambar Telegram",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        16624,
+        1328
+      ],
+      "webhookId": "telegram-image-to-veo-trigger",
+      "notesInFlow": true,
+      "credentials": {
+        "telegramApi": {
+          "id": "Z6fEzzh69oUJOCA9",
+          "name": "Bot Videos"
+        }
+      },
+      "notes": "Gunakan credential bot VEO baru di node ini. Bot ini hanya untuk menerima gambar/prompt video, bukan approval caption."
+    },
+    {
+      "parameters": {
+        "jsCode": "const root = $input.first().json || {};\nconst message = root.message || root.edited_message || root.channel_post || root;\nconst groupId = message.chat?.id;\nconst allowedGroupIds = ['-1003661293847', '-5241203468'];\nconst senderUserId = message.from?.id;\nconst allowedUserId = '6417466971';\nconst sourceMessageId = message.message_id;\nconst messageThreadId = message.message_thread_id;\nconst photos = Array.isArray(message.photo) ? message.photo : [];\n\nfunction normalizeGroupId(value) {\n  return String(value || '').trim();\n}\n\nconst normalizedGroupId = normalizeGroupId(groupId);\nconst normalizedAllowedGroupIds = allowedGroupIds.map(normalizeGroupId);\nconst normalizedSenderUserId = String(senderUserId || '').trim();\nconst chatId = normalizedGroupId;\nconst replyToMessageId = sourceMessageId;\n\nif (!groupId) {\n  return [{ json: { hasError: true, failedNode: '📥 Trigger Gambar Telegram', errorMessage: 'Group ID Telegram tidak ditemukan dari payload trigger.' } }];\n}\n\nif (!normalizedAllowedGroupIds.includes(normalizedGroupId)) {\n  return [{\n    json: {\n      hasError: true,\n      failedNode: '📥 Trigger Gambar Telegram',\n      chatId,\n      groupId,\n      normalizedGroupId,\n      allowedGroupIds,\n      senderUserId,\n      allowedUserId,\n      replyToMessageId,\n      sourceMessageId,\n      messageThreadId,\n      errorMessage: `Group Telegram tidak diizinkan. Group ID terbaca: ${groupId}. Allowed group IDs: ${allowedGroupIds.join(', ')}.`,\n    },\n  }];\n}\n\nif (!normalizedSenderUserId) {\n  return [{\n    json: {\n      hasError: true,\n      failedNode: '📥 Trigger Gambar Telegram',\n      chatId,\n      groupId,\n      normalizedGroupId,\n      allowedGroupIds,\n      allowedUserId,\n      replyToMessageId,\n      sourceMessageId,\n      messageThreadId,\n      errorMessage: 'User ID Telegram tidak ditemukan dari payload trigger. Pastikan pesan dikirim oleh user biasa, bukan anonymous admin atau channel.',\n    },\n  }];\n}\n\nif (normalizedSenderUserId !== allowedUserId) {\n  return [{\n    json: {\n      hasError: true,\n      failedNode: '📥 Trigger Gambar Telegram',\n      chatId,\n      groupId,\n      normalizedGroupId,\n      allowedGroupIds,\n      senderUserId,\n      allowedUserId,\n      replyToMessageId,\n      sourceMessageId,\n      messageThreadId,\n      errorMessage: `User Telegram tidak diizinkan. User ID terbaca: ${senderUserId}. Allowed user ID: ${allowedUserId}.`,\n    },\n  }];\n}\n\nif (!photos.length) {\n  return [{\n    json: {\n      hasError: true,\n      failedNode: '📥 Trigger Gambar Telegram',\n      chatId,\n      groupId,\n      normalizedGroupId,\n      senderUserId,\n      allowedUserId,\n      replyToMessageId,\n      sourceMessageId,\n      messageThreadId,\n      errorMessage: 'Pesan Telegram harus berisi gambar/photo. Kirim ulang dengan attachment gambar, caption boleh kosong atau berisi prompt.',\n    },\n  }];\n}\n\nconst bestPhoto = photos.reduce((best, photo) => {\n  if (!best) return photo;\n  return (photo.file_size || 0) > (best.file_size || 0) ? photo : best;\n}, null);\n\nconst userText = String(message.caption || message.text || '').trim();\n\nreturn [{\n  json: {\n    chatId,\n    groupId,\n    normalizedGroupId,\n    senderUserId,\n    allowedUserId,\n    replyToMessageId,\n    sourceMessageId,\n    messageThreadId,\n    messageId: sourceMessageId,\n    fromUser: message.from?.username || message.from?.first_name || 'telegram-user',\n    telegramFileId: bestPhoto.file_id,\n    telegramFileUniqueId: bestPhoto.file_unique_id,\n    userText,\n    hasUserText: userText.length > 0,\n    requestId: `${chatId}-${sourceMessageId || Date.now()}`,\n    receivedAt: new Date().toISOString(),\n  },\n}];"
+      },
+      "id": "ed186736-4235-4f00-bf71-5c58e799893e",
+      "name": "📩 Ambil Detail Telegram",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        16864,
+        1328
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "input-telegram-has-error",
+              "leftValue": "={{ Boolean($json.hasError || $json.error || $json.errorMessage) }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "id": "9e3e52ad-fa66-459d-aaea-d84d1864ab99",
+      "name": "🧯 Cek Error: Input Telegram",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        17104,
+        1328
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chatId || $('📩 Ambil Detail Telegram').first().json.chatId }}",
+        "text": "=❌ Proses video gagal.\n\nNode: {{ $json.failedNode || $json.errorNode || '📥 Trigger Gambar Telegram' }}\n\nError:\n{{ String($json.errorMessage || $json.error?.message || $json.message || JSON.stringify($json.error || $json)).slice(0, 3200) }}\n\nSilakan cek node tersebut di n8n, perbaiki credential/quota/parameter, lalu kirim ulang gambar ke Telegram.",
+        "additionalFields": {
+          "reply_to_message_id": "={{ $json.replyToMessageId || $('📩 Ambil Detail Telegram').first().json.replyToMessageId }}",
+          "message_thread_id": "={{ $json.messageThreadId || $('📩 Ambil Detail Telegram').first().json.messageThreadId || undefined }}"
+        }
+      },
+      "id": "c4708540-0909-4330-97b2-60e2de0e4bcd",
+      "name": "🚨 Fallback Telegram: Input Error",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        17344,
+        1168
+      ],
+      "webhookId": "1cb0c796-c3c0-45a1-b621-23573d18e0bc",
+      "credentials": {
+        "telegramApi": {
+          "id": "Z6fEzzh69oUJOCA9",
+          "name": "Bot Videos"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "fileId": "={{ $json.telegramFileId }}",
+        "additionalFields": {}
+      },
+      "id": "81fbb94e-2ed5-4c99-a00d-23c893fcd1ba",
+      "name": "🖼️ Download Gambar Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        17344,
+        1488
+      ],
+      "webhookId": "8b2eb0ae-1dea-471f-8a45-c913b7caa311",
+      "credentials": {
+        "telegramApi": {
+          "id": "Z6fEzzh69oUJOCA9",
+          "name": "Bot Videos"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "download-gambar-has-error",
+              "leftValue": "={{ Boolean($json.hasError || $json.error || $json.errorMessage) }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "id": "1bc6ffc0-7249-4d8f-9d1e-59c6d4844e1e",
+      "name": "🧯 Cek Error: Download Gambar",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        17584,
+        1488
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chatId || $('📩 Ambil Detail Telegram').first().json.chatId }}",
+        "text": "=❌ Proses video gagal.\n\nNode: {{ $json.failedNode || $json.errorNode || '🖼️ Download Gambar Telegram' }}\n\nError:\n{{ String($json.errorMessage || $json.error?.message || $json.message || JSON.stringify($json.error || $json)).slice(0, 3200) }}\n\nSilakan cek node tersebut di n8n, perbaiki credential/quota/parameter, lalu kirim ulang gambar ke Telegram.",
+        "additionalFields": {
+          "reply_to_message_id": "={{ $json.replyToMessageId || $('📩 Ambil Detail Telegram').first().json.replyToMessageId }}",
+          "message_thread_id": "={{ $json.messageThreadId || $('📩 Ambil Detail Telegram').first().json.messageThreadId || undefined }}"
+        }
+      },
+      "id": "5aa2a397-f3b4-4b0f-93fa-b9ea88be5351",
+      "name": "🚨 Fallback Telegram: Download Error",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        17824,
+        1328
+      ],
+      "webhookId": "855f024e-f63a-48a0-aa37-36d807a1002f",
+      "credentials": {
+        "telegramApi": {
+          "id": "Z6fEzzh69oUJOCA9",
+          "name": "Bot Videos"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const meta = $('📩 Ambil Detail Telegram').first().json;\nconst binary = $input.first().binary || {};\nconst binaryKey = Object.keys(binary)[0];\nconst image = binaryKey ? binary[binaryKey] : null;\n\nif (!image?.data) {\n  return [{\n    json: {\n      ...meta,\n      hasError: true,\n      failedNode: '🖼️ Download Gambar Telegram',\n      errorMessage: 'Binary image tidak ditemukan setelah download Telegram. Cek resource=file, operation=get, dan opsi Download di node Telegram.',\n    },\n  }];\n}\n\nconst systemIntent = meta.hasUserText\n  ? 'User mengirim prompt/caption. Pertahankan maksud user, pahami gambar sebagai referensi visual, lalu tone-up menjadi prompt video Veo yang sinematik.'\n  : 'User tidak mengirim teks. Pahami gambar secara visual, buat ide video otomatis yang relevan dengan objek, suasana, dan konteks gambar.';\n\nreturn [{\n  json: {\n    ...meta,\n    projectId: 'project-8fa51551-4f6c-4ff6-8b7',\n    geminiLocation: 'global',\n    veoLocation: 'us-central1',\n    geminiModel: 'gemini-2.5-pro',\n    veoModel: 'veo-3.0-generate-001',\n    veoAspectRatio: '9:16',\n    veoDurationSeconds: 8,\n    veoResolution: '720p',\n    veoGenerateAudio: true,\n    imageBase64: image.data,\n    mimeType: image.mimeType || 'image/jpeg',\n    fileName: image.fileName || 'telegram-image.jpg',\n    geminiInstruction: `Kamu adalah AI agent kreatif berbahasa Indonesia yang menyiapkan prompt video untuk Google Veo.\n${systemIntent}\n\nOutput harus JSON valid saja, tanpa markdown:\n{\n  \"image_summary_id\": \"ringkasan gambar dalam Bahasa Indonesia\",\n  \"user_intent_id\": \"maksud user atau auto-generated bila caption kosong\",\n  \"veo_prompt_en\": \"prompt final Bahasa Inggris untuk Veo, deskriptif, cinematic, camera movement, subject action, environment, lighting, mood, audio cues\",\n  \"negative_prompt_en\": \"hal yang perlu dihindari\",\n  \"telegram_caption_id\": \"caption singkat Bahasa Indonesia untuk dikirim bersama video\"\n}\n\nAturan:\n- Model Veo memakai prompt Bahasa Inggris, jadi veo_prompt_en wajib English.\n- Semua value JSON wajib satu baris. Jangan masukkan line break mentah di dalam string; kalau perlu gunakan spasi.\n- Jangan pakai tanda kutip ganda di dalam value string kecuali sudah di-escape.\n- Jika gambar berisi text/logo/produk, pertahankan informasi penting dan jangan ubah brand tanpa diminta.\n- Buat prompt cocok untuk image-to-video: gerakan kamera natural, aksi halus, tidak merusak objek utama.\n- Hindari klaim palsu, konten berbahaya, dan wajah orang nyata bila tidak jelas izinnya.\n\nPrompt/caption user:\n${meta.userText || '(caption kosong, buat ide otomatis dari gambar)'}`,\n  },\n}];"
+      },
+      "id": "bb6f539f-d32e-4fda-8468-257d799d087a",
+      "name": "🧩 Siapkan Payload Gemini",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        17824,
+        1648
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "payload-gemini-has-error",
+              "leftValue": "={{ Boolean($json.hasError || $json.error || $json.errorMessage) }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "id": "e8345196-290d-4d24-a088-4e1e052523ce",
+      "name": "🧯 Cek Error: Payload Gemini",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        18064,
+        1648
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chatId || $('📩 Ambil Detail Telegram').first().json.chatId }}",
+        "text": "=❌ Proses video gagal.\n\nNode: {{ $json.failedNode || $json.errorNode || '🧩 Siapkan Payload Gemini' }}\n\nError:\n{{ String($json.errorMessage || $json.error?.message || $json.message || JSON.stringify($json.error || $json)).slice(0, 3200) }}\n\nSilakan cek node tersebut di n8n, perbaiki credential/quota/parameter, lalu kirim ulang gambar ke Telegram.",
+        "additionalFields": {
+          "reply_to_message_id": "={{ $json.replyToMessageId || $('📩 Ambil Detail Telegram').first().json.replyToMessageId }}",
+          "message_thread_id": "={{ $json.messageThreadId || $('📩 Ambil Detail Telegram').first().json.messageThreadId || undefined }}"
+        }
+      },
+      "id": "787c7a5a-c926-49e5-8e3c-03f6156a5635",
+      "name": "🚨 Fallback Telegram: Payload Error",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        18304,
+        1488
+      ],
+      "webhookId": "b89ded9b-dc93-4f91-8dce-1945765df15d",
+      "credentials": {
+        "telegramApi": {
+          "id": "Z6fEzzh69oUJOCA9",
+          "name": "Bot Videos"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://aiplatform.googleapis.com/v1/projects/{{$json.projectId}}/locations/{{$json.geminiLocation}}/publishers/google/models/{{$json.geminiModel}}:generateContent",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { contents: [{ role: 'user', parts: [{ text: $json.geminiInstruction }, { inlineData: { mimeType: $json.mimeType, data: $json.imageBase64 } }] }], generationConfig: { temperature: 0.75, maxOutputTokens: 2500, responseMimeType: 'application/json' } } }}",
+        "options": {}
+      },
+      "id": "2e167d17-037a-4914-8089-59e3809dc761",
+      "name": "🤖 AI Agent Gemini 2.5 Pro",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        18304,
+        1808
+      ],
+      "credentials": {
+        "googleApi": {
+          "id": "CUXAdz3sUYVlwc17",
+          "name": "Google Service Account Untuk HTTP"
+        }
+      },
+      "continueOnFail": true,
+      "notes": "Gemini 2.5 Pro memahami gambar Telegram. Jika caption kosong, agent membuat konsep video otomatis. Jika caption ada, agent mengembangkan prompt user."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "ai-agent-has-error",
+              "leftValue": "={{ Boolean($json.hasError || $json.error || $json.errorMessage) }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "id": "6d4c1b73-1b62-4ab3-8eb9-997563f14d22",
+      "name": "🧯 Cek Error: AI Agent",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        18544,
+        1808
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chatId || $('📩 Ambil Detail Telegram').first().json.chatId }}",
+        "text": "=❌ Proses video gagal.\n\nNode: {{ $json.failedNode || $json.errorNode || '🤖 AI Agent Gemini 2.5 Pro' }}\n\nError:\n{{ String($json.errorMessage || $json.error?.message || $json.message || JSON.stringify($json.error || $json)).slice(0, 3200) }}\n\nSilakan cek node tersebut di n8n, perbaiki credential/quota/parameter, lalu kirim ulang gambar ke Telegram.",
+        "additionalFields": {
+          "reply_to_message_id": "={{ $json.replyToMessageId || $('📩 Ambil Detail Telegram').first().json.replyToMessageId }}",
+          "message_thread_id": "={{ $json.messageThreadId || $('📩 Ambil Detail Telegram').first().json.messageThreadId || undefined }}"
+        }
+      },
+      "id": "7b1a1fd2-8b44-4319-ac65-81edeedfa283",
+      "name": "🚨 Fallback Telegram: AI Agent Error",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        18784,
+        1648
+      ],
+      "webhookId": "ff879d27-9145-4339-bc52-a0bf97a15cad",
+      "credentials": {
+        "telegramApi": {
+          "id": "Z6fEzzh69oUJOCA9",
+          "name": "Bot Videos"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const meta = $('🧩 Siapkan Payload Gemini').first().json;\nconst response = $input.first().json;\n\nfunction stripCodeFence(value) {\n  return String(value || '')\n    .replace(/^\\s*\\`\\`\\`(?:json)?\\s*/i, '')\n    .replace(/\\s*\\`\\`\\`\\s*$/i, '')\n    .trim();\n}\n\nfunction objectLikeText(value) {\n  const cleaned = stripCodeFence(value);\n  const firstBrace = cleaned.indexOf('{');\n  const lastBrace = cleaned.lastIndexOf('}');\n  if (firstBrace >= 0 && lastBrace > firstBrace) {\n    return cleaned.slice(firstBrace, lastBrace + 1);\n  }\n  return cleaned;\n}\n\nfunction extractLooseField(source, key) {\n  const keys = ['image_summary_id', 'user_intent_id', 'veo_prompt_en', 'negative_prompt_en', 'telegram_caption_id', 'prompt'];\n  const nextKeys = keys.filter((candidate) => candidate !== key).join('|');\n  const pattern = new RegExp('\"' + key + '\"\\\\s*:\\\\s*([\\\\s\\\\S]*?)(?=,\\\\s*\"(' + nextKeys + ')\"\\\\s*:|\\\\n?\\\\s*}\\\\s*$)', 'i');\n  const match = source.match(pattern);\n  if (!match) return '';\n  let value = match[1].trim().replace(/,$/, '').trim();\n  if (value.startsWith('\"')) value = value.slice(1);\n  if (value.endsWith('\"')) value = value.slice(0, -1);\n  return value\n    .replace(/\\\\n/g, ' ')\n    .replace(/\\\\r/g, ' ')\n    .replace(/\\\\t/g, ' ')\n    .replace(/\\s+/g, ' ')\n    .trim();\n}\n\nfunction parseGeminiOutput(text) {\n  const candidate = objectLikeText(text);\n  try {\n    return JSON.parse(candidate);\n  } catch (jsonError) {\n    const loose = {\n      image_summary_id: extractLooseField(candidate, 'image_summary_id'),\n      user_intent_id: extractLooseField(candidate, 'user_intent_id'),\n      veo_prompt_en: extractLooseField(candidate, 'veo_prompt_en') || extractLooseField(candidate, 'prompt'),\n      negative_prompt_en: extractLooseField(candidate, 'negative_prompt_en'),\n      telegram_caption_id: extractLooseField(candidate, 'telegram_caption_id'),\n      _parseWarning: jsonError.message,\n    };\n    if (loose.veo_prompt_en) return loose;\n    return {\n      veo_prompt_en: stripCodeFence(text),\n      negative_prompt_en: '',\n      telegram_caption_id: 'Video selesai dibuat dari gambar Telegram.',\n      _parseWarning: jsonError.message,\n    };\n  }\n}\n\ntry {\n  if (response.error) throw new Error(response.error.message || JSON.stringify(response.error));\n  const parts = response.candidates?.[0]?.content?.parts || [];\n  const text = parts.map((part) => part.text || '').join('\\n').trim();\n  if (!text) throw new Error('Response Gemini kosong atau tidak memiliki candidates[0].content.parts[].text.');\n\n  const parsed = parseGeminiOutput(text);\n  const veoPrompt = String(parsed.veo_prompt_en || parsed.prompt || '').trim();\n  if (!veoPrompt) throw new Error('Output Gemini tidak memiliki field veo_prompt_en.');\n\n  return [{\n    json: {\n      ...meta,\n      imageSummaryId: parsed.image_summary_id || '',\n      userIntentId: parsed.user_intent_id || '',\n      veoPrompt,\n      negativePrompt: String(parsed.negative_prompt_en || 'blurry, distorted, low quality, broken text, extra limbs').trim(),\n      telegramCaption: String(parsed.telegram_caption_id || 'Video selesai dibuat dari gambar Telegram.').trim(),\n      geminiRawText: text,\n      parseWarning: parsed._parseWarning || '',\n    },\n  }];\n} catch (error) {\n  return [{\n    json: {\n      ...meta,\n      hasError: true,\n      failedNode: '📝 Parse Prompt Veo',\n      errorMessage: error.message,\n      rawGeminiResponse: JSON.stringify(response).slice(0, 3000),\n    },\n  }];\n}"
+      },
+      "id": "b7a3c6d3-f662-48a0-9455-51756ac1b08f",
+      "name": "📝 Parse Prompt Veo",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        18784,
+        1968
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "parse-prompt-has-error",
+              "leftValue": "={{ Boolean($json.hasError || $json.error || $json.errorMessage) }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "id": "e7e49ed1-0851-461d-a4ce-0d68015e6878",
+      "name": "🧯 Cek Error: Parse Prompt",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        19024,
+        1968
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chatId || $('📩 Ambil Detail Telegram').first().json.chatId }}",
+        "text": "=❌ Proses video gagal.\n\nNode: {{ $json.failedNode || $json.errorNode || '📝 Parse Prompt Veo' }}\n\nError:\n{{ String($json.errorMessage || $json.error?.message || $json.message || JSON.stringify($json.error || $json)).slice(0, 3200) }}\n\nSilakan cek node tersebut di n8n, perbaiki credential/quota/parameter, lalu kirim ulang gambar ke Telegram.",
+        "additionalFields": {
+          "reply_to_message_id": "={{ $json.replyToMessageId || $('📩 Ambil Detail Telegram').first().json.replyToMessageId }}",
+          "message_thread_id": "={{ $json.messageThreadId || $('📩 Ambil Detail Telegram').first().json.messageThreadId || undefined }}"
+        }
+      },
+      "id": "5fb4c9a0-73d3-4ba9-a65e-ff6158c4b7e7",
+      "name": "🚨 Fallback Telegram: Parse Error",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        19264,
+        1808
+      ],
+      "webhookId": "23c86cda-d934-497c-a9fe-42be3c1090a3",
+      "credentials": {
+        "telegramApi": {
+          "id": "Z6fEzzh69oUJOCA9",
+          "name": "Bot Videos"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://{{$json.veoLocation}}-aiplatform.googleapis.com/v1/projects/{{$json.projectId}}/locations/{{$json.veoLocation}}/publishers/google/models/{{$json.veoModel}}:predictLongRunning",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json; charset=utf-8"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { instances: [{ prompt: $json.veoPrompt, image: { bytesBase64Encoded: $json.imageBase64, mimeType: $json.mimeType } }], parameters: { sampleCount: 1, durationSeconds: $json.veoDurationSeconds, aspectRatio: $json.veoAspectRatio, generateAudio: $json.veoGenerateAudio, resolution: $json.veoResolution, negativePrompt: $json.negativePrompt, personGeneration: 'allow_adult' } } }}",
+        "options": {}
+      },
+      "id": "befe735e-e748-43bc-b9d6-f4e6e9787c13",
+      "name": "🎬 Generate Video Veo 3",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        19328,
+        2112
+      ],
+      "credentials": {
+        "googleApi": {
+          "id": "CUXAdz3sUYVlwc17",
+          "name": "Google Service Account Untuk HTTP"
+        }
+      },
+      "continueOnFail": true,
+      "notes": "Model diminta oleh user: veo-3.0-generate-001. Endpoint Vertex AI predictLongRunning."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "start-veo-has-error",
+              "leftValue": "={{ Boolean($json.hasError || $json.error || $json.errorMessage) }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "id": "8fbbfe5e-b464-4773-9f6b-f5c9568d8114",
+      "name": "🧯 Cek Error: Start Veo",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        19504,
+        2128
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chatId || $('📩 Ambil Detail Telegram').first().json.chatId }}",
+        "text": "=❌ Proses video gagal.\n\nNode: {{ $json.failedNode || $json.errorNode || '🎬 Generate Video Veo 3' }}\n\nError:\n{{ String($json.errorMessage || $json.error?.message || $json.message || JSON.stringify($json.error || $json)).slice(0, 3200) }}\n\nSilakan cek node tersebut di n8n, perbaiki credential/quota/parameter, lalu kirim ulang gambar ke Telegram.",
+        "additionalFields": {
+          "reply_to_message_id": "={{ $json.replyToMessageId || $('📩 Ambil Detail Telegram').first().json.replyToMessageId }}",
+          "message_thread_id": "={{ $json.messageThreadId || $('📩 Ambil Detail Telegram').first().json.messageThreadId || undefined }}"
+        }
+      },
+      "id": "ce329b77-72d6-44e7-9839-fd21c09faca2",
+      "name": "🚨 Fallback Telegram: Start Veo Error",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        19744,
+        1968
+      ],
+      "webhookId": "9995ac3e-04f5-4e6b-b64a-c083259281bd",
+      "credentials": {
+        "telegramApi": {
+          "id": "Z6fEzzh69oUJOCA9",
+          "name": "Bot Videos"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const meta = $('📝 Parse Prompt Veo').first().json;\nconst response = $input.first().json;\n\nif (response.error) {\n  return [{ json: { ...meta, hasError: true, failedNode: '🎬 Generate Video Veo 3', errorMessage: response.error.message || JSON.stringify(response.error) } }];\n}\n\nconst operationName = response.name || response.operationName || response.operation?.name;\nif (!operationName) {\n  return [{ json: { ...meta, hasError: true, failedNode: '🔁 Simpan Operasi Veo', errorMessage: 'Operation name tidak ditemukan dari response Veo: ' + JSON.stringify(response).slice(0, 2000) } }];\n}\n\nreturn [{ json: { ...meta, operationName, pollCount: 0, lastPollAt: new Date().toISOString() } }];"
+      },
+      "id": "438cf3e6-5cd6-489b-b412-1c54cb01561e",
+      "name": "🔁 Simpan Operasi Veo",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        19728,
+        2224
+      ]
+    },
+    {
+      "parameters": {
+        "unit": "minutes"
+      },
+      "id": "dd3363e3-75d6-4981-9b08-8b1bbc5da073",
+      "name": "⏱️ Tunggu 1 Menit",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        19984,
+        2288
+      ],
+      "webhookId": "wait-veo-operation-1m"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://{{$json.veoLocation}}-aiplatform.googleapis.com/v1/projects/{{$json.projectId}}/locations/{{$json.veoLocation}}/publishers/google/models/{{$json.veoModel}}:fetchPredictOperation",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json; charset=utf-8"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { operationName: $json.operationName } }}",
+        "options": {}
+      },
+      "id": "3ba86236-df8d-4f7f-bd6d-b135a2b0b92d",
+      "name": "🔎 Cek Status Operasi Veo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        20224,
+        2288
+      ],
+      "credentials": {
+        "googleApi": {
+          "id": "CUXAdz3sUYVlwc17",
+          "name": "Google Service Account Untuk HTTP"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const previous = $('⏱️ Tunggu 1 Menit').first().json;\nconst response = $input.first().json;\n\nif (response.error) {\n  return [{ json: { ...previous, hasError: true, failedNode: '🔎 Cek Status Operasi Veo', errorMessage: response.error.message || JSON.stringify(response.error) } }];\n}\n\nconst done = Boolean(response.done);\nconst operationError = response.error || response.response?.error;\nif (operationError) {\n  return [{ json: { ...previous, hasError: true, failedNode: '🔎 Cek Status Operasi Veo', errorMessage: operationError.message || JSON.stringify(operationError) } }];\n}\n\nreturn [{\n  json: {\n    ...previous,\n    done,\n    pollCount: (previous.pollCount || 0) + 1,\n    operationResponse: response.response || response,\n    rawOperation: response,\n    lastPollAt: new Date().toISOString(),\n  },\n}];"
+      },
+      "id": "94db0023-a4a5-4638-b22b-bf081614ef4f",
+      "name": "🧾 Normalisasi Status Veo",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        20464,
+        2288
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "poll-veo-has-error",
+              "leftValue": "={{ Boolean($json.hasError || $json.error || $json.errorMessage) }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "id": "7f7594a1-6b26-4256-af84-6c695a4b69f4",
+      "name": "🧯 Cek Error: Poll Veo",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        20704,
+        2288
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chatId || $('📩 Ambil Detail Telegram').first().json.chatId }}",
+        "text": "=❌ Proses video gagal.\n\nNode: {{ $json.failedNode || $json.errorNode || '🔎 Cek Status Operasi Veo' }}\n\nError:\n{{ String($json.errorMessage || $json.error?.message || $json.message || JSON.stringify($json.error || $json)).slice(0, 3200) }}\n\nSilakan cek node tersebut di n8n, perbaiki credential/quota/parameter, lalu kirim ulang gambar ke Telegram.",
+        "additionalFields": {
+          "reply_to_message_id": "={{ $json.replyToMessageId || $('📩 Ambil Detail Telegram').first().json.replyToMessageId }}",
+          "message_thread_id": "={{ $json.messageThreadId || $('📩 Ambil Detail Telegram').first().json.messageThreadId || undefined }}"
+        }
+      },
+      "id": "67e876d4-d0a4-4796-afe0-5e40b93cfeb6",
+      "name": "🚨 Fallback Telegram: Poll Veo Error",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        20992,
+        1968
+      ],
+      "webhookId": "7a4854e4-c416-42ba-a486-c95a8e79756e",
+      "credentials": {
+        "telegramApi": {
+          "id": "Z6fEzzh69oUJOCA9",
+          "name": "Bot Videos"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "veo-done",
+              "leftValue": "={{ Boolean($json.done) }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "5184596b-5923-4306-8dd5-123e2750a983",
+      "name": "✅ Video Selesai?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        20944,
+        2448
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst response = item.operationResponse || {};\nconst videos = response.videos || response.generatedVideos || response.predictions?.[0]?.videos || [];\nconst first = Array.isArray(videos) ? videos[0] : videos;\nconst video = first?.video || first || {};\nconst base64 = video.bytesBase64Encoded || video.data || first?.bytesBase64Encoded;\nconst gcsUri = video.gcsUri || first?.gcsUri;\n\nif (!base64) {\n  return [{\n    json: {\n      ...item,\n      hasError: true,\n      failedNode: '🎞️ Convert Video ke Binary',\n      errorMessage: gcsUri\n        ? `Veo mengembalikan gcsUri (${gcsUri}) bukan base64. Kosongkan parameter storageUri agar response berisi bytesBase64Encoded, atau tambahkan node download dari GCS.`\n        : 'Tidak menemukan response.videos[0].bytesBase64Encoded dari hasil Veo.',\n      rawOperationResponse: JSON.stringify(response).slice(0, 3000),\n    },\n  }];\n}\n\nconst baseCaption = `🎬 ${String(item.telegramCaption || 'Video selesai dibuat dari gambar Telegram.').trim()}`;\nconst promptPreview = String(item.veoPrompt || '').trim();\nconst promptBlock = promptPreview ? `\\n\\nPrompt Veo:\\n${promptPreview}` : '';\nconst fullCaption = `${baseCaption}${promptBlock}`;\nconst telegramVideoCaption = fullCaption.length > 1000\n  ? `${fullCaption.slice(0, 997)}...`\n  : fullCaption;\n\nreturn [{\n  json: {\n    chatId: item.chatId,\n    groupId: item.groupId,\n    normalizedGroupId: item.normalizedGroupId,\n    senderUserId: item.senderUserId,\n    allowedUserId: item.allowedUserId,\n    replyToMessageId: item.replyToMessageId,\n    sourceMessageId: item.sourceMessageId,\n    messageThreadId: item.messageThreadId,\n    telegramCaption: item.telegramCaption,\n    telegramVideoCaption,\n    veoPrompt: item.veoPrompt,\n    imageSummaryId: item.imageSummaryId,\n    requestId: item.requestId,\n  },\n  binary: {\n    video: {\n      data: base64,\n      mimeType: video.mimeType || first?.mimeType || 'video/mp4',\n      fileName: `veo-${item.requestId || Date.now()}.mp4`,\n      fileExtension: 'mp4',\n    },\n  },\n}];"
+      },
+      "id": "3ea973c9-1069-46e1-9848-23f06cf7f4fd",
+      "name": "🎞️ Convert Video ke Binary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        21184,
+        2336
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "convert-video-has-error",
+              "leftValue": "={{ Boolean($json.hasError || $json.error || $json.errorMessage) }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "id": "85f0608b-0b01-42a7-b672-8f1e4db2142d",
+      "name": "🧯 Cek Error: Convert Video",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        21424,
+        2336
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chatId || $('📩 Ambil Detail Telegram').first().json.chatId }}",
+        "text": "=❌ Proses video gagal.\n\nNode: {{ $json.failedNode || $json.errorNode || '🎞️ Convert Video ke Binary' }}\n\nError:\n{{ String($json.errorMessage || $json.error?.message || $json.message || JSON.stringify($json.error || $json)).slice(0, 3200) }}\n\nSilakan cek node tersebut di n8n, perbaiki credential/quota/parameter, lalu kirim ulang gambar ke Telegram.",
+        "additionalFields": {
+          "reply_to_message_id": "={{ $json.replyToMessageId || $('📩 Ambil Detail Telegram').first().json.replyToMessageId }}",
+          "message_thread_id": "={{ $json.messageThreadId || $('📩 Ambil Detail Telegram').first().json.messageThreadId || undefined }}"
+        }
+      },
+      "id": "260f4efb-7999-4176-84bc-c867cd2f68b6",
+      "name": "🚨 Fallback Telegram: Convert Error",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        21664,
+        2176
+      ],
+      "webhookId": "7c37af08-2fa1-4b68-ad66-0e0f6d547531",
+      "credentials": {
+        "telegramApi": {
+          "id": "Z6fEzzh69oUJOCA9",
+          "name": "Bot Videos"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "operation": "sendVideo",
+        "chatId": "={{ $json.chatId }}",
+        "binaryData": true,
+        "binaryPropertyName": "video",
+        "additionalFields": {
+          "caption": "={{ $json.telegramVideoCaption }}",
+          "reply_to_message_id": "={{ $json.replyToMessageId }}",
+          "message_thread_id": "={{ $json.messageThreadId || $('📩 Ambil Detail Telegram').first().json.messageThreadId || undefined }}"
+        }
+      },
+      "id": "e6f63cb2-916c-4171-b309-20f3608994fa",
+      "name": "📤 Kirim Video ke Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        21664,
+        2496
+      ],
+      "webhookId": "8c9d393e-63f1-448c-aec6-c8ded0eecc6f",
+      "credentials": {
+        "telegramApi": {
+          "id": "Z6fEzzh69oUJOCA9",
+          "name": "Bot Videos"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "send-telegram-has-error",
+              "leftValue": "={{ Boolean($json.hasError || $json.error || $json.errorMessage) }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "id": "efe528c0-9f45-4b89-a7cc-91755afb9044",
+      "name": "🧯 Cek Error: Kirim Telegram",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        21904,
+        2496
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chatId || $('📩 Ambil Detail Telegram').first().json.chatId }}",
+        "text": "=❌ Proses video gagal.\n\nNode: {{ $json.failedNode || $json.errorNode || '📤 Kirim Video ke Telegram' }}\n\nError:\n{{ String($json.errorMessage || $json.error?.message || $json.message || JSON.stringify($json.error || $json)).slice(0, 3200) }}\n\nSilakan cek node tersebut di n8n, perbaiki credential/quota/parameter, lalu kirim ulang gambar ke Telegram.",
+        "additionalFields": {
+          "reply_to_message_id": "={{ $json.replyToMessageId || $('📩 Ambil Detail Telegram').first().json.replyToMessageId }}",
+          "message_thread_id": "={{ $json.messageThreadId || $('📩 Ambil Detail Telegram').first().json.messageThreadId || undefined }}"
+        }
+      },
+      "id": "e710005b-92a3-487a-9218-07c30d6e72b2",
+      "name": "🚨 Fallback Telegram: Send Video Error",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        22144,
+        2336
+      ],
+      "webhookId": "4c8f96fc-2cd0-4d68-bcb9-949cb4e96577",
+      "credentials": {
+        "telegramApi": {
+          "id": "Z6fEzzh69oUJOCA9",
+          "name": "Bot Videos"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\n\nfunction sanitizePrompt(value) {\n  let prompt = String(value || '').trim();\n  const replacements = [\n    [/\\b(blood|bloody|gore|gory|corpse|dead body|decapitat\\w*|dismember\\w*)\\b/gi, 'red visual detail'],\n    [/\\b(kill|killing|murder|suicide|self[- ]?harm|harmful injury|stab\\w*|shoot\\w*)\\b/gi, 'dramatic tension'],\n    [/\\b(gun|rifle|pistol|knife|blade|weapon|bomb|explosive|explosion)\\b/gi, 'neutral prop'],\n    [/\\b(nude|naked|sex|sexual|erotic|fetish|porn\\w*)\\b/gi, 'tasteful lifestyle'],\n    [/\\b(child|children|kid|minor|underage)\\b/gi, 'person'],\n    [/\\b(drug|cocaine|heroin|meth|marijuana|weed|narcotic)\\b/gi, 'wellness product'],\n    [/\\b(hate|racist|slur|terrorist|extremist)\\b/gi, 'neutral social context'],\n  ];\n  for (const [pattern, replacement] of replacements) {\n    prompt = prompt.replace(pattern, replacement);\n  }\n  prompt = prompt\n    .replace(/\\s+/g, ' ')\n    .replace(/[“”]/g, '\"')\n    .replace(/[‘’]/g, \"'\")\n    .trim();\n\n  const safetyPrefix = 'Safe, policy-compliant cinematic product/lifestyle video. No violence, no gore, no explicit sexual content, no minors, no weapons, no illegal activity, no hate symbols.';\n  return (safetyPrefix + ' ' + prompt).slice(0, 3000);\n}\n\nconst safePrompt = sanitizePrompt(item.veoPrompt);\nconst safeNegative = [\n  item.negativePrompt || '',\n  'violence, gore, blood, weapons, explicit sexual content, nudity, minors, illegal drugs, hate symbols, self harm, realistic injury, disturbing content',\n].filter(Boolean).join(', ');\n\nreturn [{\n  json: {\n    ...item,\n    veoPromptOriginal: item.veoPrompt,\n    veoPrompt: safePrompt,\n    negativePrompt: safeNegative,\n    safetySanitized: safePrompt !== item.veoPrompt,\n    safetyRetryCount: item.safetyRetryCount || 0,\n  },\n}];"
+      },
+      "id": "0f976786-1baf-4855-bdeb-4c77afc602b3",
+      "name": "🛡️ Bersihkan Prompt Veo",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        19152,
+        2112
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "sensitive-prompt-error",
+              "leftValue": "={{ String($json.errorMessage || $json.error?.message || \"\").toLowerCase().includes(\"sensitive words\") && Number($json.safetyRetryCount || 0) < 1 }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "c13edefd-8dc7-4636-8d25-1e8c3efbbc1e",
+      "name": "🛡️ Error Prompt Sensitif?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        20736,
+        1888
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\n\nfunction compact(value) {\n  return String(value || '').replace(/\\s+/g, ' ').trim();\n}\n\nfunction removeSensitiveLanguage(value) {\n  let prompt = compact(value);\n  const replacements = [\n    [/\\b(blood|bloody|gore|gory|corpse|dead body|decapitat\\w*|dismember\\w*)\\b/gi, 'clean visual detail'],\n    [/\\b(kill|killing|murder|suicide|self[- ]?harm|harmful injury|stab\\w*|shoot\\w*)\\b/gi, 'dramatic but harmless moment'],\n    [/\\b(gun|rifle|pistol|knife|blade|weapon|bomb|explosive|explosion)\\b/gi, 'safe neutral prop'],\n    [/\\b(nude|naked|sex|sexual|erotic|fetish|porn\\w*)\\b/gi, 'tasteful lifestyle tone'],\n    [/\\b(child|children|kid|minor|underage)\\b/gi, 'adult person'],\n    [/\\b(drug|cocaine|heroin|meth|marijuana|weed|narcotic)\\b/gi, 'neutral product'],\n    [/\\b(hate|racist|slur|terrorist|extremist)\\b/gi, 'neutral background'],\n  ];\n  for (const [pattern, replacement] of replacements) prompt = prompt.replace(pattern, replacement);\n  return prompt;\n}\n\nconst sourcePrompt = item.veoPromptOriginal || item.veoPrompt;\nconst safePrompt = removeSensitiveLanguage(sourcePrompt);\nconst rewrittenPrompt = [\n  'Safe commercial cinematic video, family-friendly, policy-compliant, non-violent, no explicit or harmful content.',\n  safePrompt,\n  'Use gentle camera movement, tasteful lighting, realistic product-focused motion, upbeat visual tone.',\n].join(' ').slice(0, 2800);\n\nreturn [{\n  json: {\n    ...item,\n    hasError: false,\n    errorMessage: '',\n    failedNode: '',\n    veoPrompt: rewrittenPrompt,\n    negativePrompt: 'violence, gore, blood, weapons, explicit sexual content, nudity, minors, illegal drugs, hate symbols, self harm, realistic injury, disturbing content',\n    safetyRetryCount: Number(item.safetyRetryCount || 0) + 1,\n    safetyRewriteReason: item.errorMessage || 'Sensitive prompt retry',\n  },\n}];"
+      },
+      "id": "f3a00546-5dc6-44ba-a175-28e0db8a3943",
+      "name": "♻️ Rewrite Prompt Aman",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        21232,
+        1840
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "📥 Trigger Gambar Telegram": {
+      "main": [
+        [
+          {
+            "node": "📩 Ambil Detail Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📩 Ambil Detail Telegram": {
+      "main": [
+        [
+          {
+            "node": "🧯 Cek Error: Input Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧯 Cek Error: Input Telegram": {
+      "main": [
+        [
+          {
+            "node": "🚨 Fallback Telegram: Input Error",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "🖼️ Download Gambar Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🖼️ Download Gambar Telegram": {
+      "main": [
+        [
+          {
+            "node": "🧯 Cek Error: Download Gambar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧯 Cek Error: Download Gambar": {
+      "main": [
+        [
+          {
+            "node": "🚨 Fallback Telegram: Download Error",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "🧩 Siapkan Payload Gemini",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧩 Siapkan Payload Gemini": {
+      "main": [
+        [
+          {
+            "node": "🧯 Cek Error: Payload Gemini",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧯 Cek Error: Payload Gemini": {
+      "main": [
+        [
+          {
+            "node": "🚨 Fallback Telegram: Payload Error",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "🤖 AI Agent Gemini 2.5 Pro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🤖 AI Agent Gemini 2.5 Pro": {
+      "main": [
+        [
+          {
+            "node": "🧯 Cek Error: AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧯 Cek Error: AI Agent": {
+      "main": [
+        [
+          {
+            "node": "🚨 Fallback Telegram: AI Agent Error",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "📝 Parse Prompt Veo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📝 Parse Prompt Veo": {
+      "main": [
+        [
+          {
+            "node": "🧯 Cek Error: Parse Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧯 Cek Error: Parse Prompt": {
+      "main": [
+        [
+          {
+            "node": "🚨 Fallback Telegram: Parse Error",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "🛡️ Bersihkan Prompt Veo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🎬 Generate Video Veo 3": {
+      "main": [
+        [
+          {
+            "node": "🧯 Cek Error: Start Veo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧯 Cek Error: Start Veo": {
+      "main": [
+        [
+          {
+            "node": "🚨 Fallback Telegram: Start Veo Error",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "🔁 Simpan Operasi Veo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔁 Simpan Operasi Veo": {
+      "main": [
+        [
+          {
+            "node": "⏱️ Tunggu 1 Menit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⏱️ Tunggu 1 Menit": {
+      "main": [
+        [
+          {
+            "node": "🔎 Cek Status Operasi Veo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔎 Cek Status Operasi Veo": {
+      "main": [
+        [
+          {
+            "node": "🧾 Normalisasi Status Veo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧾 Normalisasi Status Veo": {
+      "main": [
+        [
+          {
+            "node": "🧯 Cek Error: Poll Veo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧯 Cek Error: Poll Veo": {
+      "main": [
+        [
+          {
+            "node": "🛡️ Error Prompt Sensitif?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "✅ Video Selesai?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "✅ Video Selesai?": {
+      "main": [
+        [
+          {
+            "node": "🎞️ Convert Video ke Binary",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "⏱️ Tunggu 1 Menit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🎞️ Convert Video ke Binary": {
+      "main": [
+        [
+          {
+            "node": "🧯 Cek Error: Convert Video",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧯 Cek Error: Convert Video": {
+      "main": [
+        [
+          {
+            "node": "🚨 Fallback Telegram: Convert Error",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "📤 Kirim Video ke Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📤 Kirim Video ke Telegram": {
+      "main": [
+        [
+          {
+            "node": "🧯 Cek Error: Kirim Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧯 Cek Error: Kirim Telegram": {
+      "main": [
+        [
+          {
+            "node": "🚨 Fallback Telegram: Send Video Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🛡️ Bersihkan Prompt Veo": {
+      "main": [
+        [
+          {
+            "node": "🎬 Generate Video Veo 3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🛡️ Error Prompt Sensitif?": {
+      "main": [
+        [
+          {
+            "node": "♻️ Rewrite Prompt Aman",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "🚨 Fallback Telegram: Poll Veo Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "♻️ Rewrite Prompt Aman": {
+      "main": [
+        [
+          {
+            "node": "🎬 Generate Video Veo 3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "2200234b-3824-4816-a924-ce1e0cb0fe9c",
+  "meta": {
+    "instanceId": "046877728b8f4e2565f8aab7d97c482d69443e5d7de38d0701c1be9f87bfef5b"
+  },
+  "id": "pMD9u5J4jEzhkKsc",
+  "tags": []
+}

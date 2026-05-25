@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 
 import { GeneratingAnimation } from "./generating-animation";
 import { HistoryPanel, type HistoryEntry } from "./history-panel";
+import { ImageDropzone, type ImageFile } from "./image-dropzone";
 
 export type GenerateKind = "image" | "video";
 
@@ -32,10 +33,16 @@ type PersistedSession = {
   aspectRatio: string;
   // Optional jobId yang akan diisi backend/N8N saat integrasi.
   jobId: string | null;
+  // Untuk video: row id di tool_generation untuk polling getVideoStatus.
+  rowId: number | null;
+  // Untuk video image-to-video: dua frame referensi.
+  firstFrame: ImageFile | null;
+  lastFrame: ImageFile | null;
 };
 
 const STORAGE_PREFIX = "porto.tools.session";
 const SESSION_TTL_MS = 1000 * 60 * 30; // 30 menit
+const MAX_PERSISTED_FRAME_BYTES = 2 * 1024 * 1024; // skip persist frame > 2MB
 
 const ASPECT_OPTIONS: Record<GenerateKind, ReadonlyArray<AspectOption>> = {
   image: [
@@ -70,7 +77,17 @@ function defaultSession(kind: GenerateKind): PersistedSession {
     error: null,
     aspectRatio: ASPECT_OPTIONS[kind][0].value,
     jobId: null,
+    rowId: null,
+    firstFrame: null,
+    lastFrame: null,
   };
+}
+
+function sanitizeFrameForPersist(frame: ImageFile | null): ImageFile | null {
+  if (!frame) return null;
+  // Skip persist kalau gambar besar — base64 di localStorage cepat kena quota.
+  if (frame.base64.length > MAX_PERSISTED_FRAME_BYTES) return null;
+  return frame;
 }
 
 function readSession(kind: GenerateKind): PersistedSession {
@@ -95,6 +112,9 @@ function readSession(kind: GenerateKind): PersistedSession {
       error: parsed.error ?? null,
       aspectRatio,
       jobId: parsed.jobId ?? null,
+      rowId: parsed.rowId ?? null,
+      firstFrame: parsed.firstFrame ?? null,
+      lastFrame: parsed.lastFrame ?? null,
     };
   } catch {
     return fallback;
@@ -104,9 +124,14 @@ function readSession(kind: GenerateKind): PersistedSession {
 function writeSession(kind: GenerateKind, session: PersistedSession) {
   if (typeof window === "undefined") return;
   try {
+    const safe: PersistedSession = {
+      ...session,
+      firstFrame: sanitizeFrameForPersist(session.firstFrame),
+      lastFrame: sanitizeFrameForPersist(session.lastFrame),
+    };
     window.localStorage.setItem(
       `${STORAGE_PREFIX}.${kind}`,
-      JSON.stringify({ ...session, savedAt: Date.now() }),
+      JSON.stringify({ ...safe, savedAt: Date.now() }),
     );
   } catch {
     // quota exceeded / private mode — silently ignore
@@ -140,12 +165,12 @@ const COPY: Record<
     title: "Generate Video",
     sup: "v1",
     description:
-      "Tulis prompt naratif singkat. Pipeline N8N akan render klip pendek (≤ 5 detik).",
+      "Upload First Frame (wajib) + End Frame (opsional). Caption opsional. Veo 3 render klip 8 detik. Estimasi 1–5 menit.",
     placeholder:
-      "Contoh: kamera dolly-in perlahan di lorong studio, lighting kontras tinggi, gerakan halus...",
+      "Opsional — caption singkat: contoh kamera dolly-in perlahan di lorong studio, lighting kontras tinggi, gerakan halus...",
     icon: Video,
     submitLabel: "Generate",
-    workingLabel: "Rendering",
+    workingLabel: "Rendering Veo",
   },
 };
 
@@ -171,6 +196,7 @@ export function GenerateCard({ kind }: GenerateCardProps) {
   const utils = trpc.useUtils();
   const historyQuery = trpc.tools.listMyHistory.useQuery({ kind });
   const generateImage = trpc.tools.generateImage.useMutation();
+  const generateVideo = trpc.tools.generateVideo.useMutation();
   const deleteEntry = trpc.tools.deleteMyEntry.useMutation();
 
   const history = useMemo<HistoryEntry[]>(() => {
@@ -234,20 +260,130 @@ export function GenerateCard({ kind }: GenerateCardProps) {
     );
   }, []);
 
+  const setFirstFrame = useCallback((frame: ImageFile | null) => {
+    setSession((prev) =>
+      prev.status === "generating" ? prev : { ...prev, firstFrame: frame },
+    );
+  }, []);
+
+  const setLastFrame = useCallback((frame: ImageFile | null) => {
+    setSession((prev) =>
+      prev.status === "generating" ? prev : { ...prev, lastFrame: frame },
+    );
+  }, []);
+
+  // Polling status video saat status=generating untuk kind=video.
+  const shouldPollVideo =
+    kind === "video" && session.status === "generating" && session.rowId !== null;
+  const videoStatusQuery = trpc.tools.getVideoStatus.useQuery(
+    { id: session.rowId ?? 0 },
+    {
+      enabled: shouldPollVideo,
+      refetchInterval: shouldPollVideo ? 10_000 : false,
+      refetchOnWindowFocus: false,
+      // Penting: jangan retry agresif kalau request gagal — biar 10s tick berikut yang retry.
+      retry: false,
+    },
+  );
+
+  useEffect(() => {
+    if (!shouldPollVideo) return;
+    const data = videoStatusQuery.data;
+    if (!data) return;
+    if (data.status === "success" && data.url) {
+      // Polling tRPC adalah sumber eksternal — kita sinkronkan ke state lokal.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSession((prev) => ({
+        ...prev,
+        status: "idle",
+        startedAt: null,
+        resultUrl: data.url ?? null,
+        error: null,
+      }));
+      void utils.tools.listMyHistory.invalidate({ kind });
+    } else if (data.status === "error") {
+      const message = data.error ?? "Generate video gagal";
+      setSession((prev) => ({
+        ...prev,
+        status: "error",
+        startedAt: null,
+        resultUrl: null,
+        error: message,
+      }));
+      toast.error(message);
+      void utils.tools.listMyHistory.invalidate({ kind });
+    }
+  }, [shouldPollVideo, videoStatusQuery.data, utils, kind]);
+
   const onSubmit = useCallback(
     async (event: React.FormEvent<HTMLFormElement>) => {
       event.preventDefault();
       const prompt = session.prompt.trim();
-      if (!prompt) {
-        toast.error("Prompt tidak boleh kosong");
-        return;
-      }
       if (session.status === "generating") return;
 
-      if (kind === "video") {
-        toast.info("Pipeline video belum tersedia di workflow N8N.");
+      if (kind === "image") {
+        if (!prompt) {
+          toast.error("Prompt tidak boleh kosong");
+          return;
+        }
+
+        const startedAt = Date.now();
+        const aspectRatioSnapshot = session.aspectRatio;
+        setSession((prev) => ({
+          ...prev,
+          prompt,
+          status: "generating",
+          startedAt,
+          resultUrl: null,
+          error: null,
+          jobId: null,
+          rowId: null,
+        }));
+        setElapsedSeconds(0);
+
+        try {
+          const result = await generateImage.mutateAsync({
+            prompt,
+            aspectRatio: aspectRatioSnapshot as
+              | "1:1"
+              | "4:5"
+              | "3:4"
+              | "16:9"
+              | "9:16",
+          });
+          setSession((prev) => ({
+            ...prev,
+            status: "idle",
+            startedAt: null,
+            resultUrl: result.url,
+            error: null,
+            jobId: result.requestId,
+          }));
+          await utils.tools.listMyHistory.invalidate({ kind });
+        } catch (err) {
+          const message =
+            err instanceof Error ? err.message : "Generate gagal — coba lagi.";
+          setSession((prev) => ({
+            ...prev,
+            status: "error",
+            startedAt: null,
+            resultUrl: null,
+            error: message,
+            jobId: null,
+          }));
+          toast.error(message);
+          await utils.tools.listMyHistory.invalidate({ kind });
+        }
         return;
       }
+
+      // kind === "video"
+      const firstFrame = session.firstFrame;
+      if (!firstFrame) {
+        toast.error("Upload minimal First Frame untuk image-to-video");
+        return;
+      }
+      const lastFrame = session.lastFrame;
 
       const startedAt = Date.now();
       const aspectRatioSnapshot = session.aspectRatio;
@@ -259,32 +395,37 @@ export function GenerateCard({ kind }: GenerateCardProps) {
         resultUrl: null,
         error: null,
         jobId: null,
+        rowId: null,
       }));
       setElapsedSeconds(0);
 
       try {
-        const result = await generateImage.mutateAsync({
+        const result = await generateVideo.mutateAsync({
           prompt,
           aspectRatio: aspectRatioSnapshot as
-            | "1:1"
-            | "4:5"
-            | "3:4"
             | "16:9"
-            | "9:16",
+            | "9:16"
+            | "1:1"
+            | "4:3"
+            | "21:9",
+          firstFrame: {
+            base64: firstFrame.base64,
+            mimeType: firstFrame.mimeType,
+          },
+          lastFrame: lastFrame
+            ? { base64: lastFrame.base64, mimeType: lastFrame.mimeType }
+            : undefined,
         });
+        // Tetap "generating" — useEffect polling yang akan flip ke success/error.
         setSession((prev) => ({
           ...prev,
-          status: "idle",
-          startedAt: null,
-          resultUrl: result.url,
-          error: null,
-          jobId: result.requestId,
+          jobId: result.jobId,
+          rowId: result.id,
         }));
-        // Refresh server-side history supaya entry baru muncul instan.
         await utils.tools.listMyHistory.invalidate({ kind });
       } catch (err) {
         const message =
-          err instanceof Error ? err.message : "Generate gagal — coba lagi.";
+          err instanceof Error ? err.message : "Generate video gagal — coba lagi.";
         setSession((prev) => ({
           ...prev,
           status: "error",
@@ -292,9 +433,9 @@ export function GenerateCard({ kind }: GenerateCardProps) {
           resultUrl: null,
           error: message,
           jobId: null,
+          rowId: null,
         }));
         toast.error(message);
-        // Tetap invalidate karena backend mungkin mencatat row error.
         await utils.tools.listMyHistory.invalidate({ kind });
       }
     },
@@ -302,8 +443,11 @@ export function GenerateCard({ kind }: GenerateCardProps) {
       session.prompt,
       session.status,
       session.aspectRatio,
+      session.firstFrame,
+      session.lastFrame,
       kind,
       generateImage,
+      generateVideo,
       utils,
     ],
   );
@@ -429,10 +573,23 @@ export function GenerateCard({ kind }: GenerateCardProps) {
                     transition={{ duration: 0.25 }}
                     className="absolute inset-0 overflow-hidden border border-(--line)"
                   >
-                    {/* Placeholder — integrasi nyata akan render <Image>/<video> */}
-                    <div className="absolute inset-0 grid place-items-center font-mono text-[11px] tracking-[0.18em] uppercase text-(--muted-foreground)">
-                      result · {session.jobId ?? "—"}
-                    </div>
+                    {kind === "image" ? (
+                      /* eslint-disable-next-line @next/next/no-img-element */
+                      <img
+                        src={session.resultUrl}
+                        alt={session.prompt || "Hasil generate"}
+                        className="absolute inset-0 size-full object-cover"
+                      />
+                    ) : (
+                      <video
+                        src={session.resultUrl}
+                        controls
+                        muted
+                        loop
+                        playsInline
+                        className="absolute inset-0 size-full object-cover"
+                      />
+                    )}
                   </motion.div>
                 ) : (
                   <motion.div
@@ -465,6 +622,35 @@ export function GenerateCard({ kind }: GenerateCardProps) {
         onSubmit={onSubmit}
         className="screen-line-top flex flex-col gap-3 px-4 py-4"
       >
+        {kind === "video" ? (
+          <fieldset
+            disabled={isGenerating}
+            className="flex flex-col gap-2 disabled:cursor-not-allowed"
+          >
+            <div className="flex items-center justify-between font-mono text-[10px] tracking-[0.2em] uppercase text-(--muted-foreground)">
+              <span>Reference Frames</span>
+              <span className="tabular-nums">
+                {session.firstFrame ? (session.lastFrame ? "2/2" : "1/2") : "0/2"}
+              </span>
+            </div>
+            <div className="flex flex-col gap-3 sm:flex-row sm:gap-3">
+              <ImageDropzone
+                label="First Frame"
+                value={session.firstFrame}
+                onChange={setFirstFrame}
+                disabled={isGenerating}
+              />
+              <ImageDropzone
+                label="End Frame"
+                value={session.lastFrame}
+                onChange={setLastFrame}
+                disabled={isGenerating}
+                optional
+              />
+            </div>
+          </fieldset>
+        ) : null}
+
         <fieldset
           disabled={isGenerating}
           className="flex flex-col gap-2 disabled:cursor-not-allowed"
@@ -509,7 +695,7 @@ export function GenerateCard({ kind }: GenerateCardProps) {
           htmlFor={`prompt-${kind}`}
           className="flex items-center justify-between font-mono text-[10px] tracking-[0.2em] uppercase text-(--muted-foreground)"
         >
-          <span>Prompt</span>
+          <span>{kind === "video" ? "Caption · optional" : "Prompt"}</span>
           <span className="tabular-nums">
             {session.prompt.length.toString().padStart(3, "0")} ch
           </span>
@@ -536,7 +722,14 @@ export function GenerateCard({ kind }: GenerateCardProps) {
               variant="ghost"
               size="sm"
               onClick={onReset}
-              disabled={isGenerating || !session.prompt}
+              disabled={
+                isGenerating ||
+                (kind === "image"
+                  ? !session.prompt
+                  : !session.prompt &&
+                    !session.firstFrame &&
+                    !session.lastFrame)
+              }
               className="h-8 px-2 font-mono text-[11px] tracking-wide"
             >
               <RotateCcw className="size-3.5" />
@@ -545,7 +738,12 @@ export function GenerateCard({ kind }: GenerateCardProps) {
             <Button
               type="submit"
               size="sm"
-              disabled={isGenerating || !session.prompt.trim()}
+              disabled={
+                isGenerating ||
+                (kind === "image"
+                  ? !session.prompt.trim()
+                  : !session.firstFrame)
+              }
               className="h-8 gap-1.5 px-3 font-mono text-[11px] tracking-wide"
             >
               <Send className="size-3.5" />
