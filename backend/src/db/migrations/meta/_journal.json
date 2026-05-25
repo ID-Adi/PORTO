@@ -71,6 +71,13 @@
       "when": 1779675305500,
       "tag": "0009_naive_madame_masque",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1779693409637,
+      "tag": "0010_brainy_butterfly",
+      "breakpoints": true
     }
   ]
 }

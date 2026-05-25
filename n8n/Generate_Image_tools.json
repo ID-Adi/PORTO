@@ -75,6 +75,18 @@
               "name": "requestId",
               "value": "={{ $now.toISO() }}",
               "type": "string"
+            },
+            {
+              "id": "references",
+              "name": "references",
+              "value": "={{ [] }}",
+              "type": "array"
+            },
+            {
+              "id": "referenceMapping",
+              "name": "referenceMapping",
+              "value": "={{ ({}) }}",
+              "type": "object"
             }
           ]
         },
@@ -134,6 +146,18 @@
               "name": "userEmail",
               "value": "={{ $json.body.userEmail }}",
               "type": "string"
+            },
+            {
+              "id": "references",
+              "name": "references",
+              "value": "={{ $json.body.references || [] }}",
+              "type": "array"
+            },
+            {
+              "id": "referenceMapping",
+              "name": "referenceMapping",
+              "value": "={{ $json.body.referenceMapping || {} }}",
+              "type": "object"
             }
           ]
         },
@@ -146,6 +170,19 @@
       "position": [
         29312,
         20416
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const refs = Array.isArray($json.references) ? $json.references : [];\nconst downloaded = [];\nfor (const r of refs) {\n  if (!r || typeof r.url !== 'string') continue;\n  const buf = await this.helpers.httpRequest({\n    method: 'GET',\n    url: r.url,\n    encoding: 'arraybuffer',\n    returnFullResponse: false,\n  });\n  const base64 = Buffer.from(buf).toString('base64');\n  downloaded.push({ mimeType: r.mimeType || 'image/png', data: base64 });\n}\nreturn [{ json: { ...$json, refsBase64: downloaded } }];"
+      },
+      "id": "c3a91e2f-6b7d-4e8a-9c1f-2d4e5f6a7b8c",
+      "name": "Download References",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        29504,
+        20304
       ]
     },
     {
@@ -169,7 +206,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ { contents: [{ role: 'user', parts: [{ text: $json.prompt }] }], generationConfig: { responseModalities: ['TEXT', 'IMAGE'], imageConfig: { aspectRatio: $json.aspectRatio } } } }}",
+        "jsonBody": "={{ (() => { const refs = Array.isArray($json.refsBase64) ? $json.refsBase64 : []; let p = $json.prompt || ''; const map = $json.referenceMapping || {}; for (const [token, idx] of Object.entries(map)) { const num = Number(idx) + 1; p = p.split(token).join('image #' + num); } const parts = refs.map(r => ({ inlineData: { mimeType: r.mimeType, data: r.data } })); parts.push({ text: p }); return { contents: [{ role: 'user', parts }], generationConfig: { responseModalities: ['TEXT', 'IMAGE'], imageConfig: { aspectRatio: $json.aspectRatio } } }; })() }}",
         "options": {}
       },
       "id": "a184784f-f933-4b71-979e-5a95e7d88d76",
@@ -317,7 +354,7 @@
       "main": [
         [
           {
-            "node": "Vertex Gemini 3.1 Image",
+            "node": "Download References",
             "type": "main",
             "index": 0
           }
@@ -325,6 +362,17 @@
       ]
     },
     "Webhook Config": {
+      "main": [
+        [
+          {
+            "node": "Download References",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download References": {
       "main": [
         [
           {
@@ -380,7 +428,7 @@
   "settings": {
     "executionOrder": "v1"
   },
-  "versionId": "7409a46f-7122-4a09-a07d-ad174bb4be0b",
+  "versionId": "a70e7b37-37e8-4c67-baaa-8cfdcd53073f",
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "046877728b8f4e2565f8aab7d97c482d69443e5d7de38d0701c1be9f87bfef5b"

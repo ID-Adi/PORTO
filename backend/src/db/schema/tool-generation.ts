@@ -1,6 +1,20 @@
-import { integer, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
+import {
+  integer,
+  jsonb,
+  pgTable,
+  serial,
+  text,
+  timestamp,
+} from "drizzle-orm/pg-core";
 
 import { user } from "./auth.js";
+
+export type ToolReferenceImage = {
+  url: string;
+  mimeType: string;
+};
+
+export type ToolReferenceMapping = Record<string, number>;
 
 /**
  * Tabel terpisah dari `media` (yang merupakan asset library admin).
@@ -23,5 +37,16 @@ export const toolGeneration = pgTable("tool_generation", {
   status: text("status").notNull().default("success"), // "pending" | "success" | "error"
   errorMessage: text("error_message"),
   operationName: text("operation_name"),
+  // Untuk image-edit/multi-ref: array {url, mimeType} dari referensi yang
+  // dikirim ke pipeline. Disimpan agar history bisa rebuild UI referensi.
+  referenceImages: jsonb("reference_images")
+    .$type<ToolReferenceImage[]>()
+    .notNull()
+    .default([]),
+  // Mapping tag `@N` di prompt ke index pada referenceImages, mis. {"@1": 0}.
+  referenceMapping: jsonb("reference_mapping")
+    .$type<ToolReferenceMapping>()
+    .notNull()
+    .default({}),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });

@@ -11,6 +11,7 @@ import path from "node:path";
  */
 export const UPLOADS_DIR = path.resolve(process.cwd(), "public", "uploads");
 export const TOOLS_UPLOAD_DIR = path.join(UPLOADS_DIR, "tools");
+export const TOOLS_REFS_DIR = path.join(TOOLS_UPLOAD_DIR, "refs");
 
 export function sanitizeFilename(name: string): string {
   const base = path.basename(name).replace(/[^a-zA-Z0-9._-]+/g, "-");

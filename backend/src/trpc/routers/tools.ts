@@ -8,8 +8,15 @@ import { z } from "zod";
 
 import { db } from "../../db/index.js";
 import { toolGeneration } from "../../db/schema/index.js";
+import type {
+  ToolReferenceImage,
+  ToolReferenceMapping,
+} from "../../db/schema/tool-generation.js";
 import { publicUrl } from "../../lib/public-url.js";
-import { TOOLS_UPLOAD_DIR } from "../../lib/uploads-dir.js";
+import {
+  TOOLS_REFS_DIR,
+  TOOLS_UPLOAD_DIR,
+} from "../../lib/uploads-dir.js";
 import { authenticatedProcedure, router } from "../init.js";
 
 const KIND = z.enum(["image", "video"]);
@@ -28,11 +35,11 @@ const MAX_FRAME_BYTES = 10 * 1024 * 1024;
 const N8N_VIDEO_START_TIMEOUT_MS = 60_000;
 const N8N_VIDEO_STATUS_TIMEOUT_MS = 60_000;
 
-function ensureContained(filePath: string) {
+function ensureContained(filePath: string, baseDir = TOOLS_UPLOAD_DIR) {
   const resolved = path.resolve(filePath);
   if (
-    resolved === TOOLS_UPLOAD_DIR ||
-    !resolved.startsWith(TOOLS_UPLOAD_DIR + path.sep)
+    resolved === baseDir ||
+    !resolved.startsWith(baseDir + path.sep)
   ) {
     throw new TRPCError({
       code: "INTERNAL_SERVER_ERROR",
@@ -126,6 +133,8 @@ async function callN8n(payload: {
   aspectRatio: string;
   requestId: string;
   userEmail: string | null | undefined;
+  references: ToolReferenceImage[];
+  referenceMapping: ToolReferenceMapping;
 }): Promise<N8nResponse> {
   const url = process.env.N8N_WEBHOOK_URL;
   const token = process.env.N8N_WEBHOOK_TOKEN;
@@ -177,14 +186,17 @@ async function callN8n(payload: {
   return json;
 }
 
-const generateImageInput = z.object({
-  prompt: z.string().min(1).max(2000),
-  aspectRatio: z.enum(IMAGE_ASPECT_RATIOS),
-});
-
 const framePayload = z.object({
   base64: z.string().min(1),
   mimeType: z.enum(ALLOWED_FRAME_MIME),
+});
+
+const MAX_REFERENCES = 6;
+
+const generateImageInput = z.object({
+  prompt: z.string().min(1).max(2000),
+  aspectRatio: z.enum(IMAGE_ASPECT_RATIOS),
+  references: z.array(framePayload).max(MAX_REFERENCES).optional().default([]),
 });
 
 const generateVideoInput = z.object({
@@ -381,6 +393,52 @@ export const toolsRouter = router({
       const userId = ctx.session.user.id;
       const requestId = randomUUID();
 
+      // Validasi ukuran tiap referensi (cap 10MB per gambar)
+      for (const ref of input.references) {
+        if (decodedByteLength(ref.base64) > MAX_FRAME_BYTES) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Referensi melebihi 10MB per gambar",
+          });
+        }
+      }
+
+      // Tulis referensi ke disk -> bangun {url, mimeType} untuk N8N.
+      const referenceImages: ToolReferenceImage[] = [];
+      if (input.references.length > 0) {
+        await fs.mkdir(TOOLS_REFS_DIR, { recursive: true });
+        for (let i = 0; i < input.references.length; i++) {
+          const ref = input.references[i];
+          const ext = extensionFromMime(ref.mimeType);
+          const refFilename = `${requestId}-${i}.${ext}`;
+          const refPath = ensureContained(
+            path.join(TOOLS_REFS_DIR, refFilename),
+            TOOLS_REFS_DIR,
+          );
+          await fs.writeFile(refPath, Buffer.from(ref.base64, "base64"));
+          referenceImages.push({
+            url: publicUrl(`/uploads/tools/refs/${refFilename}`)!,
+            mimeType: ref.mimeType,
+          });
+        }
+      }
+
+      // Parse `@N` di prompt ke mapping. Hanya N yang valid (1..references.length)
+      // yang masuk; sisanya silently di-skip agar user bebas mengetik tag.
+      const referenceMapping: ToolReferenceMapping = {};
+      const tagRegex = /@([1-6])/g;
+      const promptTags = new Set<string>();
+      for (const match of input.prompt.matchAll(tagRegex)) {
+        promptTags.add(match[0]);
+      }
+      for (const token of promptTags) {
+        const num = Number(token.slice(1));
+        const idx = num - 1;
+        if (idx >= 0 && idx < input.references.length) {
+          referenceMapping[token] = idx;
+        }
+      }
+
       let response: N8nResponse;
       try {
         response = await callN8n({
@@ -389,6 +447,8 @@ export const toolsRouter = router({
           aspectRatio: input.aspectRatio,
           requestId,
           userEmail: ctx.session.user.email ?? null,
+          references: referenceImages,
+          referenceMapping,
         });
       } catch (err) {
         // Catat row error supaya history tetap mencerminkan kejadian.
@@ -401,6 +461,8 @@ export const toolsRouter = router({
           status: "error",
           errorMessage:
             err instanceof Error ? err.message : "Unknown error",
+          referenceImages,
+          referenceMapping,
         });
         throw err;
       }
@@ -442,6 +504,8 @@ export const toolsRouter = router({
           fileSize: buffer.byteLength,
           requestId,
           status: "success",
+          referenceImages,
+          referenceMapping,
         })
         .returning();
 
@@ -451,6 +515,8 @@ export const toolsRouter = router({
         mimeType,
         requestId,
         createdAt: row.createdAt,
+        references: referenceImages,
+        referenceMapping,
       };
     }),
 
@@ -695,6 +761,28 @@ export const toolsRouter = router({
           });
         } catch {
           // path tidak valid — abaikan, lanjut hapus row
+        }
+      }
+
+      // Hapus referensi yang ditulis ke disk saat generate (best-effort).
+      const refs = Array.isArray(row.referenceImages)
+        ? (row.referenceImages as ToolReferenceImage[])
+        : [];
+      for (const ref of refs) {
+        const refUrl = ref.url ?? "";
+        const refMatch = refUrl.match(/\/uploads\/tools\/refs\/([^?#/]+)$/);
+        if (!refMatch) continue;
+        const refBasename = refMatch[1];
+        try {
+          const refPath = ensureContained(
+            path.join(TOOLS_REFS_DIR, refBasename),
+            TOOLS_REFS_DIR,
+          );
+          await fs.unlink(refPath).catch(() => {
+            /* sudah tidak ada */
+          });
+        } catch {
+          // skip
         }
       }
 

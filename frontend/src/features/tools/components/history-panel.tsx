@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { Download, X } from "lucide-react";
+import { Download, Maximize2, Plus, X } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,8 @@ type HistoryPanelProps = {
   entries: HistoryEntry[];
   onDelete: (id: number) => void;
   onSave: (entry: HistoryEntry) => void;
+  onExpand: (entry: HistoryEntry) => void;
+  onAddAsReference?: (entry: HistoryEntry) => void;
   isLoading?: boolean;
   className?: string;
 };
@@ -53,13 +55,46 @@ function formatTimestamp(ts: number) {
 function HistoryThumbnail({
   entry,
   kind,
+  onExpand,
+  onAddAsReference,
 }: {
   entry: HistoryEntry;
   kind: GenerateKind;
+  onExpand: (entry: HistoryEntry) => void;
+  onAddAsReference?: (entry: HistoryEntry) => void;
 }) {
   const aspectStr = entry.aspectRatio.replace(":", " / ");
 
   if (entry.resultUrl) {
+    const overlay = (
+      <div className="pointer-events-none absolute top-1 left-1 z-10 flex gap-1">
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onExpand(entry);
+          }}
+          aria-label="Perbesar preview"
+          className="pointer-events-auto inline-flex size-5 items-center justify-center border border-(--line) bg-(--background)/85 text-(--muted-foreground) backdrop-blur transition-colors hover:border-(--foreground) hover:text-(--foreground)"
+        >
+          <Maximize2 className="size-2.5" aria-hidden />
+        </button>
+        {kind === "image" && onAddAsReference ? (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onAddAsReference(entry);
+            }}
+            aria-label="Tambahkan sebagai referensi"
+            className="pointer-events-auto inline-flex size-5 items-center justify-center border border-(--line) bg-(--background)/85 text-(--muted-foreground) backdrop-blur transition-colors hover:border-(--foreground) hover:text-(--foreground)"
+          >
+            <Plus className="size-2.5" aria-hidden />
+          </button>
+        ) : null}
+      </div>
+    );
+
     if (kind === "image") {
       return (
         <div
@@ -74,18 +109,28 @@ function HistoryThumbnail({
             className="object-cover"
             unoptimized
           />
+          {overlay}
         </div>
       );
     }
+
     return (
-      <video
-        src={entry.resultUrl}
-        muted
-        playsInline
-        loop
-        className="w-full border border-(--line) bg-(--muted)/30 object-cover"
+      <div
+        className="relative w-full overflow-hidden border border-(--line) bg-(--muted)/30"
         style={{ aspectRatio: aspectStr }}
-      />
+      >
+        {/* Fragment #t=0.1 memaksa browser men-decode frame pertama agar tampil
+            sebagai poster, tanpa harus autoplay. preload=metadata bikin browser
+            cukup ambil header video, tidak download full file. */}
+        <video
+          src={`${entry.resultUrl}#t=0.1`}
+          preload="metadata"
+          muted
+          playsInline
+          className="absolute inset-0 size-full object-cover"
+        />
+        {overlay}
+      </div>
     );
   }
 
@@ -110,6 +155,8 @@ export function HistoryPanel({
   entries,
   onDelete,
   onSave,
+  onExpand,
+  onAddAsReference,
   isLoading = false,
   className,
 }: HistoryPanelProps) {
@@ -174,7 +221,12 @@ export function HistoryPanel({
                     </span>
                   </div>
 
-                  <HistoryThumbnail entry={entry} kind={kind} />
+                  <HistoryThumbnail
+                    entry={entry}
+                    kind={kind}
+                    onExpand={onExpand}
+                    onAddAsReference={onAddAsReference}
+                  />
 
                   {entry.prompt ? (
                     <p

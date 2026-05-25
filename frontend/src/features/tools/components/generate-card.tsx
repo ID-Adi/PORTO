@@ -2,7 +2,13 @@
 
 import { Image as ImageIcon, RotateCcw, Send, Video } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -13,6 +19,11 @@ import { cn } from "@/lib/utils";
 import { GeneratingAnimation } from "./generating-animation";
 import { HistoryPanel, type HistoryEntry } from "./history-panel";
 import { ImageDropzone, type ImageFile } from "./image-dropzone";
+import {
+  MediaExpandModal,
+  type MediaExpandTarget,
+} from "./media-expand-modal";
+import { REFERENCE_SLOTS, ReferenceRail } from "./reference-rail";
 
 export type GenerateKind = "image" | "video";
 
@@ -40,6 +51,8 @@ type PersistedSession = {
   // Untuk video image-to-video: dua frame referensi.
   firstFrame: ImageFile | null;
   lastFrame: ImageFile | null;
+  // Untuk image: maks 6 referensi yang bisa di-tag via @1..@6 di prompt.
+  references: (ImageFile | null)[];
 };
 
 const STORAGE_PREFIX = "porto.tools.session";
@@ -83,7 +96,25 @@ function defaultSession(kind: GenerateKind): PersistedSession {
     rowId: null,
     firstFrame: null,
     lastFrame: null,
+    references: Array.from({ length: REFERENCE_SLOTS }, () => null),
   };
+}
+
+function normalizeReferences(
+  raw: unknown,
+): (ImageFile | null)[] {
+  const out: (ImageFile | null)[] = Array.from(
+    { length: REFERENCE_SLOTS },
+    () => null,
+  );
+  if (!Array.isArray(raw)) return out;
+  for (let i = 0; i < REFERENCE_SLOTS; i++) {
+    const entry = raw[i];
+    if (entry && typeof entry === "object" && typeof (entry as ImageFile).base64 === "string") {
+      out[i] = entry as ImageFile;
+    }
+  }
+  return out;
 }
 
 function sanitizeFrameForPersist(frame: ImageFile | null): ImageFile | null {
@@ -118,6 +149,7 @@ function readSession(kind: GenerateKind): PersistedSession {
       rowId: parsed.rowId ?? null,
       firstFrame: parsed.firstFrame ?? null,
       lastFrame: parsed.lastFrame ?? null,
+      references: normalizeReferences((parsed as { references?: unknown }).references),
     };
   } catch {
     return fallback;
@@ -131,6 +163,9 @@ function writeSession(kind: GenerateKind, session: PersistedSession) {
       ...session,
       firstFrame: sanitizeFrameForPersist(session.firstFrame),
       lastFrame: sanitizeFrameForPersist(session.lastFrame),
+      // Cap each reference image; skip oversize via sanitize. Slot tetap di-preserve
+      // sebagai null agar index (badge nomor & tag @N) stabil di-reload.
+      references: session.references.map((r) => sanitizeFrameForPersist(r)),
     };
     window.localStorage.setItem(
       `${STORAGE_PREFIX}.${kind}`,
@@ -275,6 +310,233 @@ export function GenerateCard({ kind }: GenerateCardProps) {
     );
   }, []);
 
+  const setReference = useCallback(
+    (index: number, frame: ImageFile | null) => {
+      setSession((prev) => {
+        if (prev.status === "generating") return prev;
+        const next = prev.references.slice();
+        next[index] = frame;
+        return { ...prev, references: next };
+      });
+    },
+    [],
+  );
+
+  const addAsReference = useCallback(
+    async (entry: HistoryEntry) => {
+      if (!entry.resultUrl) {
+        toast.info("Hasil belum tersedia.");
+        return;
+      }
+      try {
+        // Lewat proxy /api/download untuk menghindari CORS saat fetch blob.
+        const proxied = `/api/download?url=${encodeURIComponent(entry.resultUrl)}`;
+        const res = await fetch(proxied);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const blob = await res.blob();
+        const mime = (blob.type || "image/png") as ImageFile["mimeType"];
+        if (
+          mime !== "image/jpeg" &&
+          mime !== "image/png" &&
+          mime !== "image/webp"
+        ) {
+          toast.error("Format tidak didukung sebagai referensi");
+          return;
+        }
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onerror = () => reject(new Error("Gagal membaca blob"));
+          reader.onload = () => resolve(reader.result as string);
+          reader.readAsDataURL(blob);
+        });
+        const base64 = dataUrl.slice(dataUrl.indexOf(",") + 1);
+        const fileName = `history-${entry.id}.${mime.split("/")[1]}`;
+        const file: ImageFile = { base64, mimeType: mime, dataUrl, fileName };
+
+        let placedAt = -1;
+        setSession((prev) => {
+          if (prev.status === "generating") return prev;
+          const next = prev.references.slice();
+          const emptyIdx = next.findIndex((r) => r === null);
+          if (emptyIdx < 0) return prev;
+          next[emptyIdx] = file;
+          placedAt = emptyIdx;
+          return { ...prev, references: next };
+        });
+        if (placedAt < 0) {
+          toast.info("Semua slot referensi sudah terisi");
+        } else {
+          toast.success(`Ditambahkan sebagai referensi #${placedAt + 1}`);
+        }
+      } catch (err) {
+        toast.error(
+          err instanceof Error
+            ? `Gagal menambah referensi: ${err.message}`
+            : "Gagal menambah referensi",
+        );
+      }
+    },
+    [],
+  );
+
+  const [expandTarget, setExpandTarget] = useState<MediaExpandTarget | null>(
+    null,
+  );
+
+  const onExpandHistory = useCallback(
+    (entry: HistoryEntry) => {
+      if (!entry.resultUrl) return;
+      setExpandTarget({
+        kind,
+        url: entry.resultUrl,
+        prompt: entry.prompt,
+        aspectRatio: entry.aspectRatio,
+      });
+    },
+    [kind],
+  );
+
+  const onExpandReference = useCallback(
+    (file: ImageFile, index: number) => {
+      setExpandTarget({
+        kind: "image",
+        url: file.dataUrl,
+        prompt: `Referensi #${index + 1} — ${file.fileName}`,
+      });
+    },
+    [],
+  );
+
+  // ====== @-mention state & helpers untuk Generate Image ======
+  // Memungkinkan user tag referensi via `@N` (N = 1..6). Popover muncul saat
+  // mengetik `@` lalu menampilkan referensi yang ter-isi; pilih untuk
+  // menyisipkan `@<id> ` pada posisi caret.
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const [mention, setMention] = useState<{
+    open: boolean;
+    activeIndex: number;
+    tokenStart: number;
+    tokenEnd: number;
+    query: string;
+  }>({ open: false, activeIndex: 0, tokenStart: 0, tokenEnd: 0, query: "" });
+
+  const filledReferences = useMemo(
+    () =>
+      session.references
+        .map((file, idx) => (file ? { file, idx } : null))
+        .filter((v): v is { file: ImageFile; idx: number } => v !== null),
+    [session.references],
+  );
+
+  const mentionCandidates = useMemo(() => {
+    if (!mention.open) return [];
+    const q = mention.query.trim();
+    if (!q) return filledReferences;
+    return filledReferences.filter((ref) =>
+      String(ref.idx + 1).startsWith(q),
+    );
+  }, [mention.open, mention.query, filledReferences]);
+
+  const closeMention = useCallback(() => {
+    setMention((prev) => (prev.open ? { ...prev, open: false } : prev));
+  }, []);
+
+  const detectMention = useCallback(
+    (value: string, caret: number) => {
+      if (kind !== "image") return;
+      const before = value.slice(0, caret);
+      const match = before.match(/@(\d*)$/);
+      if (!match) {
+        closeMention();
+        return;
+      }
+      const tokenStart = caret - match[0].length;
+      setMention({
+        open: true,
+        activeIndex: 0,
+        tokenStart,
+        tokenEnd: caret,
+        query: match[1] ?? "",
+      });
+    },
+    [kind, closeMention],
+  );
+
+  const insertMention = useCallback(
+    (refIndex: number) => {
+      const ta = textareaRef.current;
+      if (!ta) return;
+      const value = ta.value;
+      const before = value.slice(0, mention.tokenStart);
+      const after = value.slice(mention.tokenEnd);
+      const insertion = `@${refIndex + 1} `;
+      const next = before + insertion + after;
+      const nextCaret = before.length + insertion.length;
+      setPrompt(next);
+      closeMention();
+      requestAnimationFrame(() => {
+        ta.focus();
+        ta.setSelectionRange(nextCaret, nextCaret);
+      });
+    },
+    [mention.tokenStart, mention.tokenEnd, setPrompt, closeMention],
+  );
+
+  const onPromptChange = useCallback(
+    (event: React.ChangeEvent<HTMLTextAreaElement>) => {
+      const value = event.target.value;
+      setPrompt(value);
+      detectMention(value, event.target.selectionStart ?? value.length);
+    },
+    [setPrompt, detectMention],
+  );
+
+  const onPromptKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if (!mention.open || mentionCandidates.length === 0) {
+        if (mention.open && event.key === "Escape") {
+          event.preventDefault();
+          closeMention();
+        }
+        return;
+      }
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        setMention((prev) => ({
+          ...prev,
+          activeIndex: (prev.activeIndex + 1) % mentionCandidates.length,
+        }));
+      } else if (event.key === "ArrowUp") {
+        event.preventDefault();
+        setMention((prev) => ({
+          ...prev,
+          activeIndex:
+            (prev.activeIndex - 1 + mentionCandidates.length) %
+            mentionCandidates.length,
+        }));
+      } else if (event.key === "Enter" || event.key === "Tab") {
+        event.preventDefault();
+        const pick = mentionCandidates[mention.activeIndex];
+        if (pick) insertMention(pick.idx);
+      } else if (event.key === "Escape") {
+        event.preventDefault();
+        closeMention();
+      } else if (event.key === " ") {
+        // Spasi menutup popover, biarkan default karakter ter-input.
+        closeMention();
+      }
+    },
+    [mention.open, mention.activeIndex, mentionCandidates, insertMention, closeMention],
+  );
+
+  const onPromptSelect = useCallback(
+    (event: React.SyntheticEvent<HTMLTextAreaElement>) => {
+      const target = event.currentTarget;
+      detectMention(target.value, target.selectionStart ?? target.value.length);
+    },
+    [detectMention],
+  );
+
   // Polling status video saat status=generating untuk kind=video.
   const shouldPollVideo =
     kind === "video" && session.status === "generating" && session.rowId !== null;
@@ -353,6 +615,9 @@ export function GenerateCard({ kind }: GenerateCardProps) {
               | "3:4"
               | "16:9"
               | "9:16",
+            references: session.references
+              .filter((r): r is ImageFile => r !== null)
+              .map((r) => ({ base64: r.base64, mimeType: r.mimeType })),
           });
           setSession((prev) => ({
             ...prev,
@@ -443,6 +708,7 @@ export function GenerateCard({ kind }: GenerateCardProps) {
       session.aspectRatio,
       session.firstFrame,
       session.lastFrame,
+      session.references,
       kind,
       generateImage,
       generateVideo,
@@ -465,18 +731,40 @@ export function GenerateCard({ kind }: GenerateCardProps) {
   );
 
   const onSaveHistory = useCallback(
-    (entry: HistoryEntry) => {
+    async (entry: HistoryEntry) => {
       if (!entry.resultUrl) {
         toast.info("Hasil belum tersedia untuk disimpan.");
         return;
       }
-      const anchor = document.createElement("a");
-      anchor.href = entry.resultUrl;
-      anchor.download = `${kind}-${entry.id}.${kind === "image" ? "png" : "mp4"}`;
-      anchor.rel = "noopener";
-      document.body.appendChild(anchor);
-      anchor.click();
-      document.body.removeChild(anchor);
+      const ext = kind === "image" ? "png" : "mp4";
+      const fileName = `${kind}-${entry.id}.${ext}`;
+      try {
+        // Pakai proxy /api/download supaya server-side fetch + set
+        // Content-Disposition: attachment — menjamin browser men-download
+        // alih-alih membuka URL backend di tab baru.
+        const proxied = `/api/download?url=${encodeURIComponent(
+          entry.resultUrl,
+        )}&filename=${encodeURIComponent(fileName)}`;
+        const res = await fetch(proxied);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const blob = await res.blob();
+        const objectUrl = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = objectUrl;
+        anchor.download = fileName;
+        anchor.rel = "noopener";
+        document.body.appendChild(anchor);
+        anchor.click();
+        document.body.removeChild(anchor);
+        // Beri waktu browser mulai download sebelum revoke.
+        setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+      } catch (err) {
+        toast.error(
+          err instanceof Error
+            ? `Gagal mengunduh: ${err.message}`
+            : "Gagal mengunduh file",
+        );
+      }
     },
     [kind],
   );
@@ -537,6 +825,14 @@ export function GenerateCard({ kind }: GenerateCardProps) {
 
       <div className="screen-line-top px-4 py-4">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:gap-4">
+          {kind === "image" ? (
+            <ReferenceRail
+              values={session.references}
+              onChange={setReference}
+              onExpand={onExpandReference}
+              disabled={isGenerating}
+            />
+          ) : null}
           <div className="flex items-start justify-center lg:flex-1">
             <motion.div
               layout
@@ -611,6 +907,8 @@ export function GenerateCard({ kind }: GenerateCardProps) {
             entries={history}
             onDelete={onDeleteHistory}
             onSave={onSaveHistory}
+            onExpand={onExpandHistory}
+            onAddAsReference={kind === "image" ? addAsReference : undefined}
             isLoading={historyQuery.isPending}
           />
         </div>
@@ -703,15 +1001,76 @@ export function GenerateCard({ kind }: GenerateCardProps) {
             {session.prompt.length.toString().padStart(3, "0")} ch
           </span>
         </label>
-        <Textarea
-          id={`prompt-${kind}`}
-          value={session.prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          placeholder={copy.placeholder}
-          rows={3}
-          disabled={isGenerating}
-          className="resize-none font-mono text-xs leading-6"
-        />
+        <div className="relative">
+          <Textarea
+            ref={textareaRef}
+            id={`prompt-${kind}`}
+            value={session.prompt}
+            onChange={onPromptChange}
+            onKeyDown={onPromptKeyDown}
+            onSelect={onPromptSelect}
+            onBlur={() => {
+              // Delay agar onClick di popover sempat terjadi sebelum tutup.
+              setTimeout(closeMention, 120);
+            }}
+            placeholder={copy.placeholder}
+            rows={3}
+            disabled={isGenerating}
+            className="resize-none font-mono text-xs leading-6"
+          />
+          {kind === "image" && mention.open ? (
+            mentionCandidates.length === 0 ? (
+              <div className="absolute top-full left-0 z-30 mt-1 w-64 max-w-full border border-(--line) bg-(--background) px-3 py-2 font-mono text-[10px] tracking-[0.14em] text-(--muted-foreground) uppercase">
+                Tidak ada referensi terisi
+              </div>
+            ) : (
+              <ul
+                role="listbox"
+                aria-label="Pilih referensi"
+                className="absolute top-full left-0 z-30 mt-1 max-h-56 w-64 max-w-full overflow-y-auto border border-(--line) bg-(--background) shadow-sm"
+              >
+                {mentionCandidates.map((ref, i) => {
+                  const active = i === mention.activeIndex;
+                  return (
+                    <li key={ref.idx}>
+                      <button
+                        type="button"
+                        role="option"
+                        aria-selected={active}
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          insertMention(ref.idx);
+                        }}
+                        onMouseEnter={() =>
+                          setMention((prev) => ({ ...prev, activeIndex: i }))
+                        }
+                        className={cn(
+                          "flex w-full items-center gap-2 px-2 py-1.5 text-left font-mono text-[11px] transition-colors",
+                          active
+                            ? "bg-(--foreground) text-(--background)"
+                            : "text-(--foreground) hover:bg-(--muted)/60",
+                        )}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={ref.file.dataUrl}
+                          alt=""
+                          className="size-6 shrink-0 border border-(--line) object-cover"
+                        />
+                        <span className="font-semibold tabular-nums">
+                          @{ref.idx + 1}
+                        </span>
+                        <span className="line-clamp-1 text-[10px] opacity-80">
+                          {ref.file.fileName}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )
+          ) : null}
+        </div>
 
         <div className="flex items-center justify-between gap-2">
           <div className="font-mono text-[10px] tracking-[0.18em] text-(--muted-foreground) uppercase">
@@ -755,6 +1114,14 @@ export function GenerateCard({ kind }: GenerateCardProps) {
           </div>
         </div>
       </form>
+
+      <MediaExpandModal
+        open={expandTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setExpandTarget(null);
+        }}
+        target={expandTarget}
+      />
     </article>
   );
 }

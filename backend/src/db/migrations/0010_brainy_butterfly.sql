@@ -1,0 +1,2 @@
+ALTER TABLE "tool_generation" ADD COLUMN "reference_images" jsonb DEFAULT '[]'::jsonb NOT NULL;--> statement-breakpoint
+ALTER TABLE "tool_generation" ADD COLUMN "reference_mapping" jsonb DEFAULT '{}'::jsonb NOT NULL;
