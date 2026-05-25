@@ -223,6 +223,17 @@ type VideoStatusResponse = {
   error?: string;
 };
 
+function isRetryableVideoStatusError(error: string): boolean {
+  return [
+    /high load/i,
+    /try again later/i,
+    /temporarily unavailable/i,
+    /service unavailable/i,
+    /\bunavailable\b/i,
+    /rate limit/i,
+  ].some((pattern) => pattern.test(error));
+}
+
 async function callN8nVideoStart(payload: {
   source: "porto-web";
   requestId: string;
@@ -647,6 +658,12 @@ export const toolsRouter = router({
       }
 
       if (status.error) {
+        if (isRetryableVideoStatusError(status.error)) {
+          return {
+            status: "pending" as const,
+            transientError: status.error,
+          };
+        }
         await db
           .update(toolGeneration)
           .set({ status: "error", errorMessage: status.error })

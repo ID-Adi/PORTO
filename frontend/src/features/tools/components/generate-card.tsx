@@ -257,11 +257,11 @@ export function GenerateCard({ kind }: GenerateCardProps) {
   );
   const [hasMounted, setHasMounted] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState<number | null>(null);
+  const [addingReferenceId, setAddingReferenceId] = useState<number | null>(null);
 
   useEffect(() => {
     // Hidrasi state dari localStorage pasca-mount; tidak bisa di-init di
     // useState karena localStorage tidak tersedia saat SSR.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSession(readSession(kind));
     setHasMounted(true);
   }, [kind]);
@@ -328,6 +328,22 @@ export function GenerateCard({ kind }: GenerateCardProps) {
         toast.info("Hasil belum tersedia.");
         return;
       }
+      if (session.status === "generating") {
+        toast.info("Tunggu proses generate selesai.");
+        return;
+      }
+      if (addingReferenceId !== null) {
+        toast.info("Sedang menambahkan referensi.");
+        return;
+      }
+
+      const emptySlot = session.references.findIndex((ref) => ref === null);
+      if (emptySlot < 0) {
+        toast.info("Semua slot referensi sudah terisi");
+        return;
+      }
+
+      setAddingReferenceId(entry.id);
       try {
         // Lewat proxy /api/download untuk menghindari CORS saat fetch blob.
         const proxied = `/api/download?url=${encodeURIComponent(entry.resultUrl)}`;
@@ -374,9 +390,11 @@ export function GenerateCard({ kind }: GenerateCardProps) {
             ? `Gagal menambah referensi: ${err.message}`
             : "Gagal menambah referensi",
         );
+      } finally {
+        setAddingReferenceId(null);
       }
     },
-    [],
+    [addingReferenceId, session.references, session.status],
   );
 
   const [expandTarget, setExpandTarget] = useState<MediaExpandTarget | null>(
@@ -551,13 +569,19 @@ export function GenerateCard({ kind }: GenerateCardProps) {
     },
   );
 
+  const videoTransientMessage =
+    kind === "video" &&
+    videoStatusQuery.data?.status === "pending" &&
+    "transientError" in videoStatusQuery.data
+      ? videoStatusQuery.data.transientError
+      : null;
+
   useEffect(() => {
     if (!shouldPollVideo) return;
     const data = videoStatusQuery.data;
     if (!data) return;
     if (data.status === "success" && data.url) {
       // Polling tRPC adalah sumber eksternal — kita sinkronkan ke state lokal.
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSession((prev) => ({
         ...prev,
         status: "idle",
@@ -909,6 +933,7 @@ export function GenerateCard({ kind }: GenerateCardProps) {
             onSave={onSaveHistory}
             onExpand={onExpandHistory}
             onAddAsReference={kind === "image" ? addAsReference : undefined}
+            addingReferenceId={addingReferenceId}
             isLoading={historyQuery.isPending}
           />
         </div>
@@ -1074,9 +1099,11 @@ export function GenerateCard({ kind }: GenerateCardProps) {
 
         <div className="flex items-center justify-between gap-2">
           <div className="font-mono text-[10px] tracking-[0.18em] text-(--muted-foreground) uppercase">
-            {isGenerating && elapsedSeconds
-              ? `elapsed ${elapsedSeconds}s`
-              : "ready to dispatch"}
+            {videoTransientMessage
+              ? "veo busy · retrying"
+              : isGenerating && elapsedSeconds
+                ? `elapsed ${elapsedSeconds}s`
+                : "ready to dispatch"}
           </div>
           <div className="flex items-center gap-2">
             <Button

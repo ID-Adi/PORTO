@@ -24,6 +24,7 @@ type HistoryPanelProps = {
   onSave: (entry: HistoryEntry) => void;
   onExpand: (entry: HistoryEntry) => void;
   onAddAsReference?: (entry: HistoryEntry) => void;
+  addingReferenceId?: number | null;
   isLoading?: boolean;
   className?: string;
 };
@@ -57,11 +58,13 @@ function HistoryThumbnail({
   kind,
   onExpand,
   onAddAsReference,
+  isAddingReference = false,
 }: {
   entry: HistoryEntry;
   kind: GenerateKind;
   onExpand: (entry: HistoryEntry) => void;
   onAddAsReference?: (entry: HistoryEntry) => void;
+  isAddingReference?: boolean;
 }) {
   const aspectStr = entry.aspectRatio.replace(":", " / ");
 
@@ -87,9 +90,11 @@ function HistoryThumbnail({
               onAddAsReference(entry);
             }}
             aria-label="Tambahkan sebagai referensi"
-            className="pointer-events-auto inline-flex size-5 items-center justify-center border border-(--line) bg-(--background)/85 text-(--muted-foreground) backdrop-blur transition-colors hover:border-(--foreground) hover:text-(--foreground)"
+            aria-busy={isAddingReference}
+            disabled={isAddingReference}
+            className="pointer-events-auto inline-flex size-5 items-center justify-center border border-(--line) bg-(--background)/85 text-(--muted-foreground) backdrop-blur transition-colors hover:border-(--foreground) hover:text-(--foreground) disabled:pointer-events-none disabled:opacity-70"
           >
-            <Plus className="size-2.5" aria-hidden />
+            <Plus className={cn("size-2.5", isAddingReference && "opacity-0")} aria-hidden />
           </button>
         ) : null}
       </div>
@@ -110,6 +115,15 @@ function HistoryThumbnail({
             unoptimized
           />
           {overlay}
+          {isAddingReference ? (
+            <div
+              role="progressbar"
+              aria-label="Menambahkan referensi"
+              className="absolute inset-x-0 bottom-0 z-20 h-1 overflow-hidden bg-(--muted)"
+            >
+              <div className="h-full w-1/2 animate-pulse bg-(--foreground)" />
+            </div>
+          ) : null}
         </div>
       );
     }
@@ -157,6 +171,7 @@ export function HistoryPanel({
   onSave,
   onExpand,
   onAddAsReference,
+  addingReferenceId = null,
   isLoading = false,
   className,
 }: HistoryPanelProps) {
@@ -226,6 +241,7 @@ export function HistoryPanel({
                     kind={kind}
                     onExpand={onExpand}
                     onAddAsReference={onAddAsReference}
+                    isAddingReference={addingReferenceId === entry.id}
                   />
 
                   {entry.prompt ? (
