@@ -34,6 +34,7 @@ type HistoryPanelProps = {
   onAddAsReference?: (entry: HistoryEntry) => void;
   onAddToVideoFrame?: (entry: HistoryEntry, target: VideoFrameTarget) => void;
   addingReferenceId?: number | null;
+  downloadProgress?: Record<number, number>;
   isLoading?: boolean;
   modeToggle?: ReactNode;
   className?: string;
@@ -72,6 +73,7 @@ function HistoryThumbnail({
   onAddAsReference,
   onAddToVideoFrame,
   isAddingReference = false,
+  downloadPct,
 }: {
   entry: HistoryEntry;
   kind: GenerateKind;
@@ -79,8 +81,10 @@ function HistoryThumbnail({
   onAddAsReference?: (entry: HistoryEntry) => void;
   onAddToVideoFrame?: (entry: HistoryEntry, target: VideoFrameTarget) => void;
   isAddingReference?: boolean;
+  downloadPct?: number;
 }) {
   const aspectStr = entry.aspectRatio.replace(":", " / ");
+  const isDownloading = downloadPct !== undefined;
 
   if (entry.resultUrl) {
     const overlay = (
@@ -159,6 +163,28 @@ function HistoryThumbnail({
       </div>
     );
 
+    // Overlay progress download — tampil di atas thumbnail saat sedang mengunduh.
+    const downloadOverlay = isDownloading ? (
+      <div
+        role="progressbar"
+        aria-valuenow={downloadPct}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-label="Mengunduh"
+        className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-(--background)/75 backdrop-blur-[2px]"
+      >
+        <span className="font-mono text-[13px] font-semibold tabular-nums text-(--foreground)">
+          {downloadPct}%
+        </span>
+        <div className="absolute inset-x-0 bottom-0 h-[3px] bg-(--muted)">
+          <div
+            className="h-full bg-(--foreground) transition-[width] duration-150"
+            style={{ width: `${downloadPct}%` }}
+          />
+        </div>
+      </div>
+    ) : null;
+
     if (kind === "image") {
       return (
         <div
@@ -174,6 +200,7 @@ function HistoryThumbnail({
             unoptimized
           />
           {overlay}
+          {downloadOverlay}
           {isAddingReference ? (
             <div
               role="progressbar"
@@ -192,17 +219,21 @@ function HistoryThumbnail({
         className="relative w-full overflow-hidden border border-(--line) bg-(--muted)/30"
         style={{ aspectRatio: aspectStr }}
       >
-        {/* Fragment #t=0.1 memaksa browser men-decode frame pertama agar tampil
-            sebagai poster, tanpa harus autoplay. preload=metadata bikin browser
-            cukup ambil header video, tidak download full file. */}
+        {/* onLoadedMetadata seek ke 0.1s lebih reliable dibanding media fragment
+            URI (#t=0.1) — bekerja di semua browser termasuk yang tidak support
+            range request pada saat parsing URL. */}
         <video
-          src={`${entry.resultUrl}#t=0.1`}
+          src={entry.resultUrl}
           preload="metadata"
           muted
           playsInline
+          onLoadedMetadata={(e) => {
+            e.currentTarget.currentTime = 0.1;
+          }}
           className="absolute inset-0 size-full object-cover"
         />
         {overlay}
+        {downloadOverlay}
       </div>
     );
   }
@@ -232,6 +263,7 @@ export function HistoryPanel({
   onAddAsReference,
   onAddToVideoFrame,
   addingReferenceId = null,
+  downloadProgress = {},
   isLoading = false,
   modeToggle,
   className,
@@ -278,71 +310,78 @@ export function HistoryPanel({
         ) : (
           <ul className="divide-y divide-(--line)">
             <AnimatePresence initial={false}>
-              {entries.map((entry) => (
-                <motion.li
-                  key={entry.id}
-                  layout
-                  initial={{ opacity: 0, y: -6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, x: -16, height: 0, marginTop: 0 }}
-                  transition={{ duration: 0.2, ease: "easeOut" }}
-                  className="flex flex-col gap-2 p-3"
-                >
-                  <div className="flex items-center justify-between gap-2 font-mono text-[10px] tracking-[0.14em] uppercase">
-                    <time
-                      dateTime={new Date(entry.createdAt).toISOString()}
-                      className="text-(--muted-foreground)"
-                    >
-                      {formatTimestamp(entry.createdAt)}
-                    </time>
-                    <span className="text-(--muted-foreground)">
-                      {entry.aspectRatio}
-                    </span>
-                  </div>
+              {entries.map((entry) => {
+                const dlPct = downloadProgress[entry.id];
+                const isDownloading = dlPct !== undefined;
+                return (
+                  <motion.li
+                    key={entry.id}
+                    layout
+                    initial={{ opacity: 0, y: -6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, x: -16, height: 0, marginTop: 0 }}
+                    transition={{ duration: 0.2, ease: "easeOut" }}
+                    className="flex flex-col gap-2 p-3"
+                  >
+                    <div className="flex items-center justify-between gap-2 font-mono text-[10px] tracking-[0.14em] uppercase">
+                      <time
+                        dateTime={new Date(entry.createdAt).toISOString()}
+                        className="text-(--muted-foreground)"
+                      >
+                        {formatTimestamp(entry.createdAt)}
+                      </time>
+                      <span className="text-(--muted-foreground)">
+                        {entry.aspectRatio}
+                      </span>
+                    </div>
 
-                  <HistoryThumbnail
-                    entry={entry}
-                    kind={kind}
-                    onExpand={onExpand}
-                    onAddAsReference={onAddAsReference}
-                    onAddToVideoFrame={onAddToVideoFrame}
-                    isAddingReference={addingReferenceId === entry.id}
-                  />
+                    <HistoryThumbnail
+                      entry={entry}
+                      kind={kind}
+                      onExpand={onExpand}
+                      onAddAsReference={onAddAsReference}
+                      onAddToVideoFrame={onAddToVideoFrame}
+                      isAddingReference={addingReferenceId === entry.id}
+                      downloadPct={dlPct}
+                    />
 
-                  {entry.prompt ? (
-                    <p
-                      title={entry.prompt}
-                      className="line-clamp-2 font-mono text-[10px] leading-4 text-(--muted-foreground)"
-                    >
-                      {entry.prompt}
-                    </p>
-                  ) : null}
+                    {entry.prompt ? (
+                      <p
+                        title={entry.prompt}
+                        className="line-clamp-2 font-mono text-[10px] leading-4 text-(--muted-foreground)"
+                      >
+                        {entry.prompt}
+                      </p>
+                    ) : null}
 
-                  <div className="flex items-center gap-1">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => onSave(entry)}
-                      className="h-7 flex-1 gap-1 px-2 font-mono text-[10px] tracking-[0.12em] uppercase"
-                    >
-                      <Download className="size-3" aria-hidden />
-                      Save
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => onDelete(entry.id)}
-                      aria-label="Hapus entri history"
-                      className="h-7 gap-1 px-2 font-mono text-[10px] tracking-[0.12em] text-(--muted-foreground) uppercase hover:text-rose-500"
-                    >
-                      <X className="size-3" aria-hidden />
-                      Delete
-                    </Button>
-                  </div>
-                </motion.li>
-              ))}
+                    <div className="flex items-center gap-1">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => onSave(entry)}
+                        disabled={isDownloading}
+                        className="h-7 flex-1 gap-1 px-2 font-mono text-[10px] tracking-[0.12em] uppercase disabled:opacity-60"
+                      >
+                        <Download className="size-3" aria-hidden />
+                        {isDownloading ? `${dlPct}%` : "Save"}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => onDelete(entry.id)}
+                        disabled={isDownloading}
+                        aria-label="Hapus entri history"
+                        className="h-7 gap-1 px-2 font-mono text-[10px] tracking-[0.12em] text-(--muted-foreground) uppercase hover:text-rose-500 disabled:opacity-50"
+                      >
+                        <X className="size-3" aria-hidden />
+                        Delete
+                      </Button>
+                    </div>
+                  </motion.li>
+                );
+              })}
             </AnimatePresence>
           </ul>
         )}

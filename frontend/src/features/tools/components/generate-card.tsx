@@ -63,7 +63,6 @@ const STORAGE_PREFIX = "porto.tools.session";
 const VIDEO_HISTORY_MODE_STORAGE_KEY = "porto.tools.videoHistoryMode";
 const SESSION_TTL_MS = 1000 * 60 * 30; // 30 menit
 const MAX_PERSISTED_FRAME_BYTES = 2 * 1024 * 1024; // skip persist frame > 2MB
-const VIDEO_PREVIEW_FRAGMENT = "#t=0.1";
 
 const ASPECT_OPTIONS: Record<GenerateKind, ReadonlyArray<AspectOption>> = {
   image: [
@@ -247,11 +246,6 @@ function buildPreviewStyle(value: string, kind: GenerateKind): React.CSSProperti
   };
 }
 
-function videoPreviewSrc(url: string) {
-  const hashIndex = url.indexOf("#");
-  return `${hashIndex >= 0 ? url.slice(0, hashIndex) : url}${VIDEO_PREVIEW_FRAGMENT}`;
-}
-
 async function historyEntryToImageFile(entry: HistoryEntry): Promise<ImageFile> {
   if (!entry.resultUrl) throw new Error("Hasil belum tersedia");
   // Lewat proxy /api/download untuk menghindari CORS saat fetch blob.
@@ -385,6 +379,7 @@ export function GenerateCard({ kind }: GenerateCardProps) {
   const [hasMounted, setHasMounted] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState<number | null>(null);
   const [addingReferenceId, setAddingReferenceId] = useState<number | null>(null);
+  const [downloadProgress, setDownloadProgress] = useState<Record<number, number>>({});
 
   useEffect(() => {
     // Hidrasi state dari localStorage pasca-mount; tidak bisa di-init di
@@ -470,6 +465,7 @@ export function GenerateCard({ kind }: GenerateCardProps) {
         return;
       }
 
+      // Cek ketersediaan slot sebelum async — ini adalah ground-truth pre-check.
       const emptySlot = session.references.findIndex((ref) => ref === null);
       if (emptySlot < 0) {
         toast.info("Semua slot referensi sudah terisi");
@@ -480,21 +476,18 @@ export function GenerateCard({ kind }: GenerateCardProps) {
       try {
         const file = await historyEntryToImageFile(entry);
 
-        let placedAt = -1;
+        // Gunakan functional update agar selalu membaca state terbaru (prev),
+        // bukan closure — menghindari race condition di React 18 concurrent mode.
         setSession((prev) => {
           if (prev.status === "generating") return prev;
           const next = prev.references.slice();
           const emptyIdx = next.findIndex((r) => r === null);
           if (emptyIdx < 0) return prev;
           next[emptyIdx] = file;
-          placedAt = emptyIdx;
           return { ...prev, references: next };
         });
-        if (placedAt < 0) {
-          toast.info("Semua slot referensi sudah terisi");
-        } else {
-          toast.success(`Ditambahkan sebagai referensi #${placedAt + 1}`);
-        }
+        // Pre-check sudah memastikan ada slot kosong, jadi toast selalu success.
+        toast.success(`Ditambahkan sebagai referensi #${emptySlot + 1}`);
       } catch (err) {
         toast.error(
           err instanceof Error
@@ -917,18 +910,58 @@ export function GenerateCard({ kind }: GenerateCardProps) {
         toast.info("Hasil belum tersedia untuk disimpan.");
         return;
       }
+      // Jangan duplikasi download yang sudah berjalan untuk entry yang sama.
+      if (downloadProgress[entry.id] !== undefined) return;
+
       const ext = historyKind === "image" ? "png" : "mp4";
       const fileName = `${historyKind}-${entry.id}.${ext}`;
+
+      const clearProgress = (id: number) => {
+        setDownloadProgress((prev) => {
+          const next = { ...prev };
+          delete next[id];
+          return next;
+        });
+      };
+
       try {
-        // Pakai proxy /api/download supaya server-side fetch + set
-        // Content-Disposition: attachment — menjamin browser men-download
-        // alih-alih membuka URL backend di tab baru.
         const proxied = `/api/download?url=${encodeURIComponent(
           entry.resultUrl,
         )}&filename=${encodeURIComponent(fileName)}`;
+
+        setDownloadProgress((prev) => ({ ...prev, [entry.id]: 0 }));
+
         const res = await fetch(proxied);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const blob = await res.blob();
+
+        const contentLength = res.headers.get("Content-Length");
+        const total = contentLength ? parseInt(contentLength, 10) : null;
+
+        let blob: Blob;
+
+        if (total && total > 0 && res.body) {
+          // Stream dengan progress — aktif saat Content-Length tersedia.
+          const reader = res.body.getReader();
+          const chunks: BlobPart[] = [];
+          let loaded = 0;
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            chunks.push(value);
+            loaded += value.length;
+            const pct = Math.min(99, Math.round((loaded / total) * 100));
+            setDownloadProgress((prev) => ({ ...prev, [entry.id]: pct }));
+          }
+          blob = new Blob(chunks);
+        } else {
+          // Fallback tanpa streaming progress — tampilkan indeterminate (0%).
+          blob = await res.blob();
+        }
+
+        // Selesai — setel ke 100 sesaat sebelum hapus overlay.
+        setDownloadProgress((prev) => ({ ...prev, [entry.id]: 100 }));
+
         const objectUrl = URL.createObjectURL(blob);
         const anchor = document.createElement("a");
         anchor.href = objectUrl;
@@ -937,9 +970,12 @@ export function GenerateCard({ kind }: GenerateCardProps) {
         document.body.appendChild(anchor);
         anchor.click();
         document.body.removeChild(anchor);
-        // Beri waktu browser mulai download sebelum revoke.
         setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+
+        // Hapus overlay progress setelah sebentar agar user sempat lihat "100%".
+        setTimeout(() => clearProgress(entry.id), 1200);
       } catch (err) {
+        clearProgress(entry.id);
         toast.error(
           err instanceof Error
             ? `Gagal mengunduh: ${err.message}`
@@ -947,7 +983,7 @@ export function GenerateCard({ kind }: GenerateCardProps) {
         );
       }
     },
-    [kind],
+    [kind, downloadProgress],
   );
 
   const onReset = useCallback(() => {
@@ -1015,7 +1051,9 @@ export function GenerateCard({ kind }: GenerateCardProps) {
             source: `history-${latestHistoryEntry.id}`,
           }
         : null;
-  const previewAspectRatio = previewEntry?.aspectRatio ?? session.aspectRatio;
+  // Ukuran container preview selalu mengikuti aspect ratio yang DIPILIH user,
+  // bukan aspect ratio hasil lama — agar preview langsung update saat diubah.
+  const previewAspectRatio = session.aspectRatio;
 
   return (
     <article className="flex flex-col border-(--line) bg-(--background)">
@@ -1126,12 +1164,16 @@ export function GenerateCard({ kind }: GenerateCardProps) {
                       />
                     ) : (
                       <video
-                        src={videoPreviewSrc(previewEntry.resultUrl)}
+                        key={previewEntry.resultUrl}
+                        src={previewEntry.resultUrl}
                         controls
-                        preload="metadata"
-                        muted
-                        loop
+                        preload="auto"
                         playsInline
+                        onLoadedMetadata={(e) => {
+                          // Seek ke frame pertama agar tampil sebagai poster
+                          // tanpa harus menunggu browser decode manual.
+                          e.currentTarget.currentTime = 0.1;
+                        }}
                         className="absolute inset-0 size-full object-cover"
                       />
                     )}
@@ -1166,6 +1208,7 @@ export function GenerateCard({ kind }: GenerateCardProps) {
                 : undefined
             }
             addingReferenceId={addingReferenceId}
+            downloadProgress={downloadProgress}
             isLoading={historyPanelIsLoading}
             modeToggle={historyModeToggle}
           />
