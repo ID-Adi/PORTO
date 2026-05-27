@@ -3,8 +3,16 @@
 import Image from "next/image";
 import { Download, Maximize2, Plus, X } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
+import type { ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 
 import type { GenerateKind } from "./generate-card";
@@ -24,10 +32,14 @@ type HistoryPanelProps = {
   onSave: (entry: HistoryEntry) => void;
   onExpand: (entry: HistoryEntry) => void;
   onAddAsReference?: (entry: HistoryEntry) => void;
+  onAddToVideoFrame?: (entry: HistoryEntry, target: VideoFrameTarget) => void;
   addingReferenceId?: number | null;
   isLoading?: boolean;
+  modeToggle?: ReactNode;
   className?: string;
 };
+
+export type VideoFrameTarget = "first" | "last";
 
 const MONTH_ID_SHORT = [
   "Jan",
@@ -58,12 +70,14 @@ function HistoryThumbnail({
   kind,
   onExpand,
   onAddAsReference,
+  onAddToVideoFrame,
   isAddingReference = false,
 }: {
   entry: HistoryEntry;
   kind: GenerateKind;
   onExpand: (entry: HistoryEntry) => void;
   onAddAsReference?: (entry: HistoryEntry) => void;
+  onAddToVideoFrame?: (entry: HistoryEntry, target: VideoFrameTarget) => void;
   isAddingReference?: boolean;
 }) {
   const aspectStr = entry.aspectRatio.replace(":", " / ");
@@ -82,7 +96,52 @@ function HistoryThumbnail({
         >
           <Maximize2 className="size-2.5" aria-hidden />
         </button>
-        {kind === "image" && onAddAsReference ? (
+        {kind === "image" && onAddToVideoFrame ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                }}
+                aria-label="Tambahkan ke frame video"
+                aria-busy={isAddingReference}
+                disabled={isAddingReference}
+                className="pointer-events-auto inline-flex size-5 items-center justify-center border border-(--line) bg-(--background)/85 text-(--muted-foreground) backdrop-blur transition-colors hover:border-(--foreground) hover:text-(--foreground) disabled:pointer-events-none disabled:opacity-70"
+              >
+                <Plus
+                  className={cn("size-2.5", isAddingReference && "opacity-0")}
+                  aria-hidden
+                />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="start"
+              className="w-36 rounded-none border border-(--line) bg-(--background) p-1"
+            >
+              <DropdownMenuGroup>
+                <DropdownMenuItem
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onAddToVideoFrame(entry, "first");
+                  }}
+                  className="rounded-none font-mono text-[10px] tracking-[0.12em] text-(--foreground) uppercase"
+                >
+                  First Frame
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onAddToVideoFrame(entry, "last");
+                  }}
+                  className="rounded-none font-mono text-[10px] tracking-[0.12em] text-(--foreground) uppercase"
+                >
+                  End Frame
+                </DropdownMenuItem>
+              </DropdownMenuGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : kind === "image" && onAddAsReference ? (
           <button
             type="button"
             onClick={(e) => {
@@ -171,8 +230,10 @@ export function HistoryPanel({
   onSave,
   onExpand,
   onAddAsReference,
+  onAddToVideoFrame,
   addingReferenceId = null,
   isLoading = false,
+  modeToggle,
   className,
 }: HistoryPanelProps) {
   return (
@@ -188,9 +249,12 @@ export function HistoryPanel({
         <span className="font-mono text-[10px] tracking-[0.2em] text-(--muted-foreground) uppercase">
           History
         </span>
-        <span className="font-mono text-[10px] tabular-nums text-(--muted-foreground)">
-          {entries.length.toString().padStart(2, "0")}
-        </span>
+        <div className="flex items-center gap-2">
+          {modeToggle}
+          <span className="font-mono text-[10px] tabular-nums text-(--muted-foreground)">
+            {entries.length.toString().padStart(2, "0")}
+          </span>
+        </div>
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto">
@@ -241,6 +305,7 @@ export function HistoryPanel({
                     kind={kind}
                     onExpand={onExpand}
                     onAddAsReference={onAddAsReference}
+                    onAddToVideoFrame={onAddToVideoFrame}
                     isAddingReference={addingReferenceId === entry.id}
                   />
 

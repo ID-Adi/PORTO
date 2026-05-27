@@ -17,7 +17,11 @@ import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 
 import { GeneratingAnimation } from "./generating-animation";
-import { HistoryPanel, type HistoryEntry } from "./history-panel";
+import {
+  HistoryPanel,
+  type HistoryEntry,
+  type VideoFrameTarget,
+} from "./history-panel";
 import { ImageDropzone, type ImageFile } from "./image-dropzone";
 import {
   MediaExpandModal,
@@ -56,6 +60,7 @@ type PersistedSession = {
 };
 
 const STORAGE_PREFIX = "porto.tools.session";
+const VIDEO_HISTORY_MODE_STORAGE_KEY = "porto.tools.videoHistoryMode";
 const SESSION_TTL_MS = 1000 * 60 * 30; // 30 menit
 const MAX_PERSISTED_FRAME_BYTES = 2 * 1024 * 1024; // skip persist frame > 2MB
 const VIDEO_PREVIEW_FRAGMENT = "#t=0.1";
@@ -177,6 +182,25 @@ function writeSession(kind: GenerateKind, session: PersistedSession) {
   }
 }
 
+function readVideoHistoryMode(): GenerateKind {
+  if (typeof window === "undefined") return "video";
+  try {
+    const raw = window.localStorage.getItem(VIDEO_HISTORY_MODE_STORAGE_KEY);
+    return raw === "image" ? "image" : "video";
+  } catch {
+    return "video";
+  }
+}
+
+function writeVideoHistoryMode(mode: GenerateKind) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(VIDEO_HISTORY_MODE_STORAGE_KEY, mode);
+  } catch {
+    // ignore quota errors
+  }
+}
+
 const COPY: Record<
   GenerateKind,
   {
@@ -226,6 +250,32 @@ function buildPreviewStyle(value: string, kind: GenerateKind): React.CSSProperti
 function videoPreviewSrc(url: string) {
   const hashIndex = url.indexOf("#");
   return `${hashIndex >= 0 ? url.slice(0, hashIndex) : url}${VIDEO_PREVIEW_FRAGMENT}`;
+}
+
+async function historyEntryToImageFile(entry: HistoryEntry): Promise<ImageFile> {
+  if (!entry.resultUrl) throw new Error("Hasil belum tersedia");
+  // Lewat proxy /api/download untuk menghindari CORS saat fetch blob.
+  const proxied = `/api/download?url=${encodeURIComponent(entry.resultUrl)}`;
+  const res = await fetch(proxied);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const blob = await res.blob();
+  const mime = (blob.type || "image/png") as ImageFile["mimeType"];
+  if (
+    mime !== "image/jpeg" &&
+    mime !== "image/png" &&
+    mime !== "image/webp"
+  ) {
+    throw new Error("Format tidak didukung sebagai frame");
+  }
+  const dataUrl = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Gagal membaca blob"));
+    reader.onload = () => resolve(reader.result as string);
+    reader.readAsDataURL(blob);
+  });
+  const base64 = dataUrl.slice(dataUrl.indexOf(",") + 1);
+  const fileName = `history-${entry.id}.${mime.split("/")[1]}`;
+  return { base64, mimeType: mime, dataUrl, fileName };
 }
 
 function VideoFrameRail({
@@ -280,6 +330,30 @@ type GenerateCardProps = {
   kind: GenerateKind;
 };
 
+type HistoryRow = {
+  id: number;
+  status: string;
+  fileUrl: string | null;
+  createdAt: unknown;
+  prompt: string;
+  aspectRatio: string;
+};
+
+function mapHistoryRows(rows: readonly HistoryRow[]): HistoryEntry[] {
+  return rows
+    .filter((row) => row.status === "success" && row.fileUrl)
+    .map((row) => {
+      const ts = new Date(row.createdAt as string).getTime();
+      return {
+        id: row.id,
+        createdAt: Number.isFinite(ts) ? ts : 0,
+        prompt: row.prompt,
+        aspectRatio: row.aspectRatio,
+        resultUrl: row.fileUrl,
+      };
+    });
+}
+
 export function GenerateCard({ kind }: GenerateCardProps) {
   const copy = COPY[kind];
   const Icon = copy.icon;
@@ -287,28 +361,27 @@ export function GenerateCard({ kind }: GenerateCardProps) {
 
   const utils = trpc.useUtils();
   const historyQuery = trpc.tools.listMyHistory.useQuery({ kind });
+  const imageHistoryForVideoQuery = trpc.tools.listMyHistory.useQuery(
+    { kind: "image" },
+    { enabled: kind === "video" },
+  );
   const generateImage = trpc.tools.generateImage.useMutation();
   const generateVideo = trpc.tools.generateVideo.useMutation();
   const deleteEntry = trpc.tools.deleteMyEntry.useMutation();
 
   const history = useMemo<HistoryEntry[]>(() => {
-    return (historyQuery.data ?? [])
-      .filter((row) => row.status === "success" && row.fileUrl)
-      .map((row) => {
-        const ts = new Date(row.createdAt as unknown as string).getTime();
-        return {
-          id: row.id,
-          createdAt: Number.isFinite(ts) ? ts : 0,
-          prompt: row.prompt,
-          aspectRatio: row.aspectRatio,
-          resultUrl: row.fileUrl,
-        };
-      });
+    return mapHistoryRows(historyQuery.data ?? []);
   }, [historyQuery.data]);
+
+  const imageHistoryForVideo = useMemo<HistoryEntry[]>(() => {
+    return mapHistoryRows(imageHistoryForVideoQuery.data ?? []);
+  }, [imageHistoryForVideoQuery.data]);
 
   const [session, setSession] = useState<PersistedSession>(() =>
     defaultSession(kind),
   );
+  const [videoHistoryMode, setVideoHistoryMode] =
+    useState<GenerateKind>("video");
   const [hasMounted, setHasMounted] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState<number | null>(null);
   const [addingReferenceId, setAddingReferenceId] = useState<number | null>(null);
@@ -317,6 +390,7 @@ export function GenerateCard({ kind }: GenerateCardProps) {
     // Hidrasi state dari localStorage pasca-mount; tidak bisa di-init di
     // useState karena localStorage tidak tersedia saat SSR.
     setSession(readSession(kind));
+    if (kind === "video") setVideoHistoryMode(readVideoHistoryMode());
     setHasMounted(true);
   }, [kind]);
 
@@ -324,6 +398,11 @@ export function GenerateCard({ kind }: GenerateCardProps) {
     if (!hasMounted) return;
     writeSession(kind, session);
   }, [kind, session, hasMounted]);
+
+  useEffect(() => {
+    if (!hasMounted || kind !== "video") return;
+    writeVideoHistoryMode(videoHistoryMode);
+  }, [kind, videoHistoryMode, hasMounted]);
 
   useEffect(() => {
     if (session.status !== "generating" || !session.startedAt) {
@@ -399,29 +478,7 @@ export function GenerateCard({ kind }: GenerateCardProps) {
 
       setAddingReferenceId(entry.id);
       try {
-        // Lewat proxy /api/download untuk menghindari CORS saat fetch blob.
-        const proxied = `/api/download?url=${encodeURIComponent(entry.resultUrl)}`;
-        const res = await fetch(proxied);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const blob = await res.blob();
-        const mime = (blob.type || "image/png") as ImageFile["mimeType"];
-        if (
-          mime !== "image/jpeg" &&
-          mime !== "image/png" &&
-          mime !== "image/webp"
-        ) {
-          toast.error("Format tidak didukung sebagai referensi");
-          return;
-        }
-        const dataUrl = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onerror = () => reject(new Error("Gagal membaca blob"));
-          reader.onload = () => resolve(reader.result as string);
-          reader.readAsDataURL(blob);
-        });
-        const base64 = dataUrl.slice(dataUrl.indexOf(",") + 1);
-        const fileName = `history-${entry.id}.${mime.split("/")[1]}`;
-        const file: ImageFile = { base64, mimeType: mime, dataUrl, fileName };
+        const file = await historyEntryToImageFile(entry);
 
         let placedAt = -1;
         setSession((prev) => {
@@ -451,15 +508,61 @@ export function GenerateCard({ kind }: GenerateCardProps) {
     [addingReferenceId, session.references, session.status],
   );
 
+  const addHistoryImageToVideoFrame = useCallback(
+    async (entry: HistoryEntry, target: VideoFrameTarget) => {
+      if (!entry.resultUrl) {
+        toast.info("Hasil belum tersedia.");
+        return;
+      }
+      if (session.status === "generating") {
+        toast.info("Tunggu proses generate selesai.");
+        return;
+      }
+      if (addingReferenceId !== null) {
+        toast.info("Sedang menambahkan frame.");
+        return;
+      }
+
+      setAddingReferenceId(entry.id);
+      try {
+        const file = await historyEntryToImageFile(entry);
+        let applied = false;
+        setSession((prev) => {
+          if (prev.status === "generating") return prev;
+          applied = true;
+          return target === "first"
+            ? { ...prev, firstFrame: file }
+            : { ...prev, lastFrame: file };
+        });
+        if (applied) {
+          toast.success(
+            target === "first" ? "Masuk ke First Frame" : "Masuk ke End Frame",
+          );
+        } else {
+          toast.info("Tunggu proses generate selesai.");
+        }
+      } catch (err) {
+        toast.error(
+          err instanceof Error
+            ? `Gagal menambah frame: ${err.message}`
+            : "Gagal menambah frame",
+        );
+      } finally {
+        setAddingReferenceId(null);
+      }
+    },
+    [addingReferenceId, session.status],
+  );
+
   const [expandTarget, setExpandTarget] = useState<MediaExpandTarget | null>(
     null,
   );
 
   const onExpandHistory = useCallback(
-    (entry: HistoryEntry) => {
+    (entry: HistoryEntry, targetKind: GenerateKind = kind) => {
       if (!entry.resultUrl) return;
       setExpandTarget({
-        kind,
+        kind: targetKind,
         url: entry.resultUrl,
         prompt: entry.prompt,
         aspectRatio: entry.aspectRatio,
@@ -795,10 +898,10 @@ export function GenerateCard({ kind }: GenerateCardProps) {
   );
 
   const onDeleteHistory = useCallback(
-    async (id: number) => {
+    async (id: number, historyKind: GenerateKind = kind) => {
       try {
         await deleteEntry.mutateAsync({ id });
-        await utils.tools.listMyHistory.invalidate({ kind });
+        await utils.tools.listMyHistory.invalidate({ kind: historyKind });
       } catch (err) {
         toast.error(
           err instanceof Error ? err.message : "Gagal menghapus entri.",
@@ -809,13 +912,13 @@ export function GenerateCard({ kind }: GenerateCardProps) {
   );
 
   const onSaveHistory = useCallback(
-    async (entry: HistoryEntry) => {
+    async (entry: HistoryEntry, historyKind: GenerateKind = kind) => {
       if (!entry.resultUrl) {
         toast.info("Hasil belum tersedia untuk disimpan.");
         return;
       }
-      const ext = kind === "image" ? "png" : "mp4";
-      const fileName = `${kind}-${entry.id}.${ext}`;
+      const ext = historyKind === "image" ? "png" : "mp4";
+      const fileName = `${historyKind}-${entry.id}.${ext}`;
       try {
         // Pakai proxy /api/download supaya server-side fetch + set
         // Content-Disposition: attachment — menjamin browser men-download
@@ -852,6 +955,49 @@ export function GenerateCard({ kind }: GenerateCardProps) {
   }, [kind]);
 
   const isGenerating = session.status === "generating";
+  const historyPanelKind =
+    kind === "video" && videoHistoryMode === "image" ? "image" : kind;
+  const historyPanelEntries =
+    historyPanelKind === "image" && kind === "video"
+      ? imageHistoryForVideo
+      : history;
+  const historyPanelIsLoading =
+    historyPanelKind === "image" && kind === "video"
+      ? imageHistoryForVideoQuery.isPending
+      : historyQuery.isPending;
+  const historyModeToggle =
+    kind === "video" ? (
+      <div
+        role="group"
+        aria-label="Mode history"
+        className="inline-flex border border-(--line)"
+      >
+        {([
+          { value: "video" as const, label: "History video", icon: Video },
+          { value: "image" as const, label: "History image", icon: ImageIcon },
+        ]).map(({ value, label, icon: ModeIcon }) => {
+          const active = videoHistoryMode === value;
+          return (
+            <button
+              key={value}
+              type="button"
+              aria-label={label}
+              title={label}
+              aria-pressed={active}
+              onClick={() => setVideoHistoryMode(value)}
+              className={cn(
+                "inline-flex size-6 items-center justify-center text-(--muted-foreground) transition-colors [&+button]:border-l [&+button]:border-(--line)",
+                active
+                  ? "bg-(--foreground) text-(--background)"
+                  : "hover:text-(--foreground)",
+              )}
+            >
+              <ModeIcon className="size-3" aria-hidden />
+            </button>
+          );
+        })}
+      </div>
+    ) : null;
   const latestHistoryEntry = history[0] ?? null;
   const previewEntry =
     session.resultUrl !== null
@@ -1008,14 +1154,20 @@ export function GenerateCard({ kind }: GenerateCardProps) {
           </div>
 
           <HistoryPanel
-            kind={kind}
-            entries={history}
-            onDelete={onDeleteHistory}
-            onSave={onSaveHistory}
-            onExpand={onExpandHistory}
+            kind={historyPanelKind}
+            entries={historyPanelEntries}
+            onDelete={(id) => onDeleteHistory(id, historyPanelKind)}
+            onSave={(entry) => onSaveHistory(entry, historyPanelKind)}
+            onExpand={(entry) => onExpandHistory(entry, historyPanelKind)}
             onAddAsReference={kind === "image" ? addAsReference : undefined}
+            onAddToVideoFrame={
+              kind === "video" && historyPanelKind === "image"
+                ? addHistoryImageToVideoFrame
+                : undefined
+            }
             addingReferenceId={addingReferenceId}
-            isLoading={historyQuery.isPending}
+            isLoading={historyPanelIsLoading}
+            modeToggle={historyModeToggle}
           />
         </div>
       </div>

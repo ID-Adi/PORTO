@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 
 import { SiteShell } from "@/layout/site-shell";
 import {
-  Panel,
   PanelHeader,
   PanelTitle,
   PanelTitleSup,
@@ -23,7 +22,7 @@ export default function ToolsPage() {
   return (
     <SiteShell>
       <div className="page-frame">
-        <Panel className="before:content-none after:content-none">
+        <section className="border-x border-(--line)">
           <PanelHeader className="py-6 text-center">
             <PanelTitle className="text-balance">
               Tools PAWA - ADI
@@ -32,7 +31,7 @@ export default function ToolsPage() {
           </PanelHeader>
 
           <ToolsWorkshop />
-        </Panel>
+        </section>
       </div>
     </SiteShell>
   );
