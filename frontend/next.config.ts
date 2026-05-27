@@ -10,6 +10,13 @@ const rootDirectory = path.dirname(fileURLToPath(import.meta.url));
 const workspaceRoot = path.resolve(rootDirectory, "..");
 
 const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:4002";
+const legacyUploadHostname = "porto-api.pawa.my.id";
+const legacyUploadUrl = `https://${legacyUploadHostname}`;
+const cloudflareInsightsScriptUrl = "https://static.cloudflareinsights.com";
+const cloudflareInsightsConnectUrl = "https://cloudflareinsights.com";
+// Font & script Perplexity diinjeksi Cloudflare Zaraz / AI assistant widget
+const perplexityCdn = "https://frontend-cdn.perplexity.ai";
+const perplexityWildcard = "https://*.perplexity.ai";
 
 // Parse backend URL untuk membuat allow-listed remotePattern + CSP source.
 const backendRemotePattern = (() => {
@@ -32,6 +39,8 @@ const connectSrc = [
   backendUrl,
   "https://api.github.com",
   "https://*.pawa.my.id",
+  cloudflareInsightsConnectUrl,
+  perplexityWildcard,
 ].join(" ");
 
 const imgSrc = [
@@ -41,6 +50,28 @@ const imgSrc = [
   "https://cdn.simpleicons.org",
   "https://img.icons8.com",
   backendUrl,
+  legacyUploadUrl,
+].join(" ");
+
+const fontSrc = [
+  "'self'",
+  "data:",
+  perplexityCdn,
+].join(" ");
+
+const scriptSrc = [
+  "'self'",
+  "'unsafe-inline'",
+  "'unsafe-eval'",
+  cloudflareInsightsScriptUrl,
+  perplexityWildcard,
+].join(" ");
+
+const scriptSrcElem = [
+  "'self'",
+  "'unsafe-inline'",
+  cloudflareInsightsScriptUrl,
+  perplexityWildcard,
 ].join(" ");
 
 const csp = [
@@ -50,11 +81,12 @@ const csp = [
   "frame-ancestors 'none'",
   "object-src 'none'",
   `img-src ${imgSrc}`,
-  "font-src 'self' data:",
+  `font-src ${fontSrc}`,
   "style-src 'self' 'unsafe-inline'",
   // Next.js menyuntikkan inline bootstrap script & runtime; unsafe-inline tetap
   // dibutuhkan sampai migrasi ke nonce-based CSP.
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+  `script-src ${scriptSrc}`,
+  `script-src-elem ${scriptSrcElem}`,
   `connect-src ${connectSrc}`,
 ].join("; ");
 
@@ -67,7 +99,7 @@ const securityHeaders = [
     value: "max-age=63072000; includeSubDomains; preload",
   },
   {
-    key: "Permissions-Policy",
+    key:    "Permissions-Policy",
     value: "camera=(), microphone=(), geolocation=(), interest-cohort=()",
   },
   { key: "Content-Security-Policy", value: csp },
@@ -85,6 +117,10 @@ const nextConfig: NextConfig = {
       {
         protocol: "https",
         hostname: "img.icons8.com",
+      },
+      {
+        protocol: "https",
+        hostname: legacyUploadHostname,
       },
       // Backend menjadi authority untuk file dinamis (uploads, generations).
       // Pattern di-derive dari NEXT_PUBLIC_BACKEND_URL build-time.
