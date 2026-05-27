@@ -7,10 +7,6 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
-function videoProxySrc(url: string): string {
-  return `/api/video?url=${encodeURIComponent(url)}`;
-}
-
 export type MediaExpandTarget = {
   kind: "image" | "video";
   url: string;
@@ -60,9 +56,8 @@ export function MediaExpandModal({
           ) : target?.kind === "video" && target.url ? (
             <video
               key={target.url}
-              src={videoProxySrc(target.url)}
+              src={target.url}
               controls
-              autoPlay
               playsInline
               className="block max-h-[78vh] w-auto max-w-full object-contain"
             />

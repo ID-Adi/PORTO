@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { Download, Maximize2, Plus, X } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import type { ReactNode } from "react";
+import { type ReactNode, useCallback, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -13,12 +13,56 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useInView } from "@/hooks/use-in-view";
 import { cn } from "@/lib/utils";
 
 import type { GenerateKind } from "./generate-card";
 
-function videoProxySrc(url: string): string {
-  return `/api/video?url=${encodeURIComponent(url)}`;
+function VideoThumb({ src, className }: { src: string; className?: string }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [frameReady, setFrameReady] = useState(false);
+  const { ref: wrapRef, isInView } = useInView({
+    once: true,
+    rootMargin: "300px 0px",
+  });
+
+  const handlePlay = useCallback(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    v.pause();
+    v.currentTime = 0.1;
+  }, []);
+
+  const handleSeeked = useCallback(() => {
+    setFrameReady(true);
+  }, []);
+
+  return (
+    <div ref={wrapRef as React.RefObject<HTMLDivElement>} className={cn("relative size-full", className)}>
+      {isInView && (
+        <video
+          ref={videoRef}
+          src={src}
+          muted
+          playsInline
+          autoPlay
+          preload="auto"
+          onPlay={handlePlay}
+          onSeeked={handleSeeked}
+          className={cn(
+            "absolute inset-0 size-full object-cover transition-opacity duration-200",
+            frameReady ? "opacity-100" : "opacity-0",
+          )}
+        />
+      )}
+      {!frameReady && (
+        <div
+          aria-hidden
+          className="absolute inset-0 bg-[repeating-linear-gradient(45deg,var(--color-line)_0,var(--color-line)_1px,transparent_1px,transparent_6px)] opacity-30"
+        />
+      )}
+    </div>
+  );
 }
 
 export type HistoryEntry = {
@@ -223,18 +267,7 @@ function HistoryThumbnail({
         className="relative w-full overflow-hidden border border-(--line) bg-(--muted)/30"
         style={{ aspectRatio: aspectStr }}
       >
-        {/* Proxy ke /api/video agar browser bisa range-request:
-            preload=metadata ambil header, lalu seek 0.1s untuk poster frame. */}
-        <video
-          src={videoProxySrc(entry.resultUrl)}
-          preload="metadata"
-          muted
-          playsInline
-          onLoadedMetadata={(e) => {
-            e.currentTarget.currentTime = 0.1;
-          }}
-          className="absolute inset-0 size-full object-cover"
-        />
+        <VideoThumb src={entry.resultUrl} />
         {overlay}
         {downloadOverlay}
       </div>

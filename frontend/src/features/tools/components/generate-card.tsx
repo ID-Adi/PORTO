@@ -238,10 +238,6 @@ const COPY: Record<
 
 // Proxy video ke /api/video agar browser bisa range-request (seek + stream)
 // tanpa CORS issue — semua request melewati origin frontend.
-function videoProxySrc(url: string): string {
-  return `/api/video?url=${encodeURIComponent(url)}`;
-}
-
 function buildPreviewStyle(value: string, kind: GenerateKind): React.CSSProperties {
   const aspect = findAspect(kind, value);
   // width = min(100%, 28rem, calc(60vh * ratio)) menjaga agar height tidak
@@ -1171,13 +1167,11 @@ export function GenerateCard({ kind }: GenerateCardProps) {
                     ) : (
                       <video
                         key={previewEntry.resultUrl}
-                        src={videoProxySrc(previewEntry.resultUrl)}
+                        src={previewEntry.resultUrl}
                         controls
                         preload="auto"
+                        muted
                         playsInline
-                        onLoadedMetadata={(e) => {
-                          e.currentTarget.currentTime = 0.1;
-                        }}
                         className="absolute inset-0 size-full object-cover"
                       />
                     )}
