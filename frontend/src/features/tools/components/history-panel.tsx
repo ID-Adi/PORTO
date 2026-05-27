@@ -17,6 +17,10 @@ import { cn } from "@/lib/utils";
 
 import type { GenerateKind } from "./generate-card";
 
+function videoProxySrc(url: string): string {
+  return `/api/video?url=${encodeURIComponent(url)}`;
+}
+
 export type HistoryEntry = {
   id: number;
   createdAt: number;
@@ -219,11 +223,10 @@ function HistoryThumbnail({
         className="relative w-full overflow-hidden border border-(--line) bg-(--muted)/30"
         style={{ aspectRatio: aspectStr }}
       >
-        {/* onLoadedMetadata seek ke 0.1s lebih reliable dibanding media fragment
-            URI (#t=0.1) — bekerja di semua browser termasuk yang tidak support
-            range request pada saat parsing URL. */}
+        {/* Proxy ke /api/video agar browser bisa range-request:
+            preload=metadata ambil header, lalu seek 0.1s untuk poster frame. */}
         <video
-          src={entry.resultUrl}
+          src={videoProxySrc(entry.resultUrl)}
           preload="metadata"
           muted
           playsInline
