@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-const DEFAULT_EXCALIDRAW_URL = "http://localhost:3002";
+const DEFAULT_EXCALIDRAW_URL = "/canvas";
 
 export default function ExcalidrawRedirectPage() {
   redirect(

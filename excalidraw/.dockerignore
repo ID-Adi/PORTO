@@ -4,6 +4,8 @@
 !.eslintrc.json
 !.npmrc
 !.prettierrc
+!Dockerfile.canvas
+!nginx.canvas.conf
 !excalidraw-app/
 !package.json
 !public/

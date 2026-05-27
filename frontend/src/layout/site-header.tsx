@@ -31,6 +31,8 @@ export function SiteHeader() {
     { href: "/", label: "Home", icon: HomeIcon },
     { href: "/tools", label: "Tools", icon: Wrench },
   ] as const;
+  const canvasHref = process.env.NEXT_PUBLIC_EXCALIDRAW_URL ?? "/canvas";
+  const isCanvasActive = pathname.startsWith("/canvas");
 
   const railItems = navItems.filter((item) => item.href !== "/");
 
@@ -85,20 +87,20 @@ export function SiteHeader() {
               })}
             </div>
 
-            <Link
-              href="/excalidraw"
-              aria-current={isActive("/excalidraw") ? "page" : undefined}
+            <a
+              href={canvasHref}
+              aria-current={isCanvasActive ? "page" : undefined}
               aria-label="Canvas"
               className={cn(
                 "inline-flex h-8 items-center gap-2 px-2 font-mono text-[12px] font-medium transition-[background-color,color]",
-                isActive("/excalidraw")
+                isCanvasActive
                   ? "bg-muted/60 text-foreground"
                   : "text-muted-foreground hover:bg-muted/40 hover:text-foreground"
               )}
             >
               <Frame className="size-3.5" aria-hidden />
               <span className="hidden md:inline">Canvas</span>
-            </Link>
+            </a>
 
             <div className="ml-auto flex items-center">
               <div className="hidden items-center border-r border-line pr-2 md:flex">

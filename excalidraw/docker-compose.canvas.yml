@@ -1,0 +1,12 @@
+services:
+  excalidraw:
+    build:
+      context: .
+      dockerfile: Dockerfile.canvas
+      args:
+        NODE_ENV: production
+        VITE_APP_BASE_PATH: /canvas/
+    container_name: porto-excalidraw
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3003:80"
