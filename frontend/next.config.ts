@@ -9,7 +9,7 @@ const rootDirectory = path.dirname(fileURLToPath(import.meta.url));
 // project root, dan output file tracing inklusif untuk monorepo deploy.
 const workspaceRoot = path.resolve(rootDirectory, "..");
 
-const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:4001";
+const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:4002";
 
 // Parse backend URL untuk membuat allow-listed remotePattern + CSP source.
 const backendRemotePattern = (() => {

@@ -5,6 +5,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 
 import { auth } from "./auth/index.js";
+import { registerPasswordResetRoutes } from "./routes/password-reset.js";
 import { uploadRoute } from "./routes/upload.js";
 import { createTRPCContext } from "./trpc/init.js";
 import { appRouter } from "./trpc/routers/_app.js";
@@ -29,7 +30,14 @@ app.use(
   }),
 );
 
-app.on(["GET", "POST"], "/api/auth/**", (c) => auth.handler(c.req.raw));
+// Password reset routes — MUST be registered as individual app.post()
+// (not app.route() with a sub-router) so better-auth's own /api/auth/*
+// routes still work. Hono sub-routers intercept unmatched routes with 404.
+registerPasswordResetRoutes(app);
+
+// Better-auth catch-all for all other /api/auth/* routes.
+// Uses a regex route param (Hono doesn't support ** wildcards).
+app.all("/api/auth/:path{.+}", (c) => auth.handler(c.req.raw));
 
 app.route("/api/upload", uploadRoute);
 

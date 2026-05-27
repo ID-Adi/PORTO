@@ -19,13 +19,12 @@ import { cn } from "@/lib/utils";
 
 const adminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL;
 
-function getInitials(name?: string | null, email?: string | null) {
-  const source = name?.trim() || email?.split("@")[0]?.trim() || "User";
-  const parts = source.split(/\s+/).filter(Boolean);
-  if (parts.length > 1) {
-    return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
-  }
-  return source.slice(0, 2).toUpperCase();
+function ProfileIcon() {
+  return (
+    <span className="inline-flex size-8 items-center justify-center border border-line transition-colors group-hover/button:border-foreground/40">
+      <UserRound className="size-4" aria-hidden />
+    </span>
+  );
 }
 
 export function HeaderProfileMenu() {
@@ -33,7 +32,6 @@ export function HeaderProfileMenu() {
   const { data: session, isPending } = authClient.useSession();
   const user = session?.user;
   const dashboardHref = user?.email === adminEmail ? "/admin" : "/dashboard";
-  const initials = getInitials(user?.name, user?.email);
 
   async function handleLogout() {
     await authClient.signOut();
@@ -43,8 +41,8 @@ export function HeaderProfileMenu() {
   }
 
   const triggerClassName = cn(
-    "h-8 gap-2 rounded-none border-l border-line px-2 font-mono text-[12px] font-medium text-muted-foreground hover:bg-muted/40 hover:text-foreground",
-    "data-[state=open]:bg-muted/60 data-[state=open]:text-foreground",
+    "h-8 w-8 rounded-none border-none p-0 font-mono text-muted-foreground hover:bg-transparent hover:text-foreground",
+    "data-[state=open]:bg-transparent data-[state=open]:text-foreground",
   );
 
   if (!user) {
@@ -57,10 +55,7 @@ export function HeaderProfileMenu() {
         className={triggerClassName}
         onClick={() => router.push("/login?redirect=/dashboard")}
       >
-        <span className="inline-flex size-5 items-center justify-center border border-line text-[10px]">
-          <UserRound className="size-3" aria-hidden />
-        </span>
-        <span className="hidden lg:inline">Profile</span>
+        <ProfileIcon />
       </Button>
     );
   }
@@ -74,12 +69,7 @@ export function HeaderProfileMenu() {
           aria-label="Open profile menu"
           className={triggerClassName}
         >
-          <span className="inline-flex size-5 items-center justify-center border border-line text-[10px]">
-            {initials}
-          </span>
-          <span className="hidden max-w-28 truncate lg:inline">
-            {user.name || user.email}
-          </span>
+          <ProfileIcon />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent

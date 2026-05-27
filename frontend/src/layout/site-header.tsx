@@ -140,8 +140,13 @@ export function SiteHeader() {
                 </a>
               </Button>
 
-              <HeaderProfileMenu />
-              <ThemeToggle />
+              <section
+                aria-label="Theme and profile controls"
+                className="flex items-center"
+              >
+                <ThemeToggle />
+                <HeaderProfileMenu />
+              </section>
             </div>
           </div>
 

@@ -14,7 +14,7 @@ Backend service untuk PORTO, berjalan terpisah dari Next.js frontend.
 
 - Docker Desktop (running)
 - Node.js + pnpm 10
-- Port `4001` (backend) & `5433` (Postgres) bebas
+- Port `4002` (backend) & `5433` (Postgres) bebas
 
 ## Setup pertama kali
 
@@ -34,8 +34,8 @@ Edit `backend/.env` dan isi:
 | `ADMIN_PASSWORD` | `openssl rand -base64 16 \| tr -d '/+=' \| head -c 20` (atau pilih sendiri) |
 | `ADMIN_EMAIL` | default `admin@porto.dev`, bebas diganti |
 | `DATABASE_URL` | default sudah cocok dengan `docker-compose.yml` |
-| `BETTER_AUTH_URL` | default `http://localhost:4001` |
-| `PORT` | default `4001` |
+| `BETTER_AUTH_URL` | default `http://localhost:4002` |
+| `PORT` | default `4002` |
 
 > ⚠️ `backend/.env` ter-gitignore — kredensial tetap aman, tidak akan ter-commit.
 
@@ -55,7 +55,7 @@ pnpm --dir backend db:seed:admin # 5. Seed admin user dari ADMIN_EMAIL/PASSWORD 
 pnpm dev:backend
 ```
 
-Backend live di `http://localhost:4001`.
+Backend live di `http://localhost:4002`.
 
 ## Workflow harian
 
@@ -96,7 +96,7 @@ pnpm --dir backend db:seed:admin
 
 | Service | Port | Catatan |
 |---|---|---|
-| Backend | `4001` | Hono + tRPC |
+| Backend | `4002` | Hono + tRPC |
 | Postgres | `5433` | dipetakan dari container 5432 untuk hindari konflik dengan Postgres lokal |
 | DB name | `porto_db` | user `porto` / password `porto_secret` (dev only) |
 

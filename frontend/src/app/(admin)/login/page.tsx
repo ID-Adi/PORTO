@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { LogIn } from "lucide-react";
 import { toast } from "sonner";
@@ -25,6 +25,19 @@ function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [pending, setPending] = useState(false);
+
+  useEffect(() => {
+    if (searchParams.get("reset") === "success") {
+      toast.success(
+        "Password berhasil diubah. Silakan login dengan password baru.",
+        { duration: 6000 },
+      );
+      // Bersihkan param dari URL tanpa reload halaman
+      const url = new URL(window.location.href);
+      url.searchParams.delete("reset");
+      window.history.replaceState({}, "", url.toString());
+    }
+  }, [searchParams]);
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -88,9 +101,7 @@ function LoginForm() {
                     />
                     <button
                       type="button"
-                      onClick={() =>
-                        toast.info("Change password will be available soon")
-                      }
+                      onClick={() => router.push("/change-password")}
                       className="font-mono text-[11px] tracking-[0.12em] text-muted-foreground uppercase underline-offset-4 transition-colors hover:text-foreground hover:underline"
                     >
                       Change password
