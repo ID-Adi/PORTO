@@ -1,0 +1,117 @@
+/*
+ * Excalidraw CSS overrides — disesuaikan dengan Porto design system
+ * Monochrome, square borders, Geist typography, oklch color palette
+ */
+
+.canvas-porto-wrapper {
+  --color-primary: oklch(0.141 0.005 285.823);
+  --color-primary-darker: oklch(0.1 0.005 285.823);
+  --color-primary-light: oklch(0.967 0.001 286.375);
+  --color-primary-contrast-value: 250, 250, 250;
+
+  --color-surface-low: oklch(1 0 0);
+  --color-surface-mid: oklch(0.985 0 0);
+  --color-surface-high: oklch(0.967 0.001 286.375);
+  --color-surface-highest: oklch(0.92 0.004 286.32);
+
+  --color-on-surface: oklch(0.141 0.005 285.823);
+  --color-on-surface-muted: oklch(0.552 0.016 285.938);
+  --color-brand: oklch(0.141 0.005 285.823);
+  --color-brand-hover: oklch(0.21 0.006 285.885);
+
+  /* Border radius — Porto pakai 0 (square) */
+  --border-radius-lg: 0px;
+  --border-radius-md: 0px;
+  --border-radius-sm: 0px;
+
+  /* Typography */
+  --font-family-sans: var(--font-geist-sans), "Inter", "Segoe UI", sans-serif;
+  --font-family-monospace: var(--font-geist-mono), "SF Mono", monospace;
+
+  /* Overlay */
+  --overlay-bg-color: oklch(1 0 0 / 90%);
+}
+
+.dark .canvas-porto-wrapper {
+  --color-primary: oklch(0.985 0 0);
+  --color-primary-darker: oklch(1 0 0);
+  --color-primary-light: oklch(0.274 0.006 286.033);
+  --color-primary-contrast-value: 20, 20, 23;
+
+  --color-surface-low: oklch(0.141 0.005 285.823);
+  --color-surface-mid: oklch(0.21 0.006 285.885);
+  --color-surface-high: oklch(0.274 0.006 286.033);
+  --color-surface-highest: oklch(0.32 0.006 286.033);
+
+  --color-on-surface: oklch(0.985 0 0);
+  --color-on-surface-muted: oklch(0.705 0.015 286.067);
+  --color-brand: oklch(0.985 0 0);
+  --color-brand-hover: oklch(0.92 0.004 286.32);
+
+  --overlay-bg-color: oklch(0.141 0.005 285.823 / 90%);
+}
+
+/* Isi penuh container */
+.canvas-porto-wrapper .excalidraw-wrapper,
+.canvas-porto-wrapper .excalidraw {
+  height: 100%;
+}
+
+/* Hilangkan border radius pada toolbar, panel, popup */
+.canvas-porto-wrapper .Island,
+.canvas-porto-wrapper .ToolIcon,
+.canvas-porto-wrapper .buttonList button,
+.canvas-porto-wrapper .Popover,
+.canvas-porto-wrapper .context-menu,
+.canvas-porto-wrapper .Dialog,
+.canvas-porto-wrapper .Modal,
+.canvas-porto-wrapper .Tooltip__container {
+  border-radius: 0 !important;
+}
+
+/* Toolbar — tipis, border bottom saja */
+.canvas-porto-wrapper .App-toolbar-container {
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  border: 1px solid var(--color-surface-highest) !important;
+}
+
+/* Tool icon aktif */
+.canvas-porto-wrapper .ToolIcon.is-selected {
+  background-color: var(--color-primary) !important;
+  color: var(--color-primary-contrast-value) !important;
+  border-radius: 0 !important;
+}
+
+/* Hilangkan shadow pada panel */
+.canvas-porto-wrapper .Island {
+  box-shadow: none !important;
+  border: 1px solid var(--color-surface-highest) !important;
+}
+
+/* Scrollbar — minimal */
+.canvas-porto-wrapper ::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+.canvas-porto-wrapper ::-webkit-scrollbar-track {
+  background: transparent;
+}
+.canvas-porto-wrapper ::-webkit-scrollbar-thumb {
+  background: var(--color-surface-highest);
+}
+
+/* Font pada label dan menu */
+.canvas-porto-wrapper .ToolIcon__label,
+.canvas-porto-wrapper .Island label,
+.canvas-porto-wrapper .buttonList button {
+  font-family: var(--font-family-monospace);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+/* Sembunyikan brand logo bawaan Excalidraw */
+.canvas-porto-wrapper .encrypted-icon,
+.canvas-porto-wrapper .footer-center {
+  display: none !important;
+}
