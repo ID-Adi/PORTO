@@ -53,6 +53,15 @@ const imgSrc = [
   legacyUploadUrl,
 ].join(" ");
 
+// media-src mengatur <video>/<audio> — tanpa directive ini fallback ke
+// default-src 'self' yang memblokir video dari api.pawa.my.id.
+const mediaSrc = [
+  "'self'",
+  "blob:",
+  backendUrl,
+  legacyUploadUrl,
+].join(" ");
+
 const fontSrc = [
   "'self'",
   "data:",
@@ -81,6 +90,7 @@ const csp = [
   "frame-ancestors 'none'",
   "object-src 'none'",
   `img-src ${imgSrc}`,
+  `media-src ${mediaSrc}`,
   `font-src ${fontSrc}`,
   "style-src 'self' 'unsafe-inline'",
   // Next.js menyuntikkan inline bootstrap script & runtime; unsafe-inline tetap
