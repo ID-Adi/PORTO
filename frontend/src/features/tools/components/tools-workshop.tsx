@@ -61,7 +61,7 @@ export function ToolsWorkshop() {
         role="tablist"
         aria-label="AI generators"
         onKeyDown={onTabKeyDown}
-        className="screen-line-bottom grid grid-cols-2 border-b border-(--line)"
+        className="screen-line-bottom grid grid-cols-2"
       >
         {TABS.map(({ key, label, icon: Icon }) => {
           const isActive = active === key;

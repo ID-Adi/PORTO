@@ -58,6 +58,7 @@ type PersistedSession = {
 const STORAGE_PREFIX = "porto.tools.session";
 const SESSION_TTL_MS = 1000 * 60 * 30; // 30 menit
 const MAX_PERSISTED_FRAME_BYTES = 2 * 1024 * 1024; // skip persist frame > 2MB
+const VIDEO_PREVIEW_FRAGMENT = "#t=0.1";
 
 const ASPECT_OPTIONS: Record<GenerateKind, ReadonlyArray<AspectOption>> = {
   image: [
@@ -220,6 +221,59 @@ function buildPreviewStyle(value: string, kind: GenerateKind): React.CSSProperti
     aspectRatio: aspect.value.replace(":", " / "),
     width: `min(100%, 28rem, calc(60vh * ${aspect.ratio}))`,
   };
+}
+
+function videoPreviewSrc(url: string) {
+  const hashIndex = url.indexOf("#");
+  return `${hashIndex >= 0 ? url.slice(0, hashIndex) : url}${VIDEO_PREVIEW_FRAGMENT}`;
+}
+
+function VideoFrameRail({
+  firstFrame,
+  lastFrame,
+  onFirstFrameChange,
+  onLastFrameChange,
+  disabled,
+}: {
+  firstFrame: ImageFile | null;
+  lastFrame: ImageFile | null;
+  onFirstFrameChange: (frame: ImageFile | null) => void;
+  onLastFrameChange: (frame: ImageFile | null) => void;
+  disabled: boolean;
+}) {
+  const filledCount = firstFrame ? (lastFrame ? 2 : 1) : 0;
+
+  return (
+    <aside
+      aria-label="Reference frames video"
+      className="flex w-full flex-col border border-(--line) bg-(--background) lg:w-52"
+    >
+      <header className="flex shrink-0 items-center justify-between gap-2 border-b border-(--line) px-3 py-2.5">
+        <span className="font-mono text-[10px] tracking-[0.2em] text-(--muted-foreground) uppercase">
+          Frames
+        </span>
+        <span className="font-mono text-[10px] tabular-nums text-(--muted-foreground)">
+          {filledCount.toString().padStart(2, "0")}/02
+        </span>
+      </header>
+
+      <div className="grid grid-cols-2 gap-2 p-2 lg:grid-cols-1">
+        <ImageDropzone
+          label="First"
+          value={firstFrame}
+          onChange={onFirstFrameChange}
+          disabled={disabled}
+        />
+        <ImageDropzone
+          label="End"
+          value={lastFrame}
+          onChange={onLastFrameChange}
+          disabled={disabled}
+          optional
+        />
+      </div>
+    </aside>
+  );
 }
 
 type GenerateCardProps = {
@@ -798,6 +852,24 @@ export function GenerateCard({ kind }: GenerateCardProps) {
   }, [kind]);
 
   const isGenerating = session.status === "generating";
+  const latestHistoryEntry = history[0] ?? null;
+  const previewEntry =
+    session.resultUrl !== null
+      ? {
+          resultUrl: session.resultUrl,
+          prompt: session.prompt,
+          aspectRatio: session.aspectRatio,
+          source: "session",
+        }
+      : latestHistoryEntry
+        ? {
+            resultUrl: latestHistoryEntry.resultUrl,
+            prompt: latestHistoryEntry.prompt,
+            aspectRatio: latestHistoryEntry.aspectRatio,
+            source: `history-${latestHistoryEntry.id}`,
+          }
+        : null;
+  const previewAspectRatio = previewEntry?.aspectRatio ?? session.aspectRatio;
 
   return (
     <article className="flex flex-col border-(--line) bg-(--background)">
@@ -856,7 +928,15 @@ export function GenerateCard({ kind }: GenerateCardProps) {
               onExpand={onExpandReference}
               disabled={isGenerating}
             />
-          ) : null}
+          ) : (
+            <VideoFrameRail
+              firstFrame={session.firstFrame}
+              lastFrame={session.lastFrame}
+              onFirstFrameChange={setFirstFrame}
+              onLastFrameChange={setLastFrame}
+              disabled={isGenerating}
+            />
+          )}
           <div className="flex items-start justify-center lg:flex-1">
             <motion.div
               layout
@@ -866,7 +946,7 @@ export function GenerateCard({ kind }: GenerateCardProps) {
                 damping: 32,
               }}
               className="relative"
-              style={buildPreviewStyle(session.aspectRatio, kind)}
+              style={buildPreviewStyle(previewAspectRatio, kind)}
             >
               <AnimatePresence mode="wait" initial={false}>
                 {isGenerating ? (
@@ -883,9 +963,9 @@ export function GenerateCard({ kind }: GenerateCardProps) {
                       startedAt={session.startedAt}
                     />
                   </motion.div>
-                ) : session.resultUrl ? (
+                ) : previewEntry?.resultUrl ? (
                   <motion.div
-                    key="result"
+                    key={`result-${previewEntry.source}-${previewEntry.resultUrl}`}
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ duration: 0.25 }}
@@ -894,14 +974,15 @@ export function GenerateCard({ kind }: GenerateCardProps) {
                     {kind === "image" ? (
                       /* eslint-disable-next-line @next/next/no-img-element */
                       <img
-                        src={session.resultUrl}
-                        alt={session.prompt || "Hasil generate"}
+                        src={previewEntry.resultUrl}
+                        alt={previewEntry.prompt || "Hasil generate"}
                         className="absolute inset-0 size-full object-cover"
                       />
                     ) : (
                       <video
-                        src={session.resultUrl}
+                        src={videoPreviewSrc(previewEntry.resultUrl)}
                         controls
+                        preload="metadata"
                         muted
                         loop
                         playsInline
@@ -918,7 +999,7 @@ export function GenerateCard({ kind }: GenerateCardProps) {
                     className="absolute inset-0 border border-dashed border-(--line) bg-(--muted)/20"
                   >
                     <div className="absolute inset-0 grid place-items-center gap-1 text-center font-mono text-[10px] tracking-[0.2em] uppercase text-(--muted-foreground)">
-                      output preview · {session.aspectRatio}
+                      output preview · {previewAspectRatio}
                     </div>
                   </motion.div>
                 )}
@@ -943,35 +1024,6 @@ export function GenerateCard({ kind }: GenerateCardProps) {
         onSubmit={onSubmit}
         className="screen-line-top flex flex-col gap-3 px-4 py-4"
       >
-        {kind === "video" ? (
-          <fieldset
-            disabled={isGenerating}
-            className="flex flex-col gap-2 disabled:cursor-not-allowed"
-          >
-            <div className="flex items-center justify-between font-mono text-[10px] tracking-[0.2em] uppercase text-(--muted-foreground)">
-              <span>Reference Frames</span>
-              <span className="tabular-nums">
-                {session.firstFrame ? (session.lastFrame ? "2/2" : "1/2") : "0/2"}
-              </span>
-            </div>
-            <div className="flex flex-col gap-3 sm:flex-row sm:gap-3">
-              <ImageDropzone
-                label="First Frame"
-                value={session.firstFrame}
-                onChange={setFirstFrame}
-                disabled={isGenerating}
-              />
-              <ImageDropzone
-                label="End Frame"
-                value={session.lastFrame}
-                onChange={setLastFrame}
-                disabled={isGenerating}
-                optional
-              />
-            </div>
-          </fieldset>
-        ) : null}
-
         <fieldset
           disabled={isGenerating}
           className="flex flex-col gap-2 disabled:cursor-not-allowed"
