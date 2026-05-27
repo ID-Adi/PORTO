@@ -3,12 +3,13 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home as HomeIcon, Search, Wrench } from "lucide-react";
+import { Frame, Home as HomeIcon, Search, Wrench } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { navItems } from "@/features/home/data/nav-items";
 import { Icons } from "@/layout/icons";
 import { openCommandMenu } from "@/components/common/command-menu";
+import { HeaderProfileMenu } from "@/components/common/header-profile-menu";
 import { ThemeToggle } from "@/components/common/theme-toggle";
 import { useHasMounted } from "@/hooks/use-has-mounted";
 import { trpc } from "@/lib/trpc";
@@ -84,6 +85,21 @@ export function SiteHeader() {
               })}
             </div>
 
+            <Link
+              href="/excalidraw"
+              aria-current={isActive("/excalidraw") ? "page" : undefined}
+              aria-label="Canvas"
+              className={cn(
+                "inline-flex h-8 items-center gap-2 px-2 font-mono text-[12px] font-medium transition-[background-color,color]",
+                isActive("/excalidraw")
+                  ? "bg-muted/60 text-foreground"
+                  : "text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+              )}
+            >
+              <Frame className="size-3.5" aria-hidden />
+              <span className="hidden md:inline">Canvas</span>
+            </Link>
+
             <div className="ml-auto flex items-center">
               <div className="hidden items-center border-r border-line pr-2 md:flex">
                 <Button
@@ -124,6 +140,7 @@ export function SiteHeader() {
                 </a>
               </Button>
 
+              <HeaderProfileMenu />
               <ThemeToggle />
             </div>
           </div>

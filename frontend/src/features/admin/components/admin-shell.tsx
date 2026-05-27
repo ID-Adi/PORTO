@@ -4,6 +4,7 @@ import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
+  ArrowLeft,
   BookOpen,
   Briefcase,
   FolderKanban,
@@ -26,6 +27,11 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
 const navItems = [
@@ -75,6 +81,28 @@ function NavList({
   );
 }
 
+function HomeBackButton({ onNavigate }: { onNavigate?: () => void }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          asChild
+          variant="outline"
+          size="icon-sm"
+          className="border-(--sidebar-border) bg-transparent text-(--sidebar-foreground) hover:bg-(--sidebar-accent) hover:text-(--sidebar-accent-foreground)"
+        >
+          <Link href="/" aria-label="Back to home" onClick={onNavigate}>
+            <ArrowLeft className="size-4" />
+          </Link>
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="right" sideOffset={8}>
+        Back to home
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
 export function AdminShell({
   email,
   children,
@@ -95,15 +123,16 @@ export function AdminShell({
   return (
     <div className="flex min-h-screen">
       <aside className="hidden w-64 shrink-0 flex-col border-r border-(--sidebar-border) bg-(--sidebar) p-4 md:flex">
-        <div className="mb-6 px-3">
-          <Link href="/admin" className="block">
-            <div className="text-lg font-semibold tracking-tight text-(--primary)">
+        <div className="mb-6 flex items-start justify-between gap-3 px-3">
+          <Link href="/admin" className="min-w-0">
+            <div className="truncate text-lg font-semibold tracking-tight text-(--primary)">
               PORTO Admin
             </div>
-            <div className="text-xs text-(--muted-foreground)">
+            <div className="truncate text-xs text-(--muted-foreground)">
               Content management
             </div>
           </Link>
+          <HomeBackButton />
         </div>
         <NavList pathname={pathname} />
         <div className="mt-auto border-t border-(--sidebar-border) pt-3">
@@ -131,9 +160,12 @@ export function AdminShell({
               </Button>
             </SheetTrigger>
             <SheetContent side="left" className="w-64 p-4">
-              <SheetTitle className="mb-4 text-(--primary)">
-                PORTO Admin
-              </SheetTitle>
+              <div className="mb-4 flex items-start justify-between gap-3">
+                <SheetTitle className="min-w-0 text-(--primary)">
+                  PORTO Admin
+                </SheetTitle>
+                <HomeBackButton onNavigate={() => setMobileOpen(false)} />
+              </div>
               <NavList
                 pathname={pathname}
                 onNavigate={() => setMobileOpen(false)}

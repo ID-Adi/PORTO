@@ -9,11 +9,12 @@ import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { SiteHeader } from "@/layout/site-header";
 
 function safeRedirect(target: string | null): string {
-  if (!target) return "/admin";
+  if (!target) return "/dashboard";
   // Hanya izinkan relative path internal supaya tidak open-redirect.
-  if (!target.startsWith("/") || target.startsWith("//")) return "/admin";
+  if (!target.startsWith("/") || target.startsWith("//")) return "/dashboard";
   return target;
 }
 
@@ -45,52 +46,70 @@ function LoginForm() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-(--background) px-4">
-      <div className="w-full max-w-sm rounded-lg border border-(--border) bg-(--card) p-6 shadow-sm">
-        <div className="mb-6 text-center">
-          <div className="mx-auto mb-3 flex size-10 items-center justify-center rounded-md bg-(--primary) text-(--primary-foreground)">
-            <LogIn className="size-5" />
-          </div>
-          <h1 className="text-xl font-semibold tracking-tight">
-            PORTO Admin
-          </h1>
-          <p className="mt-1 text-sm text-(--muted-foreground)">
-            Sign in to manage portfolio content
-          </p>
+    <>
+      <SiteHeader />
+      <main className="max-w-screen overflow-x-hidden px-2">
+        <div className="page-frame">
+          <section className="min-h-[calc(100vh-5rem)] border-x border-line">
+            <div className="grid min-h-[calc(100vh-5rem)] place-items-center px-4 py-12">
+              <div className="w-full max-w-sm border border-line bg-background">
+                <div className="border-b border-line p-6 text-center">
+                  <div className="mx-auto mb-3 flex size-10 items-center justify-center border border-line bg-muted/40">
+                    <LogIn className="size-5" />
+                  </div>
+                  <h1 className="font-mono text-xl font-semibold tracking-[0.08em] uppercase">
+                    PORTO Login
+                  </h1>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    Sign in to access your dashboard and tools.
+                  </p>
+                </div>
+                <form onSubmit={onSubmit} className="space-y-4 p-6">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="email">Email</Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      autoComplete="username"
+                      required
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="password">Password</Label>
+                    <Input
+                      id="password"
+                      type="password"
+                      autoComplete="current-password"
+                      required
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      onClick={() =>
+                        toast.info("Change password will be available soon")
+                      }
+                      className="font-mono text-[11px] tracking-[0.12em] text-muted-foreground uppercase underline-offset-4 transition-colors hover:text-foreground hover:underline"
+                    >
+                      Change password
+                    </button>
+                  </div>
+                  <Button
+                    type="submit"
+                    disabled={pending}
+                    className="w-full rounded-none font-mono text-[12px] tracking-[0.12em] uppercase"
+                  >
+                    {pending ? "Signing in…" : "Sign in"}
+                  </Button>
+                </form>
+              </div>
+            </div>
+          </section>
         </div>
-        <form onSubmit={onSubmit} className="space-y-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="email">Email</Label>
-            <Input
-              id="email"
-              type="email"
-              autoComplete="username"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="password">Password</Label>
-            <Input
-              id="password"
-              type="password"
-              autoComplete="current-password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-          </div>
-          <Button
-            type="submit"
-            disabled={pending}
-            className="w-full bg-(--primary) text-(--primary-foreground) hover:bg-(--primary)/90"
-          >
-            {pending ? "Signing in…" : "Sign in"}
-          </Button>
-        </form>
-      </div>
-    </div>
+      </main>
+    </>
   );
 }
 

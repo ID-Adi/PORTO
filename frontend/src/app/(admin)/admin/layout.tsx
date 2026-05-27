@@ -14,40 +14,48 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
 
   if (isPending) {
     return (
-      <div className="flex min-h-screen items-center justify-center text-sm text-(--muted-foreground)">
-        Loading…
+      <div className="admin-theme font-sans antialiased">
+        <div className="flex min-h-screen items-center justify-center text-sm text-(--muted-foreground)">
+          Loading…
+        </div>
       </div>
     );
   }
 
   if (!session?.user) {
     if (typeof window !== "undefined") {
-      router.replace("/login");
+      router.replace("/login?redirect=/admin");
     }
     return null;
   }
 
   if (adminEmail && session.user.email !== adminEmail) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-3 px-6 text-center">
-        <h1 className="text-xl font-semibold">Forbidden</h1>
-        <p className="text-sm text-(--muted-foreground)">
-          You are signed in as {session.user.email}, but only the configured
-          admin can access this area.
-        </p>
-        <button
-          type="button"
-          onClick={async () => {
-            await authClient.signOut();
-            router.push("/login");
-          }}
-          className="text-sm text-(--primary) underline"
-        >
-          Sign out
-        </button>
+      <div className="admin-theme font-sans antialiased">
+        <div className="flex min-h-screen flex-col items-center justify-center gap-3 px-6 text-center">
+          <h1 className="text-xl font-semibold">Forbidden</h1>
+          <p className="text-sm text-(--muted-foreground)">
+            You are signed in as {session.user.email}, but only the configured
+            admin can access this area.
+          </p>
+          <button
+            type="button"
+            onClick={async () => {
+              await authClient.signOut();
+              router.push("/login");
+            }}
+            className="text-sm text-(--primary) underline"
+          >
+            Sign out
+          </button>
+        </div>
       </div>
     );
   }
 
-  return <AdminShell email={session.user.email}>{children}</AdminShell>;
+  return (
+    <div className="admin-theme font-sans antialiased">
+      <AdminShell email={session.user.email}>{children}</AdminShell>
+    </div>
+  );
 }
