@@ -36,6 +36,9 @@ Thumbs.db
 # Vercel
 .vercel/
 
+# Claude Code worktrees (lokal, jangan ikut ke-track sebagai embedded repo)
+.claude/worktrees/
+
 # Kiro CLI workspace settings (MCP config, agents, skills cache, dsb)
 .kiro/
 
