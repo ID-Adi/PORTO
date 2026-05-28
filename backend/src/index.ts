@@ -34,6 +34,14 @@ app.use(
   }),
 );
 
+// Pastikan semua /api/* response tidak di-cache oleh Cloudflare atau CDN.
+// Tanpa ini, CF menyimpan response tanpa CORS headers dan melayani ke browser
+// yang mengirim Origin header — menyebabkan CORS error.
+app.use("/api/*", async (c, next) => {
+  await next();
+  c.header("Cache-Control", "no-store");
+});
+
 // Password reset routes — MUST be registered as individual app.post()
 // (not app.route() with a sub-router) so better-auth's own /api/auth/*
 // routes still work. Hono sub-routers intercept unmatched routes with 404.
