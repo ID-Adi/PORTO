@@ -12,18 +12,22 @@ import { appRouter } from "./trpc/routers/_app.js";
 
 const app = new Hono();
 
-const allowedOrigins = new Set(
-  [
-    "http://localhost:3000",
-    "http://localhost:3001",
-    ...(process.env.FRONTEND_URL?.split(",").map((s) => s.trim()) ?? []),
-  ].filter(Boolean),
-);
+function isAllowedOrigin(origin: string | null): boolean {
+  if (!origin) return false;
+  if (origin === "http://localhost:3000" || origin === "http://localhost:3001") return true;
+  try {
+    const { hostname, protocol } = new URL(origin);
+    if (protocol !== "https:") return false;
+    return hostname === "pawa.my.id" || hostname.endsWith(".pawa.my.id");
+  } catch {
+    return false;
+  }
+}
 
 app.use(
   "*",
   cors({
-    origin: (origin) => (allowedOrigins.has(origin) ? origin : null),
+    origin: (origin) => (isAllowedOrigin(origin) ? origin : null),
     credentials: true,
     allowHeaders: ["Content-Type", "Authorization"],
     allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
