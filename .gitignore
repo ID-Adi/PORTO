@@ -55,3 +55,6 @@ GEMINI_3.1_GENERATE.json
 
 # Codex CLI local config
 .codex/
+
+# Database backups (dihasilkan deploy.sh — tidak perlu di-track)
+backups/
