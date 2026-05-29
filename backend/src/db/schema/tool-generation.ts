@@ -15,6 +15,7 @@ export type ToolReferenceImage = {
 };
 
 export type ToolReferenceMapping = Record<string, number>;
+export type ToolGenerationMeta = Record<string, unknown>;
 
 /**
  * Tabel terpisah dari `media` (yang merupakan asset library admin).
@@ -46,6 +47,15 @@ export const toolGeneration = pgTable("tool_generation", {
   // Mapping tag `@N` di prompt ke index pada referenceImages, mis. {"@1": 0}.
   referenceMapping: jsonb("reference_mapping")
     .$type<ToolReferenceMapping>()
+    .notNull()
+    .default({}),
+  // Metadata fleksibel untuk generator non-image/video seperti TTS.
+  inputMeta: jsonb("input_meta")
+    .$type<ToolGenerationMeta>()
+    .notNull()
+    .default({}),
+  outputMeta: jsonb("output_meta")
+    .$type<ToolGenerationMeta>()
     .notNull()
     .default({}),
   createdAt: timestamp("created_at").notNull().defaultNow(),

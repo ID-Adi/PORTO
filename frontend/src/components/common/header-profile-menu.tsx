@@ -1,6 +1,6 @@
 "use client";
 
-import { LayoutDashboard, LogOut, UserRound } from "lucide-react";
+import { LayoutDashboard, LogOut, ShieldCheck, UserRound } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
@@ -14,6 +14,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useHasMounted } from "@/hooks/use-has-mounted";
 import { authClient } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
 
@@ -29,9 +30,10 @@ function ProfileIcon() {
 
 export function HeaderProfileMenu() {
   const router = useRouter();
+  const mounted = useHasMounted();
   const { data: session, isPending } = authClient.useSession();
   const user = session?.user;
-  const dashboardHref = user?.email === adminEmail ? "/admin" : "/dashboard";
+  const isAdmin = Boolean(adminEmail && user?.email === adminEmail);
 
   async function handleLogout() {
     await authClient.signOut();
@@ -50,7 +52,7 @@ export function HeaderProfileMenu() {
       <Button
         variant="ghost"
         size="sm"
-        disabled={isPending}
+        disabled={mounted ? isPending : false}
         aria-label="Open profile"
         className={triggerClassName}
         onClick={() => router.push("/login?redirect=/dashboard")}
@@ -88,12 +90,21 @@ export function HeaderProfileMenu() {
         <DropdownMenuSeparator className="bg-line" />
         <DropdownMenuGroup>
           <DropdownMenuItem
-            onClick={() => router.push(dashboardHref)}
+            onClick={() => router.push("/dashboard")}
             className="rounded-none text-[12px]"
           >
             <LayoutDashboard className="size-3.5" aria-hidden />
-            Dashboard
+            User Dashboard
           </DropdownMenuItem>
+          {isAdmin && (
+            <DropdownMenuItem
+              onClick={() => router.push("/admin")}
+              className="rounded-none text-[12px]"
+            >
+              <ShieldCheck className="size-3.5" aria-hidden />
+              Admin Dashboard
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem
             onClick={handleLogout}
             className="rounded-none text-[12px]"

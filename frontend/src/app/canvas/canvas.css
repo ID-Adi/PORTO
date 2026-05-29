@@ -30,6 +30,11 @@
 
   /* Overlay */
   --overlay-bg-color: oklch(1 0 0 / 90%);
+
+  /* Gold pastel — ganti total ungu bawaan Excalidraw (--color-surface-primary-container
+     dan --color-on-primary-container) untuk highlight tool/selection */
+  --color-surface-primary-container: #f6e7b2;
+  --color-on-primary-container: #6b551b;
 }
 
 .dark .canvas-porto-wrapper {
@@ -49,6 +54,10 @@
   --color-brand-hover: oklch(0.92 0.004 286.32);
 
   --overlay-bg-color: oklch(0.141 0.005 285.823 / 90%);
+
+  /* Gold pastel dark mode */
+  --color-surface-primary-container: #4a3d18;
+  --color-on-primary-container: #f6e7b2;
 }
 
 /* Isi penuh container */
@@ -57,7 +66,16 @@
   height: 100%;
 }
 
-/* Hilangkan border radius pada toolbar, panel, popup */
+/* Propagasi border-radius 0 ke scope .excalidraw — Excalidraw mendeklarasikan
+   ulang variabel ini di .excalidraw, yang mengalahkan inheritance dari parent.
+   Override di scope yang sama supaya semua elemen toolbar/menu ikut square. */
+.canvas-porto-wrapper .excalidraw {
+  --border-radius-lg: 0;
+  --border-radius-md: 0;
+  --border-radius-sm: 0;
+}
+
+/* Hilangkan border radius pada toolbar, panel, popup, dan tombol top-bar */
 .canvas-porto-wrapper .Island,
 .canvas-porto-wrapper .ToolIcon,
 .canvas-porto-wrapper .buttonList button,
@@ -65,7 +83,12 @@
 .canvas-porto-wrapper .context-menu,
 .canvas-porto-wrapper .Dialog,
 .canvas-porto-wrapper .Modal,
-.canvas-porto-wrapper .Tooltip__container {
+.canvas-porto-wrapper .Tooltip__container,
+.canvas-porto-wrapper .dropdown-menu-button,
+.canvas-porto-wrapper .sidebar-trigger,
+.canvas-porto-wrapper .sidebar-triggers,
+.canvas-porto-wrapper .sidebar-tab-trigger,
+.canvas-porto-wrapper .canvas-header-toggle {
   border-radius: 0 !important;
 }
 
@@ -114,4 +137,35 @@
 .canvas-porto-wrapper .encrypted-icon,
 .canvas-porto-wrapper .footer-center {
   display: none !important;
+}
+
+/* Wrapper untuk aksi kanan-atas (toggle header + ekspor) yang disuntik
+   via renderTopRightUI, di sisi kiri tombol Pustaka bawaan Excalidraw */
+.canvas-porto-wrapper .canvas-top-right-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+/* Tombol toggle header & tombol ekspor — gaya square monokrom */
+.canvas-porto-wrapper .canvas-header-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 2.25rem;
+  width: 2.25rem;
+  border: 1px solid var(--color-surface-highest);
+  background: var(--color-surface-low);
+  color: var(--color-on-surface);
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.canvas-porto-wrapper .canvas-header-toggle:hover {
+  background: var(--color-surface-high);
+}
+
+.canvas-porto-wrapper .canvas-header-toggle:focus-visible {
+  outline: 2px solid var(--color-on-surface);
+  outline-offset: 1px;
 }

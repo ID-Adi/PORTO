@@ -519,7 +519,7 @@ function formatOverviewValue(icon: string, value: string) {
 
 export function ProfileSheet({ content }: ProfileSheetProps) {
   const settings = trpc.siteSettings.get.useQuery();
-  const avatarUrl = settings.data?.avatarUrl || content.avatarUrl;
+  const avatarUrl = settings.data?.avatarUrl ?? null;
 
   return (
     <div className="*:[[id]]:scroll-mt-24">

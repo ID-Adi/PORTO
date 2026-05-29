@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   ArrowLeft,
+  Bot,
   BookOpen,
   Briefcase,
   FolderKanban,
@@ -43,6 +44,7 @@ const navItems = [
   { href: "/admin/blog", label: "Blog", icon: BookOpen },
   { href: "/admin/experience", label: "Experience", icon: Briefcase },
   { href: "/admin/contact", label: "Contact", icon: Mail },
+  { href: "/admin/ai-settings", label: "AI Settings", icon: Bot },
   { href: "/admin/site-settings", label: "Site Settings", icon: Settings },
 ];
 

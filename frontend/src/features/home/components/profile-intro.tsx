@@ -12,20 +12,34 @@ import { trpc } from "@/lib/trpc";
 
 type ProfileIntroProps = Pick<
   ProfilePageContent,
-  | "avatarUrl"
-  | "flipSentences"
-  | "name"
-  | "pronunciationText"
-  | "title"
->;
+  "flipSentences" | "name" | "pronunciationText" | "title"
+> & {
+  avatarUrl: string | null;
+};
+
+const AVATAR_BASE_CLASS =
+  "size-30 rounded-full ring-1 ring-(--border) ring-offset-2 ring-offset-background select-none sm:size-40";
 
 function InteractiveAvatar({
   avatarUrl,
   name,
-}: Pick<ProfileIntroProps, "avatarUrl" | "name">) {
+}: {
+  avatarUrl: string | null;
+  name: string;
+}) {
+  if (!avatarUrl) {
+    return (
+      <div
+        role="img"
+        aria-label={`${name} — avatar belum diatur`}
+        className={`${AVATAR_BASE_CLASS} surface-hatch bg-(--surface)`}
+      />
+    );
+  }
+
   return (
     <Image
-      className="size-30 rounded-full ring-1 ring-(--border) ring-offset-2 ring-offset-background select-none sm:size-40"
+      className={AVATAR_BASE_CLASS}
       src={avatarUrl}
       alt={name}
       width={160}

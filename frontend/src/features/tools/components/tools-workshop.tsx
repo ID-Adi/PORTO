@@ -1,36 +1,40 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Image as ImageIcon, Video } from "lucide-react";
+import { Image as ImageIcon, Video, Volume2 } from "lucide-react";
 import { motion } from "motion/react";
 
 import { cn } from "@/lib/utils";
 
 import { GenerateCard, type GenerateKind } from "./generate-card";
+import { TtsCard } from "./tts-card";
+
+type ToolTabKind = GenerateKind | "tts";
 
 const TABS: ReadonlyArray<{
-  key: GenerateKind;
+  key: ToolTabKind;
   label: string;
   icon: typeof ImageIcon;
 }> = [
   { key: "image", label: "Generate Image", icon: ImageIcon },
   { key: "video", label: "Generate Video", icon: Video },
+  { key: "tts", label: "TTS", icon: Volume2 },
 ];
 
 const STORAGE_KEY = "porto.tools.activeTab";
 
-function readActiveTab(): GenerateKind {
+function readActiveTab(): ToolTabKind {
   if (typeof window === "undefined") return "image";
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
-    return raw === "video" ? "video" : "image";
+    return raw === "video" || raw === "tts" ? raw : "image";
   } catch {
     return "image";
   }
 }
 
 export function ToolsWorkshop() {
-  const [active, setActive] = useState<GenerateKind>("image");
+  const [active, setActive] = useState<ToolTabKind>("image");
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -61,7 +65,7 @@ export function ToolsWorkshop() {
         role="tablist"
         aria-label="AI generators"
         onKeyDown={onTabKeyDown}
-        className="screen-line-bottom grid grid-cols-2"
+        className="screen-line-bottom grid grid-cols-3"
       >
         {TABS.map(({ key, label, icon: Icon }) => {
           const isActive = active === key;
@@ -117,7 +121,7 @@ export function ToolsWorkshop() {
           aria-labelledby={`tools-tab-${key}`}
           hidden={active !== key}
         >
-          <GenerateCard kind={key} />
+          {key === "tts" ? <TtsCard /> : <GenerateCard kind={key} />}
         </div>
       ))}
     </>

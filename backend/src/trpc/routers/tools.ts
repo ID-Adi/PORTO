@@ -7,11 +7,18 @@ import { and, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "../../db/index.js";
-import { toolGeneration } from "../../db/schema/index.js";
+import {
+  aiToolSettings,
+  DEFAULT_TTS_MODEL,
+  DEFAULT_TTS_VOICE,
+  DEFAULT_TTS_VOICES,
+  toolGeneration,
+} from "../../db/schema/index.js";
 import type {
   ToolReferenceImage,
   ToolReferenceMapping,
 } from "../../db/schema/tool-generation.js";
+import { decryptSecret } from "../../lib/encrypted-secret.js";
 import { publicUrl } from "../../lib/public-url.js";
 import {
   TOOLS_REFS_DIR,
@@ -19,7 +26,7 @@ import {
 } from "../../lib/uploads-dir.js";
 import { authenticatedProcedure, router } from "../init.js";
 
-const KIND = z.enum(["image", "video"]);
+const KIND = z.enum(["image", "video", "tts"]);
 
 const IMAGE_ASPECT_RATIOS = ["1:1", "4:5", "3:4", "16:9", "9:16"] as const;
 const ALLOWED_MIME = new Set(["image/png", "image/jpeg", "image/webp"]);
@@ -34,6 +41,13 @@ const ALLOWED_FRAME_MIME = ["image/jpeg", "image/png", "image/webp"] as const;
 const MAX_FRAME_BYTES = 10 * 1024 * 1024;
 const N8N_VIDEO_START_TIMEOUT_MS = 60_000;
 const N8N_VIDEO_STATUS_TIMEOUT_MS = 60_000;
+const MAX_TTS_TEXT_LENGTH = 8000;
+const MAX_TTS_STYLE_LENGTH = 1000;
+const MAX_TTS_SPEAKERS = 4;
+const MAX_AUDIO_BYTES = 50 * 1024 * 1024;
+const TTS_SAMPLE_RATE = 24_000;
+const TTS_CHANNELS = 1;
+const TTS_SAMPLE_WIDTH_BYTES = 2;
 
 function ensureContained(filePath: string, baseDir = TOOLS_UPLOAD_DIR) {
   const resolved = path.resolve(filePath);
@@ -208,6 +222,20 @@ const generateVideoInput = z.object({
 
 type FramePayload = z.infer<typeof framePayload>;
 
+const ttsSpeakerInput = z.object({
+  speaker: z.string().min(1).max(40),
+  voiceName: z.string().min(1).max(80),
+});
+
+const generateTtsInput = z.object({
+  text: z.string().min(1).max(MAX_TTS_TEXT_LENGTH),
+  styleInstruction: z.string().max(MAX_TTS_STYLE_LENGTH).optional().default(""),
+  speakers: z.array(ttsSpeakerInput).min(1).max(MAX_TTS_SPEAKERS),
+});
+
+type TtsSpeaker = z.infer<typeof ttsSpeakerInput>;
+type AiToolSettingsRow = typeof aiToolSettings.$inferSelect;
+
 type VideoStartResponse = {
   ok: boolean;
   operationName?: string;
@@ -222,6 +250,182 @@ type VideoStatusResponse = {
   mimeType?: string;
   error?: string;
 };
+
+type GeminiTtsResponse = {
+  candidates?: Array<{
+    content?: {
+      parts?: Array<{
+        inlineData?: {
+          data?: string;
+          mimeType?: string;
+        };
+        inline_data?: {
+          data?: string;
+          mime_type?: string;
+        };
+      }>;
+    };
+  }>;
+  error?: {
+    message?: string;
+  };
+};
+
+function fallbackTtsSettings(): Pick<
+  AiToolSettingsRow,
+  | "ttsProvider"
+  | "ttsModel"
+  | "ttsApiKeyEncrypted"
+  | "ttsDefaultVoice"
+  | "ttsVoiceOptions"
+  | "ttsEnabled"
+> {
+  return {
+    ttsProvider: "gemini",
+    ttsModel: DEFAULT_TTS_MODEL,
+    ttsApiKeyEncrypted: null,
+    ttsDefaultVoice: DEFAULT_TTS_VOICE,
+    ttsVoiceOptions: [...DEFAULT_TTS_VOICES],
+    ttsEnabled: false,
+  };
+}
+
+async function readTtsSettings() {
+  const [row] = await db
+    .select()
+    .from(aiToolSettings)
+    .where(eq(aiToolSettings.id, 1))
+    .limit(1);
+  return row ?? fallbackTtsSettings();
+}
+
+function buildTtsPrompt(input: z.infer<typeof generateTtsInput>) {
+  const style = input.styleInstruction.trim();
+  if (!style) return `TTS the following text:\n${input.text.trim()}`;
+  return `TTS the following text with this direction: ${style}\n\n${input.text.trim()}`;
+}
+
+function buildSpeechConfig(speakers: TtsSpeaker[]) {
+  if (speakers.length === 1) {
+    return {
+      voiceConfig: {
+        prebuiltVoiceConfig: {
+          voiceName: speakers[0].voiceName,
+        },
+      },
+    };
+  }
+
+  return {
+    multiSpeakerVoiceConfig: {
+      speakerVoiceConfigs: speakers.map((speaker) => ({
+        speaker: speaker.speaker,
+        voiceConfig: {
+          prebuiltVoiceConfig: {
+            voiceName: speaker.voiceName,
+          },
+        },
+      })),
+    },
+  };
+}
+
+function wavFromPcm(pcm: Buffer) {
+  const dataSize = pcm.byteLength;
+  const header = Buffer.alloc(44);
+  const byteRate =
+    TTS_SAMPLE_RATE * TTS_CHANNELS * TTS_SAMPLE_WIDTH_BYTES;
+  const blockAlign = TTS_CHANNELS * TTS_SAMPLE_WIDTH_BYTES;
+
+  header.write("RIFF", 0);
+  header.writeUInt32LE(36 + dataSize, 4);
+  header.write("WAVE", 8);
+  header.write("fmt ", 12);
+  header.writeUInt32LE(16, 16);
+  header.writeUInt16LE(1, 20);
+  header.writeUInt16LE(TTS_CHANNELS, 22);
+  header.writeUInt32LE(TTS_SAMPLE_RATE, 24);
+  header.writeUInt32LE(byteRate, 28);
+  header.writeUInt16LE(blockAlign, 32);
+  header.writeUInt16LE(TTS_SAMPLE_WIDTH_BYTES * 8, 34);
+  header.write("data", 36);
+  header.writeUInt32LE(dataSize, 40);
+
+  return Buffer.concat([header, pcm]);
+}
+
+async function callGeminiTts({
+  apiKey,
+  model,
+  text,
+  speakers,
+}: {
+  apiKey: string;
+  model: string;
+  text: string;
+  speakers: TtsSpeaker[];
+}) {
+  const modelName = model.replace(/^models\//, "");
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent`;
+
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": apiKey,
+      },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text }] }],
+        generationConfig: {
+          responseModalities: ["AUDIO"],
+          speechConfig: buildSpeechConfig(speakers),
+        },
+        model: modelName,
+      }),
+      signal: AbortSignal.timeout(90_000),
+    });
+  } catch (err) {
+    const isAbort =
+      err instanceof DOMException && err.name === "TimeoutError";
+    throw new TRPCError({
+      code: isAbort ? "TIMEOUT" : "INTERNAL_SERVER_ERROR",
+      message: isAbort
+        ? "Gemini TTS tidak merespons tepat waktu"
+        : "Gagal menghubungi Gemini TTS",
+    });
+  }
+
+  const json = (await res.json()) as GeminiTtsResponse;
+  if (!res.ok) {
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: json.error?.message ?? `Gemini TTS HTTP ${res.status}`,
+    });
+  }
+
+  const part = json.candidates?.[0]?.content?.parts?.find(
+    (candidate) => candidate.inlineData?.data || candidate.inline_data?.data,
+  );
+  const audioBase64 = part?.inlineData?.data ?? part?.inline_data?.data;
+  if (!audioBase64) {
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Gemini TTS tidak mengembalikan audio base64",
+    });
+  }
+
+  const pcm = Buffer.from(audioBase64, "base64");
+  if (pcm.byteLength === 0 || pcm.byteLength > MAX_AUDIO_BYTES) {
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Ukuran audio TTS tidak valid",
+    });
+  }
+
+  return wavFromPcm(pcm);
+}
 
 function isRetryableVideoStatusError(error: string): boolean {
   return [
@@ -398,6 +602,18 @@ async function callN8nVideoStatus(payload: {
 }
 
 export const toolsRouter = router({
+  getTtsPublicConfig: authenticatedProcedure.query(async () => {
+    const settings = await readTtsSettings();
+    return {
+      enabled: settings.ttsEnabled,
+      provider: settings.ttsProvider,
+      model: settings.ttsModel,
+      defaultVoice: settings.ttsDefaultVoice,
+      voiceOptions: settings.ttsVoiceOptions,
+      hasApiKey: Boolean(settings.ttsApiKeyEncrypted),
+    };
+  }),
+
   generateImage: authenticatedProcedure
     .input(generateImageInput)
     .mutation(async ({ ctx, input }) => {
@@ -604,6 +820,144 @@ export const toolsRouter = router({
       };
     }),
 
+  generateTts: authenticatedProcedure
+    .input(generateTtsInput)
+    .mutation(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+      const requestId = randomUUID();
+      const settings = await readTtsSettings();
+
+      if (!settings.ttsEnabled) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "TTS belum diaktifkan di AI Settings",
+        });
+      }
+      if (settings.ttsProvider !== "gemini") {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Provider TTS belum didukung: ${settings.ttsProvider}`,
+        });
+      }
+      if (!settings.ttsApiKeyEncrypted) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Gemini API key belum dikonfigurasi",
+        });
+      }
+
+      const allowedVoices = new Set(settings.ttsVoiceOptions);
+      const normalizedSpeakers = input.speakers.map((speaker) => ({
+        speaker: speaker.speaker.trim(),
+        voiceName: speaker.voiceName.trim(),
+      }));
+
+      for (const speaker of normalizedSpeakers) {
+        if (!allowedVoices.has(speaker.voiceName)) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: `Voice tidak diizinkan: ${speaker.voiceName}`,
+          });
+        }
+      }
+
+      const [row] = await db
+        .insert(toolGeneration)
+        .values({
+          userId,
+          kind: "tts",
+          prompt: input.text,
+          aspectRatio: "audio",
+          requestId,
+          status: "pending",
+          inputMeta: {
+            provider: settings.ttsProvider,
+            model: settings.ttsModel,
+            styleInstruction: input.styleInstruction,
+            speakers: normalizedSpeakers,
+          },
+        })
+        .returning();
+
+      let apiKey: string;
+      try {
+        apiKey = decryptSecret(settings.ttsApiKeyEncrypted);
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : "Gagal membaca API key";
+        await db
+          .update(toolGeneration)
+          .set({ status: "error", errorMessage: message })
+          .where(eq(toolGeneration.id, row.id));
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message,
+        });
+      }
+
+      try {
+        const prompt = buildTtsPrompt({
+          ...input,
+          speakers: normalizedSpeakers,
+        });
+        const wav = await callGeminiTts({
+          apiKey,
+          model: settings.ttsModel,
+          text: prompt,
+          speakers: normalizedSpeakers,
+        });
+        const filename = `${requestId}.wav`;
+        const targetPath = ensureContained(
+          path.join(TOOLS_UPLOAD_DIR, filename),
+        );
+
+        await fs.mkdir(TOOLS_UPLOAD_DIR, { recursive: true });
+        await fs.writeFile(targetPath, wav);
+
+        const fileUrl = `/uploads/tools/${filename}`;
+        const durationSeconds =
+          (wav.byteLength - 44) /
+          (TTS_SAMPLE_RATE * TTS_CHANNELS * TTS_SAMPLE_WIDTH_BYTES);
+
+        const [updated] = await db
+          .update(toolGeneration)
+          .set({
+            status: "success",
+            fileUrl,
+            mimeType: "audio/wav",
+            fileSize: wav.byteLength,
+            outputMeta: {
+              durationSeconds: Math.max(0, Math.round(durationSeconds)),
+              sampleRate: TTS_SAMPLE_RATE,
+              channels: TTS_CHANNELS,
+              format: "wav",
+            },
+          })
+          .where(eq(toolGeneration.id, row.id))
+          .returning();
+
+        return {
+          id: updated.id,
+          url: publicUrl(fileUrl),
+          mimeType: "audio/wav",
+          requestId,
+          createdAt: updated.createdAt,
+          provider: settings.ttsProvider,
+          model: settings.ttsModel,
+        };
+      } catch (err) {
+        await db
+          .update(toolGeneration)
+          .set({
+            status: "error",
+            errorMessage:
+              err instanceof Error ? err.message : "Unknown error",
+          })
+          .where(eq(toolGeneration.id, row.id));
+        throw err;
+      }
+    }),
+
   getVideoStatus: authenticatedProcedure
     .input(z.object({ id: z.number().int() }))
     .query(async ({ ctx, input }) => {
@@ -749,6 +1103,21 @@ export const toolsRouter = router({
       // DB simpan relative path; response kirim absolute via PUBLIC_BACKEND_URL.
       return rows.map((row) => ({ ...row, fileUrl: publicUrl(row.fileUrl) }));
     }),
+
+  listMyTtsHistory: authenticatedProcedure.query(async ({ ctx }) => {
+    const rows = await db
+      .select()
+      .from(toolGeneration)
+      .where(
+        and(
+          eq(toolGeneration.userId, ctx.session.user.id),
+          eq(toolGeneration.kind, "tts"),
+        ),
+      )
+      .orderBy(desc(toolGeneration.createdAt))
+      .limit(50);
+    return rows.map((row) => ({ ...row, fileUrl: publicUrl(row.fileUrl) }));
+  }),
 
   deleteMyEntry: authenticatedProcedure
     .input(z.object({ id: z.number().int() }))

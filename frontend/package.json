@@ -4,8 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "predev": "lsof -ti:3001 -sTCP:LISTEN | xargs kill -9 2>/dev/null || true",
-    "dev": "next dev -p 3001",
+    "sync:excalidraw-assets": "node scripts/sync-excalidraw-assets.mjs",
+    "predev": "node scripts/sync-excalidraw-assets.mjs && lsof -ti:3000 -sTCP:LISTEN | xargs kill -9 2>/dev/null || true",
+    "dev": "next dev -p 3000",
+    "prebuild": "node scripts/sync-excalidraw-assets.mjs",
     "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint .",

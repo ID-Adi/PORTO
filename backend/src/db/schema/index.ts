@@ -15,4 +15,6 @@ export * from "./tags.js";
 export * from "./skills.js";
 export * from "./site-settings.js";
 export * from "./tool-generation.js";
+export * from "./ai-tool-settings.js";
 export * from "./password-reset.js";
+export * from "./canvas-documents.js";

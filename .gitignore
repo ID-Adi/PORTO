@@ -49,3 +49,9 @@ GEMINI_3.1_GENERATE.json
 
 # Allow examples
 !.env.example
+
+# Playwright MCP artefak sesi (log, snapshot, screenshot) — transient.
+.playwright-mcp/
+
+# Codex CLI local config
+.codex/

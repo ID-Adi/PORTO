@@ -23,3 +23,6 @@ coverage/
 
 # Logs
 *.log
+
+# Excalidraw fonts disinkronkan dari node_modules saat dev/build
+public/excalidraw-assets/

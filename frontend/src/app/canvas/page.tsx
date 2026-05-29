@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 
-import { SiteHeader } from "@/layout/site-header";
-import { CanvasClient } from "./canvas-client";
+import { CanvasShell } from "./canvas-shell";
 
 export const metadata: Metadata = {
   title: "Canvas",
@@ -10,10 +9,5 @@ export const metadata: Metadata = {
 };
 
 export default function CanvasPage() {
-  return (
-    <div className="flex h-dvh flex-col overflow-hidden bg-background">
-      <SiteHeader />
-      <CanvasClient />
-    </div>
-  );
+  return <CanvasShell />;
 }

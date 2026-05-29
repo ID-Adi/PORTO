@@ -1,6 +1,8 @@
 import { router } from "../init.js";
+import { aiSettingsRouter } from "./ai-settings.js";
 import { blogRouter } from "./blog.js";
 import { bookmarksRouter } from "./bookmarks.js";
+import { canvasRouter } from "./canvas.js";
 import { contactRouter } from "./contact.js";
 import { experiencesRouter } from "./experiences.js";
 import { mediaRouter } from "./media.js";
@@ -12,6 +14,7 @@ import { socialsRouter } from "./socials.js";
 import { toolsRouter } from "./tools.js";
 
 export const appRouter = router({
+  aiSettings: aiSettingsRouter,
   projects: projectsRouter,
   skills: skillsRouter,
   blog: blogRouter,
@@ -22,6 +25,7 @@ export const appRouter = router({
   profileOverview: profileOverviewRouter,
   socials: socialsRouter,
   bookmarks: bookmarksRouter,
+  canvas: canvasRouter,
   tools: toolsRouter,
 });
 
