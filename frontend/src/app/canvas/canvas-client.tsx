@@ -10,6 +10,7 @@ import { authClient } from "@/lib/auth-client";
 import { trpc } from "@/lib/trpc";
 
 import { exportScenePNG, exportSceneSVG } from "./canvas-export";
+import { loadLocalFiles, saveLocalFiles } from "./canvas-files-store";
 import {
   isRemoteNewer,
   loadLocalScene,
@@ -78,6 +79,7 @@ export function CanvasClient({ headerCollapsed, onToggleHeader }: CanvasClientPr
   const apiRef = useRef<ExcalidrawImperativeAPI | null>(null);
   const saveTimer = useRef<number | null>(null);
   const autoLoadedRef = useRef(false);
+  const filesRestoredRef = useRef(false);
   const [activeVideoUrl, setActiveVideoUrl] = useState<string | null>(null);
 
   const { data: session } = authClient.useSession();
@@ -94,15 +96,29 @@ export function CanvasClient({ headerCollapsed, onToggleHeader }: CanvasClientPr
     (
       elements: readonly OrderedExcalidrawElement[],
       appState: AppState,
-      _files: BinaryFiles
+      files: BinaryFiles
     ) => {
       if (saveTimer.current) window.clearTimeout(saveTimer.current);
       saveTimer.current = window.setTimeout(() => {
         saveLocalScene(elements, appState);
+        // files (dataURL gambar/poster video) disimpan terpisah di IndexedDB
+        // agar elemen image tetap punya datanya setelah unmount/remount.
+        void saveLocalFiles(files);
       }, 400);
     },
     []
   );
+
+  // Saat Excalidraw siap, muat kembali files dari IndexedDB dan tambahkan via
+  // addFiles. Excalidraw merender ulang elemen image begitu file-nya tersedia.
+  const handleApiReady = useCallback((api: ExcalidrawImperativeAPI) => {
+    apiRef.current = api;
+    if (filesRestoredRef.current) return;
+    filesRestoredRef.current = true;
+    void loadLocalFiles().then((files) => {
+      if (files) api.addFiles(Object.values(files));
+    });
+  }, []);
 
   const isDark = resolvedTheme === "dark";
 
@@ -146,9 +162,10 @@ export function CanvasClient({ headerCollapsed, onToggleHeader }: CanvasClientPr
     if (!apiRef.current) return;
     const elements = apiRef.current.getSceneElements();
     const appState = apiRef.current.getAppState();
+    const files = apiRef.current.getFiles();
     try {
       await upsertMutation.mutateAsync({
-        sceneData: { elements, appState: slimAppState(appState) },
+        sceneData: { elements, appState: slimAppState(appState), files },
       });
       toast.success("Tersimpan ke cloud");
     } catch (error) {
@@ -167,6 +184,8 @@ export function CanvasClient({ headerCollapsed, onToggleHeader }: CanvasClientPr
       // dengan subset AppState yang kita persist (lihat slimAppState).
       appState: remote.appState as unknown as Pick<AppState, keyof AppState>,
     });
+    // Sertakan kembali files agar thumbnail image/video ikut termuat.
+    if (remote.files) apiRef.current.addFiles(Object.values(remote.files));
   }, []);
 
   const handleLoadCloud = useCallback(async () => {
@@ -225,6 +244,7 @@ export function CanvasClient({ headerCollapsed, onToggleHeader }: CanvasClientPr
         onToggleHeader={onToggleHeader}
         activeVideoUrl={activeVideoUrl}
         apiRef={apiRef}
+        onApiReady={handleApiReady}
         isAuthed={isAuthed}
         upsertPending={upsertMutation.isPending}
         remoteFetching={remoteQuery.isFetching}

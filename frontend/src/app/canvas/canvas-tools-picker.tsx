@@ -30,6 +30,7 @@ type CanvasToolsPickerProps = {
 export function CanvasToolsPicker({ apiRef }: CanvasToolsPickerProps) {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<Kind>("image");
+  const [pendingId, setPendingId] = useState<number | null>(null);
   const { data: session } = authClient.useSession();
   const isAuthed = Boolean(session?.user);
 
@@ -38,9 +39,14 @@ export function CanvasToolsPicker({ apiRef }: CanvasToolsPickerProps) {
     { enabled: open && isAuthed, staleTime: 30_000 }
   );
 
-  async function handlePick(fileUrl: string, prompt: string, mimeType: string | null) {
-    if (!apiRef.current) return;
-    setOpen(false);
+  async function handlePick(
+    id: number,
+    fileUrl: string,
+    prompt: string,
+    mimeType: string | null
+  ) {
+    if (!apiRef.current || pendingId !== null) return;
+    setPendingId(id);
     try {
       if (tab === "image") {
         await insertImageFromUrl(apiRef.current, fileUrl);
@@ -51,10 +57,13 @@ export function CanvasToolsPicker({ apiRef }: CanvasToolsPickerProps) {
         tab === "image" ? "Image disisipkan" : "Video disisipkan",
         { description: prompt }
       );
+      setPendingId(null);
+      setOpen(false);
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "Gagal menyisipkan"
       );
+      setPendingId(null);
     }
   }
 
@@ -63,7 +72,14 @@ export function CanvasToolsPicker({ apiRef }: CanvasToolsPickerProps) {
   );
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        // Cegah modal menutup saat sisipan masih berjalan.
+        if (!next && pendingId !== null) return;
+        setOpen(next);
+      }}
+    >
       <DialogTrigger asChild>
         <button
           type="button"
@@ -100,7 +116,7 @@ export function CanvasToolsPicker({ apiRef }: CanvasToolsPickerProps) {
           ))}
         </div>
 
-        <div className="flex min-h-[60vh] flex-col">
+        <div className="flex max-h-[70vh] min-h-[40vh] flex-col overflow-y-auto">
         {!isAuthed ? (
           <p className="flex flex-1 items-center justify-center px-4 text-center font-mono text-xs text-muted-foreground">
             Login dulu untuk melihat history /tools.
@@ -115,37 +131,54 @@ export function CanvasToolsPicker({ apiRef }: CanvasToolsPickerProps) {
             Belum ada hasil {tab} di /tools. Generate dulu di halaman /tools.
           </p>
         ) : (
-          <div className="grid flex-1 grid-cols-4 gap-2 overflow-y-auto p-1">
-            {rows.map((row) => (
-              <button
-                key={row.id}
-                type="button"
-                onClick={() =>
-                  row.fileUrl && handlePick(row.fileUrl, row.prompt, row.mimeType)
-                }
-                title={row.prompt}
-                className="block cursor-pointer border border-line bg-background transition-colors hover:border-foreground"
-              >
-                {tab === "image" ? (
-                  <Image
-                    src={row.fileUrl!}
-                    alt={row.prompt}
-                    width={120}
-                    height={120}
-                    className="size-30 object-cover"
-                    unoptimized
-                  />
-                ) : (
-                  <video
-                    src={row.fileUrl!}
-                    muted
-                    playsInline
-                    preload="metadata"
-                    className="size-30 object-cover"
-                  />
-                )}
-              </button>
-            ))}
+          <div className="columns-3 gap-2 p-1">
+            {rows.map((row) => {
+              const aspect = row.aspectRatio
+                ? row.aspectRatio.replace(":", " / ")
+                : "1 / 1";
+              const isPending = pendingId === row.id;
+              return (
+                <button
+                  key={row.id}
+                  type="button"
+                  disabled={pendingId !== null}
+                  onClick={() =>
+                    row.fileUrl &&
+                    handlePick(row.id, row.fileUrl, row.prompt, row.mimeType)
+                  }
+                  title={row.prompt}
+                  className="relative mb-2 block w-full cursor-pointer overflow-hidden border border-line bg-background transition-colors hover:border-foreground disabled:cursor-not-allowed disabled:opacity-60 break-inside-avoid"
+                  style={{ aspectRatio: aspect }}
+                >
+                  {tab === "image" ? (
+                    <Image
+                      src={row.fileUrl!}
+                      alt={row.prompt}
+                      fill
+                      sizes="200px"
+                      className="object-cover"
+                      unoptimized
+                    />
+                  ) : (
+                    <video
+                      src={row.fileUrl!}
+                      muted
+                      playsInline
+                      preload="metadata"
+                      className="size-full object-cover"
+                    />
+                  )}
+                  {isPending && (
+                    <span className="absolute inset-0 flex items-center justify-center bg-background/70">
+                      <Loader2
+                        className="size-5 animate-spin text-foreground"
+                        aria-hidden
+                      />
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
         )}
         </div>

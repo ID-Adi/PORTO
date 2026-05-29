@@ -1,5 +1,5 @@
 import type { OrderedExcalidrawElement } from "@excalidraw/excalidraw/element/types";
-import type { AppState } from "@excalidraw/excalidraw/types";
+import type { AppState, BinaryFiles } from "@excalidraw/excalidraw/types";
 
 const SCENE_KEY = "porto:canvas:scene:v1";
 
@@ -60,6 +60,7 @@ export function clearLocalScene() {
 export type RemoteScene = {
   elements: readonly OrderedExcalidrawElement[];
   appState: Partial<AppState>;
+  files?: BinaryFiles;
 };
 
 export function isRemoteNewer(

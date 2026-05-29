@@ -33,6 +33,7 @@ type CanvasExcalidrawProps = {
   onToggleHeader: () => void;
   activeVideoUrl: string | null;
   apiRef: RefObject<ExcalidrawImperativeAPI | null>;
+  onApiReady?: (api: ExcalidrawImperativeAPI) => void;
   isAuthed: boolean;
   upsertPending: boolean;
   remoteFetching: boolean;
@@ -58,6 +59,7 @@ export function CanvasExcalidraw({
   onToggleHeader,
   activeVideoUrl,
   apiRef,
+  onApiReady,
   isAuthed,
   upsertPending,
   remoteFetching,
@@ -72,6 +74,7 @@ export function CanvasExcalidraw({
     <Excalidraw
       excalidrawAPI={(api) => {
         apiRef.current = api;
+        onApiReady?.(api);
       }}
       onChange={onChange}
       onLinkOpen={onLinkOpen as never}
