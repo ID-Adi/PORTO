@@ -68,7 +68,7 @@ services:
         # NEXT_PUBLIC_* di-inline saat build, jadi diberikan sebagai build arg.
         # Override lewat root .env bila perlu; default = nilai produksi.
         NEXT_PUBLIC_BACKEND_URL: ${NEXT_PUBLIC_BACKEND_URL:-https://api.pawa.my.id}
-        NEXT_PUBLIC_ADMIN_EMAIL: ${NEXT_PUBLIC_ADMIN_EMAIL:-admin@porto.dev}
+        NEXT_PUBLIC_ADMIN_EMAIL: ${NEXT_PUBLIC_ADMIN_EMAIL:-adi@pawa.my.id}
     container_name: porto-frontend
     restart: unless-stopped
     ports:

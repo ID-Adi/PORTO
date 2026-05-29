@@ -29,7 +29,12 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
     return null;
   }
 
-  if (adminEmail && session.user.email !== adminEmail) {
+  // Otorisasi utama lewat role DB (dikembalikan Better Auth di session);
+  // email == NEXT_PUBLIC_ADMIN_EMAIL dipertahankan sebagai fallback.
+  const role = (session.user as { role?: string }).role;
+  const isAdmin =
+    role === "admin" || (!!adminEmail && session.user.email === adminEmail);
+  if (!isAdmin) {
     return (
       <div className="admin-theme font-sans antialiased">
         <div className="flex min-h-screen flex-col items-center justify-center gap-3 px-6 text-center">
