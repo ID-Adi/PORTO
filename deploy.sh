@@ -7,16 +7,19 @@
 #   3. Tarik kode terbaru dari origin/main (dengan proteksi working tree kotor).
 #   4. Pastikan Postgres hidup & sehat lebih dulu.
 #   5. Rebuild + restart backend (migrasi drizzle jalan otomatis via entrypoint).
-#   6. Verifikasi backend benar-benar sehat; kalau gagal, tampilkan log + cara rollback.
+#   6. Rebuild + restart frontend (porto-frontend, dilayani via cloudflared-pawa
+#      tunnel -> localhost:3001). Lewati dengan --skip-frontend.
+#   7. Verifikasi kedua service sehat; kalau gagal, tampilkan log + cara rollback.
 #
 # Database container (porto-postgres) & volume postgres_data TIDAK PERNAH disentuh
 # script ini — tidak ada `down`, tidak ada `-v`. Data aman lintas deploy.
 #
 # Usage:
-#   ./deploy.sh              # deploy normal (abort kalau working tree kotor)
-#   ./deploy.sh --force      # paksa lanjut walau ada perubahan lokal (akan di-reset)
-#   ./deploy.sh --no-backup  # skip backup DB (TIDAK disarankan)
-#   ./deploy.sh --skip-pull  # deploy ulang dari kode yang sudah ada (tanpa git fetch/reset)
+#   ./deploy.sh                 # deploy normal (abort kalau working tree kotor)
+#   ./deploy.sh --force         # paksa lanjut walau ada perubahan lokal (akan di-reset)
+#   ./deploy.sh --no-backup     # skip backup DB (TIDAK disarankan)
+#   ./deploy.sh --skip-pull     # deploy ulang dari kode yang sudah ada (tanpa git fetch/reset)
+#   ./deploy.sh --skip-frontend # hanya redeploy backend, jangan sentuh frontend
 
 set -euo pipefail
 
@@ -27,8 +30,10 @@ cd "$(dirname "$0")"
 # ──────────────────────────────────────────────────────────────────────────
 PG_SERVICE="postgres"            # nama service postgres di docker-compose.yml
 BACKEND_SERVICE="backend"        # nama service backend
+FRONTEND_SERVICE="frontend"      # nama service frontend
 PG_CONTAINER="porto-postgres"    # container_name postgres
 BACKEND_CONTAINER="porto-backend"
+FRONTEND_CONTAINER="porto-frontend"
 BACKUP_DIR="./backups"
 BACKUP_RETENTION=10              # jumlah backup terakhir yang disimpan
 HEALTH_RETRIES=30                # percobaan health check (x interval)
@@ -37,14 +42,16 @@ HEALTH_INTERVAL=3                # detik antar percobaan
 FORCE=0
 DO_BACKUP=1
 DO_PULL=1
+DO_FRONTEND=1
 
 for arg in "$@"; do
   case "$arg" in
-    --force)     FORCE=1 ;;
-    --no-backup) DO_BACKUP=0 ;;
-    --skip-pull) DO_PULL=0 ;;
+    --force)         FORCE=1 ;;
+    --no-backup)     DO_BACKUP=0 ;;
+    --skip-pull)     DO_PULL=0 ;;
+    --skip-frontend) DO_FRONTEND=0 ;;
     -h|--help)
-      grep '^#' "$0" | sed 's/^# \{0,1\}//' | head -n 22
+      grep '^#' "$0" | sed 's/^# \{0,1\}//' | head -n 24
       exit 0
       ;;
     *)
@@ -99,6 +106,23 @@ report_pending_migrations() {
     warn "${pending_count} migrasi akan diterapkan saat backend start:"
     printf "%b" "$pending_list"
   fi
+}
+
+# Tunggu sebuah container jadi 'healthy' (atau 'running' bila tak punya
+# healthcheck). Return 0 kalau sehat, 1 kalau gagal/timeout.
+wait_healthy() {
+  local container="$1" status
+  for i in $(seq 1 "$HEALTH_RETRIES"); do
+    status="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$container" 2>/dev/null || echo 'missing')"
+    case "$status" in
+      healthy) return 0 ;;
+      # 'running' tanpa healthcheck: anggap ok setelah beberapa detik stabil.
+      running) [ "$i" -ge 2 ] && return 0 ;;
+      exited|dead|missing) return 1 ;;
+    esac
+    sleep "$HEALTH_INTERVAL"
+  done
+  return 1
 }
 
 # Pilih perintah compose yang tersedia (v2 plugin atau v1 standalone).
@@ -214,41 +238,60 @@ step "Restart backend (migrasi DB jalan via entrypoint)..."
 $DC up -d "$BACKEND_SERVICE"
 
 # ──────────────────────────────────────────────────────────────────────────
-# 6. Verifikasi health
+# 6. Verifikasi backend sehat
 # ──────────────────────────────────────────────────────────────────────────
 step "Menunggu backend sehat..."
-healthy=0
-for i in $(seq 1 "$HEALTH_RETRIES"); do
-  status="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$BACKEND_CONTAINER" 2>/dev/null || echo 'missing')"
-  case "$status" in
-    healthy|running)
-      # Kalau ada healthcheck, tunggu 'healthy'. Kalau tidak, 'running' cukup.
-      if [ "$status" = "healthy" ]; then healthy=1; break; fi
-      # 'running' tanpa healthcheck: anggap ok setelah beberapa detik stabil.
-      if [ "$i" -ge 2 ]; then healthy=1; break; fi
-      ;;
-    exited|dead|missing)
-      break
-      ;;
-  esac
-  sleep "$HEALTH_INTERVAL"
-done
+backend_ok=0
+if wait_healthy "$BACKEND_CONTAINER"; then backend_ok=1; fi
 
+# ──────────────────────────────────────────────────────────────────────────
+# 7. Rebuild + restart frontend (Next.js standalone, origin tunnel localhost:3001)
+# ──────────────────────────────────────────────────────────────────────────
+# Build context = repo root; type-check butuh source backend (alias @porto/api).
+frontend_ok=1
+if [ "$DO_FRONTEND" -eq 1 ]; then
+  step "Build image frontend..."
+  $DC build "$FRONTEND_SERVICE"
+
+  step "Restart frontend..."
+  $DC up -d "$FRONTEND_SERVICE"
+
+  step "Menunggu frontend sehat..."
+  frontend_ok=0
+  if wait_healthy "$FRONTEND_CONTAINER"; then frontend_ok=1; fi
+else
+  warn "Frontend di-skip (--skip-frontend)."
+fi
+
+# ──────────────────────────────────────────────────────────────────────────
+# 8. Ringkasan + log
+# ──────────────────────────────────────────────────────────────────────────
 echo
 step "Log backend terbaru:"
-$DC logs --tail=40 "$BACKEND_SERVICE" || true
+$DC logs --tail=30 "$BACKEND_SERVICE" || true
+if [ "$DO_FRONTEND" -eq 1 ]; then
+  echo
+  step "Log frontend terbaru:"
+  $DC logs --tail=30 "$FRONTEND_SERVICE" || true
+fi
 echo
 step "Status container:"
 $DC ps
 
-if [ "$healthy" -eq 1 ]; then
+echo
+[ "$backend_ok" -eq 1 ] && ok "Backend sehat." || warn "Backend BELUM sehat (migrasi gagal? env salah?)."
+if [ "$DO_FRONTEND" -eq 1 ]; then
+  [ "$frontend_ok" -eq 1 ] && ok "Frontend sehat." || warn "Frontend BELUM sehat (build/env gagal?)."
+fi
+
+if [ "$backend_ok" -eq 1 ] && [ "$frontend_ok" -eq 1 ]; then
   echo
-  ok "Deploy selesai. Backend sehat di commit $(git rev-parse --short HEAD)."
+  ok "Deploy selesai di commit $(git rev-parse --short HEAD)."
   [ "$DO_BACKUP" -eq 1 ] && echo "${C_DIM}  Backup DB: ${backup_file:-<dilewati>}${C_RST}"
 else
   echo
-  warn "Backend BELUM sehat. Cek log di atas untuk penyebab (migrasi gagal? env salah?)."
-  echo "  Rollback kode:     git reset --hard ${PREV_COMMIT} && ${DC} up -d --build ${BACKEND_SERVICE}"
+  warn "Ada service yang belum sehat — cek log di atas untuk penyebabnya."
+  echo "  Rollback kode:     git reset --hard ${PREV_COMMIT} && ${DC} up -d --build ${BACKEND_SERVICE} ${FRONTEND_SERVICE}"
   if [ "$DO_BACKUP" -eq 1 ] && [ -n "${backup_file:-}" ]; then
     echo "  Restore database:  gunzip -c ${backup_file} | docker exec -i ${PG_CONTAINER} psql -U ${PGUSER} -d ${PGDB}"
   fi

@@ -7,7 +7,14 @@ const rootDirectory = path.dirname(fileURLToPath(import.meta.url));
 // Repo punya 2 lockfile (frontend + backend) tanpa pnpm-workspace.yaml.
 // Override root supaya Next.js / Turbopack / Vercel tidak ambigu menentukan
 // project root, dan output file tracing inklusif untuk monorepo deploy.
-const workspaceRoot = path.resolve(rootDirectory, "..");
+//
+// Default (Vercel/monorepo) = parent dir. Untuk build Docker — di mana hanya
+// folder `frontend/` yang di-copy ke /app — set NEXT_FILE_TRACING_ROOT=/app
+// supaya standalone output ter-trace dari root container, bukan parent yang
+// tidak ada. Default tidak berubah, jadi build Vercel tetap identik.
+const workspaceRoot = process.env.NEXT_FILE_TRACING_ROOT
+  ? path.resolve(process.env.NEXT_FILE_TRACING_ROOT)
+  : path.resolve(rootDirectory, "..");
 
 const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:4002";
 const legacyUploadHostname = "porto-api.pawa.my.id";
@@ -116,6 +123,9 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // Standalone output → server.js + node_modules minimal untuk runtime Docker.
+  // Tidak berpengaruh ke Vercel (Vercel mengabaikan output mode ini).
+  output: "standalone",
   allowedDevOrigins: ["127.0.0.1"],
   images: {
     qualities: [75, 100],

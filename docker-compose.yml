@@ -58,6 +58,35 @@ services:
       # container restart. Backend serve /uploads/* via Hono serveStatic.
       - porto_uploads:/app/public/uploads
 
+  frontend:
+    build:
+      # Context = repo root: build butuh source backend untuk type-check
+      # import AppRouter (@porto/api). Lihat catatan di frontend/Dockerfile.
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        # NEXT_PUBLIC_* di-inline saat build, jadi diberikan sebagai build arg.
+        # Override lewat root .env bila perlu; default = nilai produksi.
+        NEXT_PUBLIC_BACKEND_URL: ${NEXT_PUBLIC_BACKEND_URL:-https://api.pawa.my.id}
+        NEXT_PUBLIC_ADMIN_EMAIL: ${NEXT_PUBLIC_ADMIN_EMAIL:-admin@porto.dev}
+    container_name: porto-frontend
+    restart: unless-stopped
+    ports:
+      # Ingress publik = Cloudflare Tunnel (cloudflared-pawa) → localhost:3001.
+      # Publish ke loopback saja (sejajar backend 127.0.0.1:4002); tunnel jalan
+      # di host menjangkau via localhost. Tidak terekspos ke LAN/VPS.
+      - "127.0.0.1:3001:3000"
+    networks:
+      # Tetap di n8n-pawa-net agar Caddy bisa menjangkau via porto-frontend:3000
+      # bila diperlukan (jalur sekunder, sejajar backend).
+      - default
+      - caddy
+    env_file:
+      # Variabel server-side runtime (GITHUB_TOKEN, GITHUB_USERNAME).
+      - ./frontend/.env
+    environment:
+      NODE_ENV: production
+
 volumes:
   postgres_data:
   porto_uploads:

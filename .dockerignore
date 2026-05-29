@@ -1,0 +1,35 @@
+# Berlaku saat build context = repo root (dipakai service `frontend`).
+# Tujuan: kirim hanya source frontend/ + backend/ yang dibutuhkan, bukan
+# node_modules/.next/aset besar/rahasia.
+
+**/node_modules
+**/.next
+**/.turbo
+.git
+.github
+
+# Aset & folder besar yang tidak relevan untuk build frontend.
+excalidraw
+n8n
+backups
+chanhdai.com
+untitled folder
+docs
+plan
+*.png
+
+# Tooling lokal & editor.
+.claude
+.hermes
+.idea
+.playwright-cli
+.vercel
+.agents
+
+# Secrets — NEXT_PUBLIC_* via build arg, GITHUB_* via env_file runtime.
+**/.env
+**/.env.*
+!**/.env.example
+
+*.log
+.DS_Store
