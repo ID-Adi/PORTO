@@ -40,6 +40,18 @@ export const auth = betterAuth({
   database: drizzleAdapter(db, {
     provider: "pg",
   }),
+  user: {
+    additionalFields: {
+      // Role disimpan di DB & dikembalikan dalam session. `input: false`
+      // mencegah user menetapkan role sendiri saat signup/update.
+      role: {
+        type: "string",
+        required: false,
+        defaultValue: "user",
+        input: false,
+      },
+    },
+  },
   emailAndPassword: {
     enabled: true,
   },

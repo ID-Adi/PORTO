@@ -15,11 +15,17 @@ export const router = t.router;
 export const publicProcedure = t.procedure;
 
 export const protectedProcedure = t.procedure.use(({ ctx, next }) => {
-  const adminEmail = process.env.ADMIN_EMAIL;
   if (!ctx.session?.user) {
     throw new TRPCError({ code: "UNAUTHORIZED", message: "Not signed in" });
   }
-  if (adminEmail && ctx.session.user.email !== adminEmail) {
+  // Otorisasi admin ditentukan oleh `role` di DB (dikembalikan via session).
+  // ADMIN_EMAIL dipertahankan sebagai fallback bootstrap supaya tidak ada
+  // lockout sebelum role tersetel.
+  const adminEmail = process.env.ADMIN_EMAIL;
+  const role = (ctx.session.user as { role?: string }).role;
+  const isAdmin =
+    role === "admin" || (!!adminEmail && ctx.session.user.email === adminEmail);
+  if (!isAdmin) {
     throw new TRPCError({ code: "FORBIDDEN", message: "Admin only" });
   }
   return next({ ctx: { ...ctx, session: ctx.session } });
