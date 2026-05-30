@@ -4,6 +4,7 @@ import { z } from "zod";
 import { db } from "../../db/index.js";
 import {
   aiToolSettings,
+  DEFAULT_CANVAS_AGENT_MODEL,
   DEFAULT_TTS_MODEL,
   DEFAULT_TTS_VOICE,
   DEFAULT_TTS_VOICES,
@@ -26,6 +27,10 @@ const ttsConfigInput = z.object({
   ttsDefaultVoice: z.string().min(1).max(80),
   ttsVoiceOptions: z.array(z.string().min(1).max(80)).min(1).max(30),
   ttsEnabled: z.boolean(),
+  canvasAgentEnabled: z.boolean().optional().default(false),
+  canvasAgentProvider: TTS_PROVIDER.optional().default("gemini"),
+  canvasAgentModel: z.string().min(1).max(160).optional().default(DEFAULT_CANVAS_AGENT_MODEL),
+  canvasAgentSystemPrompt: z.string().max(8000).optional().nullable(),
 });
 
 // Kredensial per provider (dipakai untuk Save & Test di modal).
@@ -61,6 +66,10 @@ function publicConfig(row: AiToolSettingsRow) {
     ttsDefaultVoice: row.ttsDefaultVoice,
     ttsVoiceOptions: row.ttsVoiceOptions,
     ttsEnabled: row.ttsEnabled,
+    canvasAgentEnabled: row.canvasAgentEnabled,
+    canvasAgentProvider: row.canvasAgentProvider,
+    canvasAgentModel: row.canvasAgentModel,
+    canvasAgentSystemPrompt: row.canvasAgentSystemPrompt,
     // Per-provider (tak pernah kirim secret plaintext).
     gemini: {
       hasApiKey: Boolean(row.ttsApiKeyEncrypted),
@@ -100,6 +109,9 @@ async function getOrCreateSettings() {
       ttsDefaultVoice: DEFAULT_TTS_VOICE,
       ttsVoiceOptions: [...DEFAULT_TTS_VOICES],
       ttsEnabled: false,
+      canvasAgentEnabled: false,
+      canvasAgentProvider: "gemini",
+      canvasAgentModel: DEFAULT_CANVAS_AGENT_MODEL,
     })
     .returning();
   return row;
@@ -158,6 +170,10 @@ export const aiSettingsRouter = router({
           ttsDefaultVoice: input.ttsDefaultVoice,
           ttsVoiceOptions: input.ttsVoiceOptions,
           ttsEnabled: input.ttsEnabled,
+          canvasAgentEnabled: input.canvasAgentEnabled,
+          canvasAgentProvider: input.canvasAgentProvider,
+          canvasAgentModel: input.canvasAgentModel,
+          canvasAgentSystemPrompt: input.canvasAgentSystemPrompt?.trim() || null,
           updatedAt: new Date(),
         })
         .where(eq(aiToolSettings.id, existing.id))

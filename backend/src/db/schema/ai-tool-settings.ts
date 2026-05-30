@@ -33,6 +33,7 @@ export const OPENAI_TTS_VOICES = [
 ] as const;
 
 export const DEFAULT_VERTEX_LOCATION = "us-central1";
+export const DEFAULT_CANVAS_AGENT_MODEL = "gemini-3.1-flash";
 
 export type TtsProvider = "gemini" | "vertex" | "openrouter";
 
@@ -60,5 +61,11 @@ export const aiToolSettings = pgTable("ai_tool_settings", {
     .notNull()
     .default([...DEFAULT_TTS_VOICES]),
   ttsEnabled: boolean("tts_enabled").notNull().default(false),
+  canvasAgentEnabled: boolean("canvas_agent_enabled").notNull().default(false),
+  canvasAgentProvider: text("canvas_agent_provider").notNull().default("gemini"),
+  canvasAgentModel: text("canvas_agent_model")
+    .notNull()
+    .default(DEFAULT_CANVAS_AGENT_MODEL),
+  canvasAgentSystemPrompt: text("canvas_agent_system_prompt"),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

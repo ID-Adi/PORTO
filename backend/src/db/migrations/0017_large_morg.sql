@@ -1,0 +1,1 @@
+ALTER TABLE "canvas_agent_workflows" ADD COLUMN "is_pinned" boolean DEFAULT false NOT NULL;

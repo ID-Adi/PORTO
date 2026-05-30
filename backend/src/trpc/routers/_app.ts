@@ -2,6 +2,7 @@ import { router } from "../init.js";
 import { aiSettingsRouter } from "./ai-settings.js";
 import { blogRouter } from "./blog.js";
 import { bookmarksRouter } from "./bookmarks.js";
+import { canvasAgentRouter } from "./canvas-agent.js";
 import { canvasRouter } from "./canvas.js";
 import { contactRouter } from "./contact.js";
 import { experiencesRouter } from "./experiences.js";
@@ -26,6 +27,7 @@ export const appRouter = router({
   socials: socialsRouter,
   bookmarks: bookmarksRouter,
   canvas: canvasRouter,
+  canvasAgent: canvasAgentRouter,
   tools: toolsRouter,
 });
 

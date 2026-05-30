@@ -1,0 +1,1 @@
+ALTER TABLE "canvas_agent_workflows" ADD COLUMN "scene_data" jsonb;
