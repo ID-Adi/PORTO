@@ -182,7 +182,7 @@ export function ApiKeyField({ provider, label, hint, status }: ApiKeyFieldProps)
             </DialogTitle>
           </DialogHeader>
 
-          <div className="grid gap-3">
+          <div className="grid gap-3 p-4">
             {isVertex ? (
               <>
                 <div className="space-y-1.5">

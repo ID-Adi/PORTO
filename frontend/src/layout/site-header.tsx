@@ -7,10 +7,14 @@ import { Frame, Home as HomeIcon, Search, Wrench } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { navItems } from "@/features/home/data/nav-items";
-import { Icons } from "@/layout/icons";
 import { openCommandMenu } from "@/components/common/command-menu";
 import { HeaderProfileMenu } from "@/components/common/header-profile-menu";
 import { ThemeToggle } from "@/components/common/theme-toggle";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useHasMounted } from "@/hooks/use-has-mounted";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
@@ -103,44 +107,34 @@ export function SiteHeader() {
             </a>
 
             <div className="ml-auto flex items-center">
-              <div className="hidden items-center border-r border-line pr-2 md:flex">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 gap-2 border-none px-2 font-mono text-[12px] font-medium text-muted-foreground hover:bg-transparent hover:text-foreground"
-                  aria-label="Search"
-                  onClick={() => openCommandMenu()}
-                >
-                  <Search className="size-3.5" />
-                  Search
-                  <span className="inline-flex gap-0.5">
-                    <span className="rounded-[4px] border border-line px-1 leading-4">
-                      ⌘
-                    </span>
-                    <span className="rounded-[4px] border border-line px-1 leading-4">
-                      K
-                    </span>
-                  </span>
-                </Button>
-              </div>
-
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-8 gap-2 border-r border-line border-none px-2 font-mono text-[12px] font-medium hover:bg-transparent"
-                asChild
-              >
-                <a
-                  href="https://github.com"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label="GitHub"
-                  className="border-r border-line pr-2"
-                >
-                  <Icons.gitHub className="size-4" />
-                  <span className="hidden md:inline-block">1.6k</span>
-                </a>
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 rounded-none border-r border-line px-0 text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+                    aria-label="Search"
+                    onClick={() => openCommandMenu()}
+                  >
+                    <Search aria-hidden />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" sideOffset={8}>
+                  <span>Search</span>
+                  <kbd
+                    data-slot="kbd"
+                    className="border border-background/20 px-1"
+                  >
+                    ⌘ K
+                  </kbd>
+                  <kbd
+                    data-slot="kbd"
+                    className="border border-background/20 px-1"
+                  >
+                    /
+                  </kbd>
+                </TooltipContent>
+              </Tooltip>
 
               <section
                 aria-label="Theme and profile controls"

@@ -12,11 +12,17 @@ import { trpc } from "@/lib/trpc";
 import { exportScenePNG, exportSceneSVG } from "./canvas-export";
 import { loadLocalFiles, saveLocalFiles } from "./canvas-files-store";
 import {
-  isRemoteNewer,
   loadLocalScene,
   saveLocalScene,
   type RemoteScene,
 } from "./canvas-storage";
+import {
+  CanvasWorkflowProvider,
+  persistWorkflowId,
+  readStoredWorkflowId,
+  type CanvasWorkflowContextValue,
+} from "./canvas-workflow-context";
+import { CanvasWorkflowPicker } from "./canvas-workflow-picker";
 
 import "@excalidraw/excalidraw/index.css";
 import "./canvas.css";
@@ -78,19 +84,38 @@ export function CanvasClient({ headerCollapsed, onToggleHeader }: CanvasClientPr
   const mounted = useHasMounted();
   const apiRef = useRef<ExcalidrawImperativeAPI | null>(null);
   const saveTimer = useRef<number | null>(null);
-  const autoLoadedRef = useRef(false);
-  const filesRestoredRef = useRef(false);
+  const cloudBootstrappedRef = useRef(false);
   const [activeVideoUrl, setActiveVideoUrl] = useState<string | null>(null);
 
   const { data: session } = authClient.useSession();
   const user = session?.user;
   const isAuthed = Boolean(user);
 
-  const remoteQuery = trpc.canvas.get.useQuery(undefined, {
-    enabled: mounted && isAuthed,
-    staleTime: 60_000,
-  });
-  const upsertMutation = trpc.canvas.upsert.useMutation();
+  const utils = trpc.useUtils();
+  const saveSceneMutation = trpc.canvasAgent.saveWorkflowScene.useMutation();
+  const createWorkflowMutation = trpc.canvasAgent.createWorkflow.useMutation();
+
+  // Workflow aktif — sumber kebenaran tunggal (canvas scene + agent chat).
+  const [activeWorkflowId, setActiveWorkflowIdState] = useState<number | null>(
+    () => readStoredWorkflowId()
+  );
+  const [pickerOpen, setPickerOpen] = useState(false);
+
+  // Mirror nilai ke ref agar bisa dibaca di callback stabil.
+  const activeWorkflowIdRef = useRef(activeWorkflowId);
+  const isAuthedRef = useRef(isAuthed);
+  useEffect(() => {
+    activeWorkflowIdRef.current = activeWorkflowId;
+  }, [activeWorkflowId]);
+  useEffect(() => {
+    isAuthedRef.current = isAuthed;
+  }, [isAuthed]);
+
+  const setActiveWorkflowId = useCallback((id: number | null) => {
+    setActiveWorkflowIdState(id);
+    activeWorkflowIdRef.current = id;
+    persistWorkflowId(id);
+  }, []);
 
   const handleChange = useCallback(
     (
@@ -100,25 +125,157 @@ export function CanvasClient({ headerCollapsed, onToggleHeader }: CanvasClientPr
     ) => {
       if (saveTimer.current) window.clearTimeout(saveTimer.current);
       saveTimer.current = window.setTimeout(() => {
+        // Draft lokal (working scene) — terpisah dari cloud per-workflow.
         saveLocalScene(elements, appState);
-        // files (dataURL gambar/poster video) disimpan terpisah di IndexedDB
-        // agar elemen image tetap punya datanya setelah unmount/remount.
         void saveLocalFiles(files);
       }, 400);
     },
     []
   );
 
-  // Saat Excalidraw siap, muat kembali files dari IndexedDB dan tambahkan via
-  // addFiles. Excalidraw merender ulang elemen image begitu file-nya tersedia.
-  const handleApiReady = useCallback((api: ExcalidrawImperativeAPI) => {
-    apiRef.current = api;
-    if (filesRestoredRef.current) return;
-    filesRestoredRef.current = true;
-    void loadLocalFiles().then((files) => {
-      if (files) api.addFiles(Object.values(files));
+  const applyRemoteScene = useCallback((remote: RemoteScene) => {
+    if (!apiRef.current) return;
+    apiRef.current.updateScene({
+      elements: remote.elements,
+      appState: remote.appState as unknown as Pick<AppState, keyof AppState>,
     });
+    if (remote.files) apiRef.current.addFiles(Object.values(remote.files));
   }, []);
+
+  // Terapkan scene workflow ke canvas (atau kosongkan bila workflow belum punya
+  // scene). Sinkronkan juga draft lokal supaya konsisten saat remount.
+  const applyWorkflowScene = useCallback(
+    (scene: RemoteScene | null) => {
+      if (!apiRef.current) return;
+      if (!scene || !Array.isArray(scene.elements)) {
+        apiRef.current.updateScene({ elements: [] });
+        return;
+      }
+      applyRemoteScene(scene);
+      saveLocalScene(
+        scene.elements,
+        scene.appState as unknown as AppState
+      );
+      if (scene.files) void saveLocalFiles(scene.files);
+    },
+    [applyRemoteScene]
+  );
+
+  const loadWorkflowScene = useCallback(
+    async (id: number) => {
+      try {
+        const data = await utils.canvasAgent.getWorkflow.fetch({ id });
+        applyWorkflowScene(
+          (data?.workflow?.sceneData ?? null) as RemoteScene | null
+        );
+      } catch {
+        // workflow tak ditemukan / belum login — biarkan canvas apa adanya.
+      }
+    },
+    [utils, applyWorkflowScene]
+  );
+
+  const saveCurrentSceneTo = useCallback(
+    async (id: number) => {
+      if (!apiRef.current) return;
+      const elements = apiRef.current.getSceneElements();
+      const appState = apiRef.current.getAppState();
+      const files = apiRef.current.getFiles();
+      await saveSceneMutation.mutateAsync({
+        id,
+        sceneData: { elements, appState: slimAppState(appState), files },
+      });
+    },
+    [saveSceneMutation]
+  );
+
+  // Pindah workflow (2-arah): auto-save scene aktif → set aktif → muat scene baru.
+  const switchWorkflow = useCallback(
+    async (nextId: number | null) => {
+      const prev = activeWorkflowIdRef.current;
+      if (prev !== null && prev !== nextId && apiRef.current) {
+        try {
+          await saveCurrentSceneTo(prev);
+        } catch {
+          // best-effort — jangan blok perpindahan kalau gagal simpan.
+        }
+      }
+      setActiveWorkflowId(nextId);
+      void utils.canvasAgent.listWorkflows.invalidate();
+      if (nextId !== null) await loadWorkflowScene(nextId);
+      else applyWorkflowScene(null);
+    },
+    [
+      saveCurrentSceneTo,
+      setActiveWorkflowId,
+      loadWorkflowScene,
+      applyWorkflowScene,
+      utils,
+    ]
+  );
+
+  // Pastikan ada workflow aktif; bila belum ada, buat baru & ADOPSI scene canvas
+  // saat ini (tanpa mengosongkan kanvas). Return id workflow aktif.
+  const ensureWorkflow = useCallback(
+    async (title = "Untitled workflow") => {
+      let id = activeWorkflowIdRef.current;
+      if (id === null) {
+        const row = await createWorkflowMutation.mutateAsync({ title });
+        id = row.id;
+        setActiveWorkflowId(id);
+        try {
+          await saveCurrentSceneTo(id);
+        } catch {
+          // best-effort adopsi scene
+        }
+        void utils.canvasAgent.listWorkflows.invalidate();
+      }
+      return id;
+    },
+    [createWorkflowMutation, setActiveWorkflowId, saveCurrentSceneTo, utils]
+  );
+
+  const saveActiveScene = useCallback(async () => {
+    try {
+      const id = await ensureWorkflow("Canvas workflow");
+      await saveCurrentSceneTo(id);
+      void utils.canvasAgent.listWorkflows.invalidate();
+      void utils.canvasAgent.getWorkflow.invalidate({ id });
+      toast.success("Tersimpan ke workflow");
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Gagal menyimpan ke cloud"
+      );
+    }
+  }, [ensureWorkflow, saveCurrentSceneTo, utils]);
+
+  // Auto-load scene workflow aktif sekali (setelah API siap & user login).
+  const maybeBootstrapCloud = useCallback(() => {
+    if (cloudBootstrappedRef.current) return;
+    if (!apiRef.current || !isAuthedRef.current) return;
+    const id = activeWorkflowIdRef.current;
+    if (id === null) return;
+    cloudBootstrappedRef.current = true;
+    void loadWorkflowScene(id);
+  }, [loadWorkflowScene]);
+
+  // Saat CanvasPawa siap: pasang apiRef, restore files lokal, lalu coba bootstrap
+  // scene workflow dari cloud (kalau ada workflow aktif & sudah login).
+  const handleApiReady = useCallback(
+    (api: ExcalidrawImperativeAPI) => {
+      apiRef.current = api;
+      void loadLocalFiles().then((files) => {
+        if (files) api.addFiles(Object.values(files));
+      });
+      maybeBootstrapCloud();
+    },
+    [maybeBootstrapCloud]
+  );
+
+  // Auth bisa resolve setelah API ready — coba bootstrap lagi.
+  useEffect(() => {
+    if (isAuthed) maybeBootstrapCloud();
+  }, [isAuthed, maybeBootstrapCloud]);
 
   const isDark = resolvedTheme === "dark";
 
@@ -141,8 +298,7 @@ export function CanvasClient({ headerCollapsed, onToggleHeader }: CanvasClientPr
       elements: saved.elements,
       appState: { ...defaultAppState, ...saved.appState },
     };
-    // initialData hanya dibaca sekali saat mount Excalidraw, jadi dependency
-    // theme dibekukan ke nilai pertama; mengubah tema tidak mereset scene.
+    // initialData hanya dibaca sekali saat mount CanvasPawa.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -158,46 +314,9 @@ export function CanvasClient({ headerCollapsed, onToggleHeader }: CanvasClientPr
     if (!ok) toast.info("Kanvas kosong — tidak ada yang diekspor");
   }, []);
 
-  const handleSaveCloud = useCallback(async () => {
-    if (!apiRef.current) return;
-    const elements = apiRef.current.getSceneElements();
-    const appState = apiRef.current.getAppState();
-    const files = apiRef.current.getFiles();
-    try {
-      await upsertMutation.mutateAsync({
-        sceneData: { elements, appState: slimAppState(appState), files },
-      });
-      toast.success("Tersimpan ke cloud");
-    } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Gagal menyimpan ke cloud"
-      );
-    }
-  }, [upsertMutation]);
-
-  const applyRemoteScene = useCallback((remote: RemoteScene) => {
-    if (!apiRef.current) return;
-    apiRef.current.updateScene({
-      elements: remote.elements,
-      // Excalidraw mengetik `appState` sebagai Pick<AppState, K> — cast via
-      // unknown karena bentuk JSON dari backend secara struktural cocok
-      // dengan subset AppState yang kita persist (lihat slimAppState).
-      appState: remote.appState as unknown as Pick<AppState, keyof AppState>,
-    });
-    // Sertakan kembali files agar thumbnail image/video ikut termuat.
-    if (remote.files) apiRef.current.addFiles(Object.values(remote.files));
+  const handleLoadCloud = useCallback(() => {
+    setPickerOpen(true);
   }, []);
-
-  const handleLoadCloud = useCallback(async () => {
-    const result = await remoteQuery.refetch();
-    const row = result.data;
-    if (!row || !apiRef.current) {
-      toast.info("Belum ada kanvas tersimpan di cloud");
-      return;
-    }
-    applyRemoteScene(row.sceneData as RemoteScene);
-    toast.success("Dimuat dari cloud");
-  }, [remoteQuery, applyRemoteScene]);
 
   const handleLinkOpen = useCallback(
     (element: { customData?: unknown }, event: { preventDefault: () => void }) => {
@@ -217,44 +336,48 @@ export function CanvasClient({ headerCollapsed, onToggleHeader }: CanvasClientPr
     []
   );
 
-  // Auto-load remote saat tersedia & lebih baru dari local. Jalankan sekali
-  // per session canvas (autoLoadedRef) untuk menghindari overwrite saat
-  // remote re-fetch (mis. window focus).
-  useEffect(() => {
-    if (autoLoadedRef.current) return;
-    if (!apiRef.current) return;
-    const row = remoteQuery.data;
-    if (!row) return;
-    const local = loadLocalScene();
-    if (isRemoteNewer(local, row.updatedAt)) {
-      applyRemoteScene(row.sceneData as RemoteScene);
-      toast.success("Kanvas dimuat dari cloud");
-    }
-    autoLoadedRef.current = true;
-  }, [remoteQuery.data, applyRemoteScene]);
+  const workflowContext = useMemo<CanvasWorkflowContextValue>(
+    () => ({
+      activeWorkflowId,
+      switchWorkflow,
+      saveActiveScene,
+      ensureWorkflow,
+      openPicker: () => setPickerOpen(true),
+    }),
+    [activeWorkflowId, switchWorkflow, saveActiveScene, ensureWorkflow]
+  );
 
   if (!mounted) return <CanvasLoader />;
 
   return (
-    <div className="canvas-porto-wrapper flex-1 overflow-hidden">
-      <CanvasExcalidraw
-        isDark={isDark}
-        initialData={initialData}
-        headerCollapsed={headerCollapsed}
-        onToggleHeader={onToggleHeader}
-        activeVideoUrl={activeVideoUrl}
-        apiRef={apiRef}
-        onApiReady={handleApiReady}
-        isAuthed={isAuthed}
-        upsertPending={upsertMutation.isPending}
-        remoteFetching={remoteQuery.isFetching}
-        onChange={handleChange}
-        onLinkOpen={handleLinkOpen}
-        onExportPNG={handleExportPNG}
-        onExportSVG={handleExportSVG}
-        onSaveCloud={handleSaveCloud}
-        onLoadCloud={handleLoadCloud}
-      />
-    </div>
+    <CanvasWorkflowProvider value={workflowContext}>
+      <div className="canvas-porto-wrapper flex-1 overflow-hidden">
+        <CanvasExcalidraw
+          isDark={isDark}
+          initialData={initialData}
+          headerCollapsed={headerCollapsed}
+          onToggleHeader={onToggleHeader}
+          activeVideoUrl={activeVideoUrl}
+          apiRef={apiRef}
+          onApiReady={handleApiReady}
+          isAuthed={isAuthed}
+          upsertPending={
+            saveSceneMutation.isPending || createWorkflowMutation.isPending
+          }
+          remoteFetching={false}
+          onChange={handleChange}
+          onLinkOpen={handleLinkOpen}
+          onExportPNG={handleExportPNG}
+          onExportSVG={handleExportSVG}
+          onSaveCloud={saveActiveScene}
+          onLoadCloud={handleLoadCloud}
+        />
+        <CanvasWorkflowPicker
+          open={pickerOpen}
+          onOpenChange={setPickerOpen}
+          isAuthed={isAuthed}
+        />
+      </div>
+    </CanvasWorkflowProvider>
   );
 }

@@ -170,7 +170,7 @@ export default function DashboardPage() {
               </div>
               <Button
                 asChild
-                className="w-fit rounded-none font-mono text-[12px] uppercase"
+                className="w-fit rounded-none bg-(--primary) font-mono text-[12px] text-(--primary-foreground) uppercase hover:bg-(--primary)/90"
               >
                 <Link href="/tools">
                   Open Tools <ArrowRight className="size-3.5" aria-hidden />

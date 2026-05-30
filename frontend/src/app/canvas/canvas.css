@@ -1,5 +1,5 @@
 /*
- * Excalidraw CSS overrides — disesuaikan dengan Porto design system
+ * CanvasPawa CSS overrides — disesuaikan dengan Porto design system
  * Monochrome, square borders, Geist typography, oklch color palette
  */
 
@@ -31,7 +31,7 @@
   /* Overlay */
   --overlay-bg-color: oklch(1 0 0 / 90%);
 
-  /* Gold pastel — ganti total ungu bawaan Excalidraw (--color-surface-primary-container
+  /* Gold pastel — ganti total ungu bawaan CanvasPawa (--color-surface-primary-container
      dan --color-on-primary-container) untuk highlight tool/selection */
   --color-surface-primary-container: #f6e7b2;
   --color-on-primary-container: #6b551b;
@@ -66,13 +66,74 @@
   height: 100%;
 }
 
-/* Propagasi border-radius 0 ke scope .excalidraw — Excalidraw mendeklarasikan
+/* Propagasi border-radius 0 ke scope .excalidraw — CanvasPawa mendeklarasikan
    ulang variabel ini di .excalidraw, yang mengalahkan inheritance dari parent.
    Override di scope yang sama supaya semua elemen toolbar/menu ikut square. */
 .canvas-porto-wrapper .excalidraw {
   --border-radius-lg: 0;
   --border-radius-md: 0;
   --border-radius-sm: 0;
+  --right-sidebar-width: 420px;
+}
+
+/* Gold pastel — override di scope .excalidraw (yang menang atas .canvas-porto-wrapper)
+   untuk highlight container CanvasPawa (tool terpilih, dll). Ganti lavender bawaan. */
+.canvas-porto-wrapper .excalidraw {
+  --color-surface-primary-container: #f6e7b2;
+  --color-on-primary-container: #6b551b;
+}
+.canvas-porto-wrapper .excalidraw.theme--dark {
+  --color-surface-primary-container: #4a3d18;
+  --color-on-primary-container: #f6e7b2;
+}
+
+/* Tab sidebar aktif — ganti indigo solid jadi gold pastel (ikon diwarnai via
+   --color-icon-white yang dipakai CanvasPawa untuk warna teks/ikon tab aktif). */
+.canvas-porto-wrapper .sidebar-tab-trigger[data-state="active"] {
+  --button-bg: #f6e7b2;
+  --button-hover-bg: #ecd98f;
+  --button-border: #f6e7b2;
+  --color-icon-white: #6b551b;
+  color: #6b551b;
+}
+.canvas-porto-wrapper .excalidraw.theme--dark .sidebar-tab-trigger[data-state="active"] {
+  --button-bg: #4a3d18;
+  --button-hover-bg: #5a4a1e;
+  --button-border: #4a3d18;
+  --color-icon-white: #f6e7b2;
+  color: #f6e7b2;
+}
+
+/* Hover/active tool toolbar — ganti lavender (--color-surface-high) jadi soft gold. */
+.canvas-porto-wrapper .excalidraw .ToolIcon__icon:hover,
+.canvas-porto-wrapper .excalidraw .ToolIcon__icon:active {
+  background: #fbf3d6;
+}
+.canvas-porto-wrapper .excalidraw .ToolIcon:hover {
+  --icon-fill-color: #6b551b;
+  --keybinding-color: #6b551b;
+}
+.canvas-porto-wrapper .excalidraw.theme--dark .ToolIcon__icon:hover,
+.canvas-porto-wrapper .excalidraw.theme--dark .ToolIcon__icon:active {
+  background: #5a4a1e;
+}
+.canvas-porto-wrapper .excalidraw.theme--dark .ToolIcon:hover {
+  --icon-fill-color: #f6e7b2;
+  --keybinding-color: #f6e7b2;
+}
+
+/* Tab sidebar non-aktif — hover/onclick indigo jadi gold. */
+.canvas-porto-wrapper .sidebar-tab-trigger {
+  --button-hover-bg: #fbf3d6;
+  --button-hover-color: #6b551b;
+  --button-hover-border: #6b551b;
+  --button-active-bg: #f6e7b2;
+}
+.canvas-porto-wrapper .excalidraw.theme--dark .sidebar-tab-trigger {
+  --button-hover-bg: #5a4a1e;
+  --button-hover-color: #f6e7b2;
+  --button-hover-border: #f6e7b2;
+  --button-active-bg: #4a3d18;
 }
 
 /* Hilangkan border radius pada toolbar, panel, popup, dan tombol top-bar */
@@ -133,14 +194,14 @@
   letter-spacing: 0.04em;
 }
 
-/* Sembunyikan brand logo bawaan Excalidraw */
+/* Sembunyikan brand logo bawaan CanvasPawa */
 .canvas-porto-wrapper .encrypted-icon,
 .canvas-porto-wrapper .footer-center {
   display: none !important;
 }
 
 /* Wrapper untuk aksi kanan-atas (toggle header + ekspor) yang disuntik
-   via renderTopRightUI, di sisi kiri tombol Pustaka bawaan Excalidraw */
+   via renderTopRightUI, di sisi kiri tombol Pustaka bawaan CanvasPawa */
 .canvas-porto-wrapper .canvas-top-right-actions {
   display: inline-flex;
   align-items: center;
@@ -161,11 +222,460 @@
   transition: background-color 120ms ease, color 120ms ease;
 }
 
-.canvas-porto-wrapper .canvas-header-toggle:hover {
-  background: var(--color-surface-high);
+/* Hover/active/open — mix ke arah on-surface agar terlihat di kedua tema
+   (menggelap di light, menerang di dark; surface-low→high terlalu samar). */
+.canvas-porto-wrapper .canvas-header-toggle:hover,
+.canvas-porto-wrapper .canvas-header-toggle[aria-expanded="true"] {
+  background: color-mix(in srgb, var(--color-surface-low) 86%, var(--color-on-surface));
+  border-color: var(--color-on-surface);
+}
+
+.canvas-porto-wrapper .canvas-header-toggle:active {
+  background: color-mix(in srgb, var(--color-surface-low) 74%, var(--color-on-surface));
+  border-color: var(--color-on-surface);
 }
 
 .canvas-porto-wrapper .canvas-header-toggle:focus-visible {
   outline: 2px solid var(--color-on-surface);
   outline-offset: 1px;
+}
+
+/* Sidebar resize handle — lives on the left border of CanvasPawa default sidebar. */
+.canvas-porto-wrapper .excalidraw .sidebar {
+  max-width: min(720px, 70vw);
+  min-width: 320px;
+}
+
+.canvas-porto-wrapper .canvas-sidebar-resize-handle {
+  position: absolute;
+  inset-block: 0;
+  left: -4px;
+  z-index: 4;
+  width: 8px;
+  cursor: ew-resize;
+  touch-action: none;
+}
+
+.canvas-porto-wrapper .canvas-sidebar-resize-handle-line {
+  position: absolute;
+  inset-block: 0;
+  left: 3px;
+  width: 1px;
+  background: transparent;
+  transition: background-color 120ms ease;
+}
+
+.canvas-porto-wrapper .canvas-sidebar-resize-handle:hover
+  .canvas-sidebar-resize-handle-line,
+.canvas-porto-wrapper .canvas-sidebar-resize-handle:focus-visible
+  .canvas-sidebar-resize-handle-line {
+  background: var(--color-on-surface);
+}
+
+.canvas-porto-wrapper .canvas-sidebar-resize-handle:focus-visible {
+  outline: 2px solid var(--color-on-surface);
+  outline-offset: -2px;
+}
+
+/* Canvas Agent tab */
+.canvas-porto-wrapper .excalidraw .sidebar-tabs-root:has(.canvas-agent-tab) {
+  padding-bottom: 0;
+}
+
+.canvas-porto-wrapper .canvas-agent-tab {
+  min-height: 0;
+}
+
+.canvas-porto-wrapper .canvas-agent-panel {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  flex-direction: column;
+  background: var(--color-surface-low);
+  color: var(--color-on-surface);
+  font-family: var(--font-family-sans);
+}
+
+.canvas-porto-wrapper .canvas-agent-panel-empty {
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 2rem;
+  text-align: center;
+  font-family: var(--font-family-monospace);
+  font-size: 11px;
+  color: var(--color-on-surface-muted);
+}
+
+.canvas-porto-wrapper .canvas-agent-header {
+  display: flex;
+  flex: none;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  border-bottom: 1px solid var(--color-surface-highest);
+  padding: 1rem;
+}
+
+.canvas-porto-wrapper .canvas-agent-header h3 {
+  margin: 0.15rem 0 0;
+  max-width: 18rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
+.canvas-porto-wrapper .canvas-agent-header p,
+.canvas-porto-wrapper .canvas-agent-proposal p {
+  margin: 0.25rem 0 0;
+  font-family: var(--font-family-monospace);
+  font-size: 10px;
+  color: var(--color-on-surface-muted);
+}
+
+.canvas-porto-wrapper .canvas-agent-header-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.canvas-porto-wrapper .canvas-agent-section-kicker {
+  display: block;
+  font-family: var(--font-family-monospace);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-on-surface-muted);
+}
+
+.canvas-porto-wrapper .canvas-agent-icon-button,
+.canvas-porto-wrapper .canvas-agent-composer button,
+.canvas-porto-wrapper .canvas-agent-proposal-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--color-surface-highest);
+  border-radius: 0;
+  background: var(--color-surface-low);
+  color: var(--color-on-surface);
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease,
+    border-color 120ms ease;
+}
+
+.canvas-porto-wrapper .canvas-agent-icon-button {
+  height: 2.25rem;
+  width: 2.25rem;
+  flex: none;
+}
+
+.canvas-porto-wrapper .canvas-agent-icon-button:hover,
+.canvas-porto-wrapper .canvas-agent-composer button:hover,
+.canvas-porto-wrapper .canvas-agent-proposal-actions button:hover {
+  background: var(--color-surface-high);
+  border-color: var(--color-on-surface);
+}
+
+.canvas-porto-wrapper .canvas-agent-icon-button:disabled,
+.canvas-porto-wrapper .canvas-agent-composer button:disabled,
+.canvas-porto-wrapper .canvas-agent-proposal-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.canvas-porto-wrapper .canvas-agent-composer textarea {
+  width: 100%;
+  border: 1px solid var(--color-surface-highest);
+  border-radius: 0;
+  background: var(--color-surface-low);
+  color: var(--color-on-surface);
+  font: inherit;
+  outline: none;
+}
+
+.canvas-porto-wrapper .canvas-agent-composer textarea:focus {
+  border-color: var(--color-on-surface);
+}
+
+.canvas-porto-wrapper .canvas-agent-scroll {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 0;
+  flex-direction: column;
+  gap: 0.75rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 1rem;
+}
+
+.canvas-porto-wrapper .canvas-agent-loading,
+.canvas-porto-wrapper .canvas-agent-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 1rem;
+  text-align: center;
+  font-family: var(--font-family-monospace);
+  font-size: 11px;
+  color: var(--color-on-surface-muted);
+}
+
+.canvas-porto-wrapper .canvas-agent-placeholder {
+  min-height: 9rem;
+  flex-direction: column;
+  border: 1px dashed var(--color-surface-highest);
+}
+
+.canvas-porto-wrapper .canvas-agent-message {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  border-left: 2px solid var(--color-surface-highest);
+  padding: 0.35rem 0 0.35rem 0.75rem;
+}
+
+.canvas-porto-wrapper .canvas-agent-message-user {
+  border-left-color: var(--color-on-surface);
+}
+
+.canvas-porto-wrapper .canvas-agent-message-kicker {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-family: var(--font-family-monospace);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-on-surface-muted);
+}
+
+.canvas-porto-wrapper .canvas-agent-message p {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.canvas-porto-wrapper .canvas-agent-frame-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.canvas-porto-wrapper .canvas-agent-frame-chips span,
+.canvas-porto-wrapper .canvas-agent-status-pill {
+  border: 1px solid var(--color-surface-highest);
+  padding: 0.2rem 0.4rem;
+  font-family: var(--font-family-monospace);
+  font-size: 9px;
+  color: var(--color-on-surface-muted);
+}
+
+.canvas-porto-wrapper .canvas-agent-proposals {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  border-top: 1px solid var(--color-surface-highest);
+  padding-top: 0.75rem;
+}
+
+.canvas-porto-wrapper .canvas-agent-proposal {
+  border: 1px solid var(--color-surface-highest);
+  padding: 0.75rem;
+}
+
+.canvas-porto-wrapper .canvas-agent-proposal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.canvas-porto-wrapper .canvas-agent-proposal h4 {
+  margin: 0.15rem 0 0;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.canvas-porto-wrapper .canvas-agent-proposal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.canvas-porto-wrapper .canvas-agent-proposal-actions button {
+  gap: 0.35rem;
+  min-height: 2rem;
+  padding: 0 0.65rem;
+  font-family: var(--font-family-monospace);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.canvas-porto-wrapper .canvas-agent-composer {
+  display: grid;
+  flex: none;
+  grid-template-columns: minmax(0, 1fr) 2.5rem;
+  gap: 0.5rem;
+  border-top: 1px solid var(--color-surface-highest);
+  padding: 0.75rem 1rem 1rem;
+  overscroll-behavior: contain;
+}
+
+.canvas-porto-wrapper .canvas-agent-composer-input {
+  min-width: 0;
+  border: 1px solid var(--color-surface-highest);
+  background: var(--color-surface-low);
+  padding: 0.35rem;
+  overscroll-behavior: contain;
+}
+
+.canvas-porto-wrapper .canvas-agent-composer-input:focus-within {
+  border-color: var(--color-on-surface);
+}
+
+.canvas-porto-wrapper .canvas-agent-composer textarea {
+  min-height: 4.75rem;
+  max-height: 9rem;
+  height: 100%;
+  border: 0;
+  display: block;
+  field-sizing: fixed;
+  resize: vertical;
+  overflow-y: auto;
+  padding: 0.55rem;
+  font-size: 12px;
+  line-height: 1.45;
+  overscroll-behavior: contain;
+}
+
+.canvas-agent-history-menu {
+  width: min(26rem, calc(100vw - 2rem));
+  max-height: min(38rem, calc(100vh - 8rem));
+  padding: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  border-radius: 0;
+  border: 1px solid var(--line);
+  background: var(--popover);
+  box-shadow: none;
+  font-family: var(--font-geist-sans), "Inter", "Segoe UI", sans-serif;
+}
+
+.canvas-agent-history-sticky {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  border-bottom: 1px solid var(--line);
+  background: var(--popover);
+  box-shadow: 0 1px 0 var(--line);
+}
+
+.canvas-agent-history-current {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.45rem 0.65rem 0.7rem;
+}
+
+.canvas-agent-history-current span,
+.canvas-agent-history-copy small {
+  font-family: var(--font-family-monospace);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+
+.canvas-agent-history-current strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.canvas-agent-history-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.75rem;
+  align-items: center;
+  border-radius: 0;
+  padding: 0.55rem 0.45rem 0.55rem 0.65rem;
+  cursor: pointer;
+}
+
+.canvas-agent-history-item:hover,
+.canvas-agent-history-item:focus-visible {
+  background: var(--accent);
+  outline: none;
+}
+
+/* Item workflow aktif — gold pastel (konsisten dengan state aktif lainnya). */
+.canvas-agent-history-item-active {
+  background: var(--color-surface-primary-container);
+  border-color: var(--color-on-primary-container);
+  outline: none;
+}
+
+.canvas-agent-history-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.canvas-agent-history-copy input {
+  height: 2rem;
+  border-radius: 0;
+  border-color: var(--line);
+  background: transparent;
+  padding-inline: 0.45rem;
+  font-size: 12px;
+}
+
+.canvas-agent-history-copy input:focus-visible {
+  border-color: var(--foreground);
+  box-shadow: none;
+  outline: none;
+}
+
+.canvas-agent-history-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.canvas-agent-history-pin-button:hover,
+.canvas-agent-history-pin-button[data-pinned="true"] {
+  background: var(--color-surface-primary-container);
+  color: var(--color-on-primary-container);
+}
+
+.canvas-agent-history-delete-button:hover {
+  background: color-mix(in srgb, var(--destructive) 12%, transparent);
+  color: var(--destructive);
+}
+
+.canvas-agent-delete-dialog {
+  z-index: 70;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.canvas-agent-delete-dialog-overlay {
+  z-index: 69;
+}
+
+.canvas-agent-delete-dialog-title {
+  color: var(--foreground);
+  font-weight: 500;
 }

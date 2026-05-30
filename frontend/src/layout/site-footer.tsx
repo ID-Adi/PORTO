@@ -10,7 +10,8 @@ export function SiteFooter() {
       <div className="screen-line-top page-frame relative border-x border-line pt-4">
         <p className="mb-4 px-4 text-center font-mono text-sm text-balance text-muted-foreground">
           Open for freelance &amp; collaboration ( Untuk Video storytelling,
-          motion graphic, Web Company - PORTO - ERP, App Mobile, Design Grafic
+          motion graphic, Web Company - PORTO - Web ERP, App Mobile, Design
+          Grafic )
         </p>
 
         <div className="screen-line-top screen-line-bottom relative flex w-full before:z-1 after:z-1">

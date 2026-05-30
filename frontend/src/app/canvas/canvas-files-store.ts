@@ -1,6 +1,6 @@
 import type { BinaryFiles } from "@excalidraw/excalidraw/types";
 
-// File biner Excalidraw (dataURL gambar / poster video) bisa beberapa MB,
+// File biner CanvasPawa (dataURL gambar / poster video) bisa beberapa MB,
 // jadi disimpan di IndexedDB — bukan localStorage yang berkuota ~5MB.
 const DB_NAME = "porto-canvas";
 const STORE_NAME = "files";

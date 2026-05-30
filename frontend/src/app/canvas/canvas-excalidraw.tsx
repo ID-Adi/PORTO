@@ -157,7 +157,11 @@ export function CanvasExcalidraw({
       initialData={initialData}
       langCode="id-ID"
     >
-      <CanvasExtraSidebar videoUrl={activeVideoUrl} />
+      <CanvasExtraSidebar
+        videoUrl={activeVideoUrl}
+        apiRef={apiRef}
+        isAuthed={isAuthed}
+      />
     </Excalidraw>
   );
 }

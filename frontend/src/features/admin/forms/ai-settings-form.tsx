@@ -18,6 +18,10 @@ type AiSettingsState = {
   ttsDefaultVoice: string;
   ttsVoiceOptionsText: string;
   ttsEnabled: boolean;
+  canvasAgentModel: string;
+  canvasAgentProvider: "gemini" | "vertex" | "openrouter";
+  canvasAgentSystemPrompt: string;
+  canvasAgentEnabled: boolean;
 };
 
 const empty: AiSettingsState = {
@@ -25,6 +29,10 @@ const empty: AiSettingsState = {
   ttsDefaultVoice: "",
   ttsVoiceOptionsText: "",
   ttsEnabled: false,
+  canvasAgentModel: "",
+  canvasAgentProvider: "gemini",
+  canvasAgentSystemPrompt: "",
+  canvasAgentEnabled: false,
 };
 
 function parseVoiceOptions(value: string) {
@@ -51,14 +59,17 @@ export function AiSettingsForm() {
       ttsDefaultVoice: query.data.ttsDefaultVoice,
       ttsVoiceOptionsText: query.data.ttsVoiceOptions.join("\n"),
       ttsEnabled: query.data.ttsEnabled,
+      canvasAgentModel: query.data.canvasAgentModel,
+      canvasAgentProvider: query.data.canvasAgentProvider as AiSettingsState["canvasAgentProvider"],
+      canvasAgentSystemPrompt: query.data.canvasAgentSystemPrompt ?? "",
+      canvasAgentEnabled: query.data.canvasAgentEnabled,
     });
   }, [query.data]);
 
   const update = trpc.aiSettings.updateTtsConfig.useMutation({
     onSuccess: () => {
       toast.success("AI settings saved");
-      setState((prev) => ({ ...prev, ttsApiKey: "" }));
-      utils.aiSettings.getTtsConfig.invalidate();
+      void utils.aiSettings.getTtsConfig.invalidate();
     },
     onError: (err) => toast.error(err.message),
   });
@@ -83,6 +94,10 @@ export function AiSettingsForm() {
       ttsDefaultVoice: state.ttsDefaultVoice.trim(),
       ttsVoiceOptions: voiceOptions,
       ttsEnabled: state.ttsEnabled,
+      canvasAgentEnabled: state.canvasAgentEnabled,
+      canvasAgentProvider: state.canvasAgentProvider,
+      canvasAgentModel: state.canvasAgentModel.trim(),
+      canvasAgentSystemPrompt: state.canvasAgentSystemPrompt.trim() || null,
     });
   }
 
@@ -121,6 +136,67 @@ export function AiSettingsForm() {
         onChange={(event) => set("ttsModel", event.target.value)}
         hint="Model default; user bisa memilih model lain di /tools (daftar live per provider)."
       />
+
+      <div className="grid gap-4 border border-(--line) p-4">
+        <Field
+          label="Enable Canvas Agent"
+          htmlFor="canvasAgentEnabled"
+          hint="Mengaktifkan agent chat di /canvas. Provider API tetap memakai credential di bawah."
+        >
+          <div className="flex items-center gap-3">
+            <Switch
+              id="canvasAgentEnabled"
+              checked={state.canvasAgentEnabled}
+              onCheckedChange={(checked) => set("canvasAgentEnabled", checked)}
+            />
+            <span className="font-mono text-[11px] tracking-[0.16em] text-(--muted-foreground) uppercase">
+              {state.canvasAgentEnabled ? "Enabled" : "Disabled"}
+            </span>
+          </div>
+        </Field>
+
+        <Field
+          label="Canvas Agent provider"
+          htmlFor="canvasAgentProvider"
+          hint="Provider yang dipakai agent chat saat backend AI disambungkan."
+        >
+          <select
+            id="canvasAgentProvider"
+            value={state.canvasAgentProvider}
+            onChange={(event) =>
+              set(
+                "canvasAgentProvider",
+                event.target.value as AiSettingsState["canvasAgentProvider"],
+              )
+            }
+            className="h-9 w-full border border-(--input) bg-background px-3 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+          >
+            <option value="gemini">Gemini</option>
+            <option value="vertex">Vertex AI</option>
+            <option value="openrouter">OpenRouter</option>
+          </select>
+        </Field>
+
+        <TextField
+          label="Canvas Agent model"
+          name="canvasAgentModel"
+          required
+          value={state.canvasAgentModel}
+          onChange={(event) => set("canvasAgentModel", event.target.value)}
+          hint="Model default agent untuk membaca frame dan membuat proposal perubahan."
+        />
+
+        <TextAreaField
+          label="Canvas Agent system prompt"
+          name="canvasAgentSystemPrompt"
+          rows={5}
+          value={state.canvasAgentSystemPrompt}
+          onChange={(event) =>
+            set("canvasAgentSystemPrompt", event.target.value)
+          }
+          hint="Opsional. Instruksi dasar untuk workflow agent di /canvas."
+        />
+      </div>
 
       <div className="grid gap-4 border border-(--line) p-4">
         <p className="font-mono text-[11px] tracking-[0.16em] text-(--muted-foreground) uppercase">
