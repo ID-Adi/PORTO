@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { trpc } from "@/lib/trpc";
+import { ApiKeyField } from "@/features/admin/components/api-key-field";
 import {
   Field,
   TextAreaField,
@@ -17,7 +18,6 @@ type AiSettingsState = {
   ttsDefaultVoice: string;
   ttsVoiceOptionsText: string;
   ttsEnabled: boolean;
-  ttsApiKey: string;
 };
 
 const empty: AiSettingsState = {
@@ -25,7 +25,6 @@ const empty: AiSettingsState = {
   ttsDefaultVoice: "",
   ttsVoiceOptionsText: "",
   ttsEnabled: false,
-  ttsApiKey: "",
 };
 
 function parseVoiceOptions(value: string) {
@@ -52,7 +51,6 @@ export function AiSettingsForm() {
       ttsDefaultVoice: query.data.ttsDefaultVoice,
       ttsVoiceOptionsText: query.data.ttsVoiceOptions.join("\n"),
       ttsEnabled: query.data.ttsEnabled,
-      ttsApiKey: "",
     });
   }, [query.data]);
 
@@ -85,7 +83,6 @@ export function AiSettingsForm() {
       ttsDefaultVoice: state.ttsDefaultVoice.trim(),
       ttsVoiceOptions: voiceOptions,
       ttsEnabled: state.ttsEnabled,
-      ttsApiKey: state.ttsApiKey.trim() || undefined,
     });
   }
 
@@ -94,10 +91,6 @@ export function AiSettingsForm() {
       <div className="text-sm text-(--muted-foreground)">Loading...</div>
     );
   }
-
-  const keyHint = query.data?.hasTtsApiKey
-    ? `Current key saved, ending ${query.data.ttsApiKeyLast4 ?? "****"}. Leave blank to keep it.`
-    : "Required before enabling TTS generation.";
 
   return (
     <form onSubmit={onSubmit} className="grid max-w-2xl gap-5">
@@ -121,22 +114,41 @@ export function AiSettingsForm() {
       </div>
 
       <TextField
-        label="Gemini TTS model"
+        label="Default TTS model"
         name="ttsModel"
         required
         value={state.ttsModel}
         onChange={(event) => set("ttsModel", event.target.value)}
-        hint="Default: gemini-3.1-flash-tts-preview."
+        hint="Model default; user bisa memilih model lain di /tools (daftar live per provider)."
       />
 
-      <TextField
-        label="Gemini API key"
-        name="ttsApiKey"
-        type="password"
-        value={state.ttsApiKey}
-        onChange={(event) => set("ttsApiKey", event.target.value)}
-        hint={keyHint}
-      />
+      <div className="grid gap-4 border border-(--line) p-4">
+        <p className="font-mono text-[11px] tracking-[0.16em] text-(--muted-foreground) uppercase">
+          Provider credentials
+        </p>
+        {query.data ? (
+          <>
+            <ApiKeyField
+              provider="gemini"
+              label="Gemini API key"
+              hint="Google AI Studio key (generativelanguage)."
+              status={query.data.gemini}
+            />
+            <ApiKeyField
+              provider="vertex"
+              label="Vertex AI (Service Account)"
+              hint="Service Account JSON + Project ID + Location."
+              status={query.data.vertex}
+            />
+            <ApiKeyField
+              provider="openrouter"
+              label="OpenRouter API key"
+              hint="Bearer key dari openrouter.ai."
+              status={query.data.openrouter}
+            />
+          </>
+        ) : null}
+      </div>
 
       <TextField
         label="Default voice"

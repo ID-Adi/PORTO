@@ -3,7 +3,8 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 
 import { TRPCError } from "@trpc/server";
-import { and, desc, eq } from "drizzle-orm";
+import { Mp3Encoder } from "@breezystack/lamejs";
+import { and, count, desc, eq, gte, ne } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "../../db/index.js";
@@ -20,11 +21,25 @@ import type {
 } from "../../db/schema/tool-generation.js";
 import { decryptSecret } from "../../lib/encrypted-secret.js";
 import { publicUrl } from "../../lib/public-url.js";
+import { callOpenAiAudio } from "../../lib/tts-openai-audio.js";
+import {
+  isRetryableTtsStatus,
+  listProviderModels,
+  OPENROUTER_BASE_URL,
+  TtsError,
+  vertexAccessToken,
+  vertexBaseUrl,
+  voicesFor,
+  type ListModelsArgs,
+  type TtsTokens,
+} from "../../lib/tts-providers.js";
 import {
   TOOLS_REFS_DIR,
   TOOLS_UPLOAD_DIR,
 } from "../../lib/uploads-dir.js";
 import { authenticatedProcedure, router } from "../init.js";
+
+type TtsProviderId = "gemini" | "vertex" | "openrouter";
 
 const KIND = z.enum(["image", "video", "tts"]);
 
@@ -48,6 +63,17 @@ const MAX_AUDIO_BYTES = 50 * 1024 * 1024;
 const TTS_SAMPLE_RATE = 24_000;
 const TTS_CHANNELS = 1;
 const TTS_SAMPLE_WIDTH_BYTES = 2;
+const TTS_MP3_BITRATE_KBPS = 128;
+// Job TTS berjalan in-process; bila row masih `pending` melewati batas ini saat
+// dipoll, anggap proses mati (mis. server restart) lalu tandai error. Harus lebih
+// besar dari worst-case retry (3×90s fetch + backoff ≈ 273s) agar tak salah-error.
+const TTS_JOB_TIMEOUT_MS = 300_000;
+const TTS_JOB_RETRY_ATTEMPTS = 3;
+// Rate limit per user (DB-based, tanpa infra tambahan).
+const TTS_RATE_WINDOW_MS = 60_000;
+const TTS_RATE_MAX_PER_WINDOW = 10;
+const TTS_PREVIEW_RATE_MAX_PER_WINDOW = 20;
+const TTS_PREVIEW_TEXT = "Halo, ini contoh suara.";
 
 function ensureContained(filePath: string, baseDir = TOOLS_UPLOAD_DIR) {
   const resolved = path.resolve(filePath);
@@ -227,11 +253,18 @@ const ttsSpeakerInput = z.object({
   voiceName: z.string().min(1).max(80),
 });
 
+const TTS_PROVIDER = z.enum(["gemini", "vertex", "openrouter"]);
+
 const generateTtsInput = z.object({
+  provider: TTS_PROVIDER.optional().default("gemini"),
+  model: z.string().min(1).max(160),
   text: z.string().min(1).max(MAX_TTS_TEXT_LENGTH),
   styleInstruction: z.string().max(MAX_TTS_STYLE_LENGTH).optional().default(""),
   speakers: z.array(ttsSpeakerInput).min(1).max(MAX_TTS_SPEAKERS),
+  format: z.enum(["wav", "mp3"]).optional().default("wav"),
 });
+
+type TtsFormat = z.infer<typeof generateTtsInput>["format"];
 
 type TtsSpeaker = z.infer<typeof ttsSpeakerInput>;
 type AiToolSettingsRow = typeof aiToolSettings.$inferSelect;
@@ -266,6 +299,11 @@ type GeminiTtsResponse = {
       }>;
     };
   }>;
+  usageMetadata?: {
+    promptTokenCount?: number;
+    candidatesTokenCount?: number;
+    totalTokenCount?: number;
+  };
   error?: {
     message?: string;
   };
@@ -276,6 +314,10 @@ function fallbackTtsSettings(): Pick<
   | "ttsProvider"
   | "ttsModel"
   | "ttsApiKeyEncrypted"
+  | "openrouterApiKeyEncrypted"
+  | "vertexServiceAccountEncrypted"
+  | "vertexProjectId"
+  | "vertexLocation"
   | "ttsDefaultVoice"
   | "ttsVoiceOptions"
   | "ttsEnabled"
@@ -284,6 +326,10 @@ function fallbackTtsSettings(): Pick<
     ttsProvider: "gemini",
     ttsModel: DEFAULT_TTS_MODEL,
     ttsApiKeyEncrypted: null,
+    openrouterApiKeyEncrypted: null,
+    vertexServiceAccountEncrypted: null,
+    vertexProjectId: null,
+    vertexLocation: "us-central1",
     ttsDefaultVoice: DEFAULT_TTS_VOICE,
     ttsVoiceOptions: [...DEFAULT_TTS_VOICES],
     ttsEnabled: false,
@@ -297,12 +343,6 @@ async function readTtsSettings() {
     .where(eq(aiToolSettings.id, 1))
     .limit(1);
   return row ?? fallbackTtsSettings();
-}
-
-function buildTtsPrompt(input: z.infer<typeof generateTtsInput>) {
-  const style = input.styleInstruction.trim();
-  if (!style) return `TTS the following text:\n${input.text.trim()}`;
-  return `TTS the following text with this direction: ${style}\n\n${input.text.trim()}`;
 }
 
 function buildSpeechConfig(speakers: TtsSpeaker[]) {
@@ -354,6 +394,72 @@ function wavFromPcm(pcm: Buffer) {
   return Buffer.concat([header, pcm]);
 }
 
+// Encode PCM 16-bit mono (TTS_SAMPLE_RATE) menjadi MP3 via lamejs (pure-JS).
+function pcmToMp3(pcm: Buffer): Buffer {
+  const encoder = new Mp3Encoder(
+    TTS_CHANNELS,
+    TTS_SAMPLE_RATE,
+    TTS_MP3_BITRATE_KBPS,
+  );
+  // Salin ke ArrayBuffer baru (offset 0) agar alignment Int16Array terjamin —
+  // Buffer node bisa punya byteOffset ganjil dari pool yang memicu RangeError.
+  const sampleCount = Math.floor(pcm.byteLength / TTS_SAMPLE_WIDTH_BYTES);
+  const aligned = pcm.buffer.slice(
+    pcm.byteOffset,
+    pcm.byteOffset + sampleCount * TTS_SAMPLE_WIDTH_BYTES,
+  );
+  const samples = new Int16Array(aligned);
+  const blockSize = 1152;
+  const chunks: Uint8Array[] = [];
+  for (let i = 0; i < samples.length; i += blockSize) {
+    const slice = samples.subarray(i, i + blockSize);
+    const buf = encoder.encodeBuffer(slice);
+    if (buf.length > 0) chunks.push(buf);
+  }
+  const tail = encoder.flush();
+  if (tail.length > 0) chunks.push(tail);
+  return Buffer.concat(chunks.map((c) => Buffer.from(c)));
+}
+
+type PcmResult = { pcm: Buffer; tokens: TtsTokens };
+
+function geminiTokens(json: GeminiTtsResponse): TtsTokens {
+  const u = json.usageMetadata;
+  if (!u) return {};
+  return {
+    total: u.totalTokenCount,
+    prompt: u.promptTokenCount,
+    output: u.candidatesTokenCount,
+  };
+}
+
+function extractGeminiPcm(json: GeminiTtsResponse, label: string): Buffer {
+  const part = json.candidates?.[0]?.content?.parts?.find(
+    (candidate) => candidate.inlineData?.data || candidate.inline_data?.data,
+  );
+  const audioBase64 = part?.inlineData?.data ?? part?.inline_data?.data;
+  if (!audioBase64) {
+    throw new TtsError(`${label} tidak mengembalikan audio base64`, false);
+  }
+  const pcm = Buffer.from(audioBase64, "base64");
+  if (pcm.byteLength === 0 || pcm.byteLength > MAX_AUDIO_BYTES) {
+    throw new TtsError("Ukuran audio TTS tidak valid", false);
+  }
+  return pcm;
+}
+
+function geminiRequestBody(modelName: string, text: string, speakers: TtsSpeaker[]) {
+  return {
+    contents: [{ parts: [{ text }] }],
+    generationConfig: {
+      responseModalities: ["AUDIO"],
+      speechConfig: buildSpeechConfig(speakers),
+    },
+    model: modelName,
+  };
+}
+
+// Gemini (Google AI Studio) — generateContent dengan API key.
 async function callGeminiTts({
   apiKey,
   model,
@@ -364,7 +470,7 @@ async function callGeminiTts({
   model: string;
   text: string;
   speakers: TtsSpeaker[];
-}) {
+}): Promise<PcmResult> {
   const modelName = model.replace(/^models\//, "");
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent`;
 
@@ -372,59 +478,310 @@ async function callGeminiTts({
   try {
     res = await fetch(url, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-goog-api-key": apiKey,
-      },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text }] }],
-        generationConfig: {
-          responseModalities: ["AUDIO"],
-          speechConfig: buildSpeechConfig(speakers),
-        },
-        model: modelName,
-      }),
+      headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+      body: JSON.stringify(geminiRequestBody(modelName, text, speakers)),
       signal: AbortSignal.timeout(90_000),
     });
   } catch (err) {
-    const isAbort =
-      err instanceof DOMException && err.name === "TimeoutError";
-    throw new TRPCError({
-      code: isAbort ? "TIMEOUT" : "INTERNAL_SERVER_ERROR",
-      message: isAbort
-        ? "Gemini TTS tidak merespons tepat waktu"
-        : "Gagal menghubungi Gemini TTS",
-    });
+    const isAbort = err instanceof DOMException && err.name === "TimeoutError";
+    throw new TtsError(
+      isAbort ? "Gemini TTS tidak merespons tepat waktu" : "Gagal menghubungi Gemini TTS",
+      true,
+    );
   }
 
   const json = (await res.json()) as GeminiTtsResponse;
   if (!res.ok) {
+    throw new TtsError(
+      json.error?.message ?? `Gemini TTS HTTP ${res.status}`,
+      isRetryableTtsStatus(res.status),
+    );
+  }
+  return { pcm: extractGeminiPcm(json, "Gemini TTS"), tokens: geminiTokens(json) };
+}
+
+// Vertex AI — generateContent (bentuk Gemini) via OAuth dari service account.
+async function callVertexTts({
+  saJson,
+  projectId,
+  location,
+  model,
+  text,
+  speakers,
+}: {
+  saJson: string;
+  projectId: string;
+  location: string;
+  model: string;
+  text: string;
+  speakers: TtsSpeaker[];
+}): Promise<PcmResult> {
+  const token = await vertexAccessToken(saJson);
+  const modelName = model.replace(/^(publishers\/google\/models\/|models\/)/, "");
+  const url = `${vertexBaseUrl(location, projectId)}/${modelName}:generateContent`;
+
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(geminiRequestBody(modelName, text, speakers)),
+      signal: AbortSignal.timeout(90_000),
+    });
+  } catch (err) {
+    const isAbort = err instanceof DOMException && err.name === "TimeoutError";
+    throw new TtsError(
+      isAbort ? "Vertex TTS tidak merespons tepat waktu" : "Gagal menghubungi Vertex TTS",
+      true,
+    );
+  }
+
+  const json = (await res.json()) as GeminiTtsResponse;
+  if (!res.ok) {
+    throw new TtsError(
+      json.error?.message ?? `Vertex TTS HTTP ${res.status}`,
+      isRetryableTtsStatus(res.status),
+    );
+  }
+  return { pcm: extractGeminiPcm(json, "Vertex TTS"), tokens: geminiTokens(json) };
+}
+
+// Retry terbatas + backoff untuk error transient (lintas provider).
+async function withTtsRetry<T>(fn: () => Promise<T>): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < TTS_JOB_RETRY_ATTEMPTS; attempt += 1) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastError = err;
+      const retryable = err instanceof TtsError && err.retryable;
+      if (!retryable || attempt === TTS_JOB_RETRY_ATTEMPTS - 1) break;
+      await new Promise((r) => setTimeout(r, 1000 * 2 ** attempt));
+    }
+  }
+  throw lastError;
+}
+
+// Kredensial provider yang sudah didekripsi (bentuk = ListModelsArgs).
+type ProviderCreds = ListModelsArgs;
+type AiToolSettingsLike = Awaited<ReturnType<typeof readTtsSettings>>;
+
+// Ambil + dekripsi kredensial provider dari settings; lempar bila belum diatur.
+function resolveProviderCreds(
+  settings: AiToolSettingsLike,
+  provider: TtsProviderId,
+): ProviderCreds {
+  if (provider === "gemini") {
+    if (!settings.ttsApiKeyEncrypted) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Gemini API key belum dikonfigurasi",
+      });
+    }
+    return { provider, apiKey: decryptSecret(settings.ttsApiKeyEncrypted) };
+  }
+  if (provider === "openrouter") {
+    if (!settings.openrouterApiKeyEncrypted) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "OpenRouter API key belum dikonfigurasi",
+      });
+    }
+    return {
+      provider,
+      apiKey: decryptSecret(settings.openrouterApiKeyEncrypted),
+    };
+  }
+  // vertex
+  if (!settings.vertexServiceAccountEncrypted || !settings.vertexProjectId) {
     throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: json.error?.message ?? `Gemini TTS HTTP ${res.status}`,
+      code: "BAD_REQUEST",
+      message: "Kredensial Vertex (Service Account/Project) belum dikonfigurasi",
+    });
+  }
+  return {
+    provider,
+    saJson: decryptSecret(settings.vertexServiceAccountEncrypted),
+    projectId: settings.vertexProjectId,
+    location: settings.vertexLocation,
+  };
+}
+
+// Bangun teks untuk dikirim ke model sesuai provider.
+function buildProviderText(
+  provider: TtsProviderId,
+  script: string,
+  style: string,
+): string {
+  const trimmed = script.trim();
+  const dir = style.trim();
+  if (provider === "openrouter") {
+    // Model chat audio: kirim teks yang ingin diucapkan (style sbg arahan).
+    return dir ? `(${dir})\n${trimmed}` : trimmed;
+  }
+  return dir
+    ? `TTS the following text with this direction: ${dir}\n\n${trimmed}`
+    : `TTS the following text:\n${trimmed}`;
+}
+
+// Worker in-process: generasi + tulis file + update row. Tidak melempar ke
+// pemanggil (detached); semua kegagalan ditulis ke row.error.
+async function runTtsJob(args: {
+  rowId: number;
+  requestId: string;
+  creds: ProviderCreds;
+  model: string;
+  script: string;
+  style: string;
+  speakers: TtsSpeaker[];
+  format: TtsFormat;
+}): Promise<void> {
+  const { rowId, requestId, creds, model, script, style, speakers, format } = args;
+  try {
+    const text = buildProviderText(creds.provider, script, style);
+    let fileBuffer: Buffer;
+    let mimeType: string;
+    let ext: string;
+    let durationSeconds: number | undefined;
+    let tokens: TtsTokens;
+
+    if (creds.provider === "openrouter") {
+      const result = await withTtsRetry(() =>
+        callOpenAiAudio({
+          baseUrl: OPENROUTER_BASE_URL,
+          apiKey: creds.apiKey,
+          model,
+          voice: speakers[0]?.voiceName ?? "alloy",
+          text,
+          format,
+        }),
+      );
+      fileBuffer = result.audio;
+      mimeType = result.mimeType;
+      ext = format === "mp3" ? "mp3" : "wav";
+      tokens = result.tokens;
+    } else {
+      const { pcm, tokens: t } =
+        creds.provider === "gemini"
+          ? await withTtsRetry(() =>
+              callGeminiTts({ apiKey: creds.apiKey, model, text, speakers }),
+            )
+          : await withTtsRetry(() =>
+              callVertexTts({
+                saJson: creds.saJson,
+                projectId: creds.projectId,
+                location: creds.location,
+                model,
+                text,
+                speakers,
+              }),
+            );
+      const isMp3 = format === "mp3";
+      fileBuffer = isMp3 ? pcmToMp3(pcm) : wavFromPcm(pcm);
+      mimeType = isMp3 ? "audio/mpeg" : "audio/wav";
+      ext = isMp3 ? "mp3" : "wav";
+      // Durasi dari PCM (linear), bukan byte file — MP3 non-linear.
+      durationSeconds =
+        pcm.byteLength / (TTS_SAMPLE_RATE * TTS_CHANNELS * TTS_SAMPLE_WIDTH_BYTES);
+      tokens = t;
+    }
+
+    const filename = `${requestId}.${ext}`;
+    const targetPath = ensureContained(path.join(TOOLS_UPLOAD_DIR, filename));
+    await fs.mkdir(TOOLS_UPLOAD_DIR, { recursive: true });
+    await fs.writeFile(targetPath, fileBuffer);
+
+    await db
+      .update(toolGeneration)
+      .set({
+        status: "success",
+        fileUrl: `/uploads/tools/${filename}`,
+        mimeType,
+        fileSize: fileBuffer.byteLength,
+        outputMeta: {
+          ...(durationSeconds !== undefined
+            ? { durationSeconds: Math.max(0, Math.round(durationSeconds)) }
+            : {}),
+          sampleRate: TTS_SAMPLE_RATE,
+          channels: TTS_CHANNELS,
+          format: ext,
+          tokens,
+        },
+      })
+      // Guard optimistik: jangan timpa keputusan reaper (status sudah error).
+      .where(and(eq(toolGeneration.id, rowId), eq(toolGeneration.status, "pending")));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Generate TTS gagal";
+    await db
+      .update(toolGeneration)
+      .set({ status: "error", errorMessage: message })
+      .where(and(eq(toolGeneration.id, rowId), eq(toolGeneration.status, "pending")))
+      .catch(() => {
+        // best-effort; jangan biarkan unhandledRejection
+      });
+  }
+}
+
+// Rate limit TTS per user (DB-based): cegah job pending ganda + batas/menit.
+async function assertTtsRateLimit(userId: string): Promise<void> {
+  const [pending] = await db
+    .select({ c: count() })
+    .from(toolGeneration)
+    .where(
+      and(
+        eq(toolGeneration.userId, userId),
+        eq(toolGeneration.kind, "tts"),
+        eq(toolGeneration.status, "pending"),
+      ),
+    );
+  if ((pending?.c ?? 0) >= 1) {
+    throw new TRPCError({
+      code: "TOO_MANY_REQUESTS",
+      message: "Masih ada job TTS berjalan. Tunggu sampai selesai.",
     });
   }
 
-  const part = json.candidates?.[0]?.content?.parts?.find(
-    (candidate) => candidate.inlineData?.data || candidate.inline_data?.data,
+  const since = new Date(Date.now() - TTS_RATE_WINDOW_MS);
+  const [recent] = await db
+    .select({ c: count() })
+    .from(toolGeneration)
+    .where(
+      and(
+        eq(toolGeneration.userId, userId),
+        eq(toolGeneration.kind, "tts"),
+        gte(toolGeneration.createdAt, since),
+        // Jangan hitung job yang gagal-cepat agar tak memblok user yang tak abuse.
+        ne(toolGeneration.status, "error"),
+      ),
+    );
+  if ((recent?.c ?? 0) >= TTS_RATE_MAX_PER_WINDOW) {
+    throw new TRPCError({
+      code: "TOO_MANY_REQUESTS",
+      message: "Terlalu banyak permintaan TTS. Coba lagi sebentar.",
+    });
+  }
+}
+
+// Throttle preview voice in-memory per user (preview ephemeral, tak menyisipkan
+// row sehingga tak bisa diandalkan via DB count). Reset saat proses restart.
+const previewHits = new Map<string, number[]>();
+
+function assertPreviewRateLimit(userId: string): void {
+  const now = Date.now();
+  const recent = (previewHits.get(userId) ?? []).filter(
+    (t) => now - t < TTS_RATE_WINDOW_MS,
   );
-  const audioBase64 = part?.inlineData?.data ?? part?.inline_data?.data;
-  if (!audioBase64) {
+  if (recent.length >= TTS_PREVIEW_RATE_MAX_PER_WINDOW) {
     throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Gemini TTS tidak mengembalikan audio base64",
+      code: "TOO_MANY_REQUESTS",
+      message: "Terlalu banyak preview. Coba lagi sebentar.",
     });
   }
-
-  const pcm = Buffer.from(audioBase64, "base64");
-  if (pcm.byteLength === 0 || pcm.byteLength > MAX_AUDIO_BYTES) {
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Ukuran audio TTS tidak valid",
-    });
-  }
-
-  return wavFromPcm(pcm);
+  recent.push(now);
+  previewHits.set(userId, recent);
 }
 
 function isRetryableVideoStatusError(error: string): boolean {
@@ -610,9 +967,38 @@ export const toolsRouter = router({
       model: settings.ttsModel,
       defaultVoice: settings.ttsDefaultVoice,
       voiceOptions: settings.ttsVoiceOptions,
+      // Status per-provider untuk menentukan provider mana yang bisa dipakai.
+      providers: {
+        gemini: { hasApiKey: Boolean(settings.ttsApiKeyEncrypted) },
+        vertex: {
+          hasApiKey: Boolean(
+            settings.vertexServiceAccountEncrypted && settings.vertexProjectId,
+          ),
+        },
+        openrouter: { hasApiKey: Boolean(settings.openrouterApiKeyEncrypted) },
+      },
+      // Kompat lama: hasApiKey = Gemini.
       hasApiKey: Boolean(settings.ttsApiKeyEncrypted),
     };
   }),
+
+  listTtsModels: authenticatedProcedure
+    .input(z.object({ provider: TTS_PROVIDER }))
+    .query(async ({ input }) => {
+      const settings = await readTtsSettings();
+      const provider = input.provider as TtsProviderId;
+      const creds = resolveProviderCreds(settings, provider);
+      const voices = voicesFor(provider, settings.ttsVoiceOptions);
+      try {
+        const models = await listProviderModels(creds);
+        return { models, voices, defaultVoice: voices[0] ?? null };
+      } catch (err) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: err instanceof Error ? err.message : "Gagal memuat daftar model",
+        });
+      }
+    }),
 
   generateImage: authenticatedProcedure
     .input(generateImageInput)
@@ -826,6 +1212,7 @@ export const toolsRouter = router({
       const userId = ctx.session.user.id;
       const requestId = randomUUID();
       const settings = await readTtsSettings();
+      const provider = input.provider as TtsProviderId;
 
       if (!settings.ttsEnabled) {
         throw new TRPCError({
@@ -833,33 +1220,27 @@ export const toolsRouter = router({
           message: "TTS belum diaktifkan di AI Settings",
         });
       }
-      if (settings.ttsProvider !== "gemini") {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: `Provider TTS belum didukung: ${settings.ttsProvider}`,
-        });
-      }
-      if (!settings.ttsApiKeyEncrypted) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "Gemini API key belum dikonfigurasi",
-        });
-      }
 
-      const allowedVoices = new Set(settings.ttsVoiceOptions);
+      // Validasi voice sesuai provider. Gemini/Vertex pakai voice set Gemini;
+      // OpenRouter (single-voice) divalidasi terhadap voice OpenAI.
+      const allowedVoices = new Set(voicesFor(provider, settings.ttsVoiceOptions));
       const normalizedSpeakers = input.speakers.map((speaker) => ({
         speaker: speaker.speaker.trim(),
         voiceName: speaker.voiceName.trim(),
       }));
-
       for (const speaker of normalizedSpeakers) {
         if (!allowedVoices.has(speaker.voiceName)) {
           throw new TRPCError({
             code: "BAD_REQUEST",
-            message: `Voice tidak diizinkan: ${speaker.voiceName}`,
+            message: `Voice tidak diizinkan untuk ${provider}: ${speaker.voiceName}`,
           });
         }
       }
+
+      // Resolusi + dekripsi kredensial provider (lempar bila belum diatur).
+      const creds = resolveProviderCreds(settings, provider);
+
+      await assertTtsRateLimit(userId);
 
       const [row] = await db
         .insert(toolGeneration)
@@ -871,90 +1252,158 @@ export const toolsRouter = router({
           requestId,
           status: "pending",
           inputMeta: {
-            provider: settings.ttsProvider,
-            model: settings.ttsModel,
+            provider,
+            model: input.model,
             styleInstruction: input.styleInstruction,
             speakers: normalizedSpeakers,
+            format: input.format,
           },
         })
         .returning();
 
-      let apiKey: string;
-      try {
-        apiKey = decryptSecret(settings.ttsApiKeyEncrypted);
-      } catch (err) {
-        const message =
-          err instanceof Error ? err.message : "Gagal membaca API key";
+      // Jalankan generasi di background (detached) agar request tidak blocking;
+      // frontend memantau via getTtsStatus. Tahan refresh/navigasi.
+      void runTtsJob({
+        rowId: row.id,
+        requestId,
+        creds,
+        model: input.model,
+        script: input.text,
+        style: input.styleInstruction,
+        speakers: normalizedSpeakers,
+        format: input.format,
+      });
+
+      return {
+        id: row.id,
+        requestId,
+        status: "pending" as const,
+        createdAt: row.createdAt,
+        provider,
+        model: input.model,
+        format: input.format,
+      };
+    }),
+
+  getTtsStatus: authenticatedProcedure
+    .input(z.object({ id: z.number().int() }))
+    .query(async ({ ctx, input }) => {
+      const [row] = await db
+        .select()
+        .from(toolGeneration)
+        .where(eq(toolGeneration.id, input.id))
+        .limit(1);
+
+      if (!row) {
+        throw new TRPCError({ code: "NOT_FOUND" });
+      }
+      if (row.userId !== ctx.session.user.id) {
+        throw new TRPCError({ code: "FORBIDDEN" });
+      }
+      if (row.kind !== "tts") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Entry bukan TTS" });
+      }
+
+      if (row.status === "success") {
+        const out = row.outputMeta as { tokens?: TtsTokens } | null;
+        return {
+          status: "success" as const,
+          url: publicUrl(row.fileUrl),
+          mimeType: row.mimeType ?? "audio/wav",
+          tokens: out?.tokens ?? null,
+          createdAt: row.createdAt,
+        };
+      }
+      if (row.status === "error") {
+        return {
+          status: "error" as const,
+          error: row.errorMessage ?? "Generate TTS gagal",
+        };
+      }
+
+      // pending — reaper: bila terlalu lama (mis. proses mati/restart), tandai error.
+      const ageMs = Date.now() - new Date(row.createdAt).getTime();
+      if (ageMs > TTS_JOB_TIMEOUT_MS) {
+        const message = "TTS timeout — proses tidak selesai. Coba lagi.";
+        // Guard status=pending agar tak menimpa worker yang baru saja sukses.
         await db
           .update(toolGeneration)
           .set({ status: "error", errorMessage: message })
-          .where(eq(toolGeneration.id, row.id));
+          .where(
+            and(eq(toolGeneration.id, row.id), eq(toolGeneration.status, "pending")),
+          );
+        return { status: "error" as const, error: message };
+      }
+      return { status: "pending" as const };
+    }),
+
+  previewTtsVoice: authenticatedProcedure
+    .input(
+      z.object({
+        provider: TTS_PROVIDER.optional().default("gemini"),
+        model: z.string().min(1).max(160),
+        voiceName: z.string().min(1).max(80),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const settings = await readTtsSettings();
+      const provider = input.provider as TtsProviderId;
+      if (!settings.ttsEnabled) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "TTS belum aktif" });
+      }
+      if (!voicesFor(provider, settings.ttsVoiceOptions).includes(input.voiceName)) {
         throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message,
+          code: "BAD_REQUEST",
+          message: `Voice tidak diizinkan: ${input.voiceName}`,
         });
       }
+      const creds = resolveProviderCreds(settings, provider);
+
+      // Guard preview (in-memory) terpisah dari limit generate.
+      assertPreviewRateLimit(ctx.session.user.id);
 
       try {
-        const prompt = buildTtsPrompt({
-          ...input,
-          speakers: normalizedSpeakers,
-        });
-        const wav = await callGeminiTts({
-          apiKey,
-          model: settings.ttsModel,
-          text: prompt,
-          speakers: normalizedSpeakers,
-        });
-        const filename = `${requestId}.wav`;
-        const targetPath = ensureContained(
-          path.join(TOOLS_UPLOAD_DIR, filename),
-        );
-
-        await fs.mkdir(TOOLS_UPLOAD_DIR, { recursive: true });
-        await fs.writeFile(targetPath, wav);
-
-        const fileUrl = `/uploads/tools/${filename}`;
-        const durationSeconds =
-          (wav.byteLength - 44) /
-          (TTS_SAMPLE_RATE * TTS_CHANNELS * TTS_SAMPLE_WIDTH_BYTES);
-
-        const [updated] = await db
-          .update(toolGeneration)
-          .set({
-            status: "success",
-            fileUrl,
-            mimeType: "audio/wav",
-            fileSize: wav.byteLength,
-            outputMeta: {
-              durationSeconds: Math.max(0, Math.round(durationSeconds)),
-              sampleRate: TTS_SAMPLE_RATE,
-              channels: TTS_CHANNELS,
-              format: "wav",
-            },
-          })
-          .where(eq(toolGeneration.id, row.id))
-          .returning();
-
-        return {
-          id: updated.id,
-          url: publicUrl(fileUrl),
-          mimeType: "audio/wav",
-          requestId,
-          createdAt: updated.createdAt,
-          provider: settings.ttsProvider,
-          model: settings.ttsModel,
-        };
+        // Ephemeral: tidak disimpan ke history/disk; kembalikan data URL audio.
+        if (creds.provider === "openrouter") {
+          const { audio, mimeType } = await withTtsRetry(() =>
+            callOpenAiAudio({
+              baseUrl: OPENROUTER_BASE_URL,
+              apiKey: creds.apiKey,
+              model: input.model,
+              voice: input.voiceName,
+              text: TTS_PREVIEW_TEXT,
+              format: "mp3",
+            }),
+          );
+          return {
+            voiceName: input.voiceName,
+            dataUrl: `data:${mimeType};base64,${audio.toString("base64")}`,
+          };
+        }
+        const text = `TTS the following text:\n${TTS_PREVIEW_TEXT}`;
+        const speakers = [{ speaker: "Preview", voiceName: input.voiceName }];
+        const { pcm } =
+          creds.provider === "gemini"
+            ? await withTtsRetry(() =>
+                callGeminiTts({ apiKey: creds.apiKey, model: input.model, text, speakers }),
+              )
+            : await withTtsRetry(() =>
+                callVertexTts({
+                  saJson: creds.saJson,
+                  projectId: creds.projectId,
+                  location: creds.location,
+                  model: input.model,
+                  text,
+                  speakers,
+                }),
+              );
+        const dataUrl = `data:audio/wav;base64,${wavFromPcm(pcm).toString("base64")}`;
+        return { voiceName: input.voiceName, dataUrl };
       } catch (err) {
-        await db
-          .update(toolGeneration)
-          .set({
-            status: "error",
-            errorMessage:
-              err instanceof Error ? err.message : "Unknown error",
-          })
-          .where(eq(toolGeneration.id, row.id));
-        throw err;
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: err instanceof Error ? err.message : "Preview voice gagal",
+        });
       }
     }),
 

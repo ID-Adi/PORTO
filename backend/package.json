@@ -17,11 +17,13 @@
     "db:seed:overview": "tsx --env-file=.env src/scripts/seed-profile-overview.ts"
   },
   "dependencies": {
+    "@breezystack/lamejs": "^1.2.7",
     "@hono/node-server": "^2.0.0",
     "@hono/trpc-server": "^0.4.2",
     "@trpc/server": "^11.16.0",
     "better-auth": "^1.6.9",
     "drizzle-orm": "^0.45.2",
+    "google-auth-library": "^10.6.2",
     "hono": "^4.12.15",
     "nodemailer": "^8.0.8",
     "postgres": "^3.4.9",
@@ -35,6 +37,8 @@
     "typescript": "^6.0.3"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["esbuild"]
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
   }
 }

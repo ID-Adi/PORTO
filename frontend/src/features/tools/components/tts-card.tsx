@@ -2,7 +2,10 @@
 
 import {
   Download,
+  Import,
+  Loader2,
   Mic2,
+  Play,
   Plus,
   RotateCcw,
   Send,
@@ -10,7 +13,7 @@ import {
   Volume2,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -35,12 +38,19 @@ type TtsSpeaker = {
   voiceName: string;
 };
 
+type TtsFormat = "wav" | "mp3";
+type TtsProviderId = "gemini" | "vertex" | "openrouter";
+
 type TtsSession = {
+  provider: TtsProviderId;
+  model: string;
   text: string;
   styleInstruction: string;
   speakers: TtsSpeaker[];
+  format: TtsFormat;
   status: Status;
   startedAt: number | null;
+  rowId: number | null;
   resultUrl: string | null;
   error: string | null;
 };
@@ -63,13 +73,36 @@ type InputMeta = {
   speakers?: TtsSpeaker[];
 };
 
+type TtsTokens = {
+  total?: number;
+  prompt?: number;
+  output?: number;
+};
+
 type OutputMeta = {
   durationSeconds?: number;
+  tokens?: TtsTokens;
 };
+
+function readTokens(value: unknown): TtsTokens | undefined {
+  const record = readRecord(value);
+  if (!record) return undefined;
+  const num = (v: unknown) => (typeof v === "number" ? v : undefined);
+  const t = { total: num(record.total), prompt: num(record.prompt), output: num(record.output) };
+  return t.total === undefined && t.prompt === undefined && t.output === undefined
+    ? undefined
+    : t;
+}
 
 const STORAGE_KEY = "porto.tools.session.tts";
 const SESSION_TTL_MS = 1000 * 60 * 30;
 const MAX_SPEAKERS = 4;
+
+const PROVIDER_LABEL: Record<TtsProviderId, string> = {
+  gemini: "Gemini",
+  vertex: "Vertex AI",
+  openrouter: "OpenRouter",
+};
 
 function readRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object"
@@ -112,6 +145,7 @@ function readOutputMeta(value: unknown): OutputMeta {
       typeof record.durationSeconds === "number"
         ? record.durationSeconds
         : undefined,
+    tokens: readTokens(record.tokens),
   };
 }
 
@@ -123,16 +157,27 @@ function defaultSpeakers(defaultVoice: string, voices: readonly string[]) {
   ];
 }
 
-function defaultSession(defaultVoice = "Kore", voices: readonly string[] = ["Kore"]) {
+function defaultSession(
+  defaultVoice = "Kore",
+  voices: readonly string[] = ["Kore"],
+): TtsSession {
   return {
+    provider: "gemini",
+    model: "",
     text: "",
     styleInstruction: "",
     speakers: defaultSpeakers(defaultVoice, voices),
-    status: "idle" as const,
+    format: "wav",
+    status: "idle",
     startedAt: null,
+    rowId: null,
     resultUrl: null,
     error: null,
   };
+}
+
+function normalizeProvider(value: unknown): TtsProviderId {
+  return value === "vertex" || value === "openrouter" ? value : "gemini";
 }
 
 function readSession(defaultVoice: string, voices: readonly string[]): TtsSession {
@@ -156,12 +201,26 @@ function readSession(defaultVoice: string, voices: readonly string[]): TtsSessio
             }))
         : defaultSpeakers(defaultVoice, voices);
 
+    // Resume: jika sebelumnya `generating` dan punya rowId, pertahankan status
+    // agar polling getTtsStatus tersambung kembali setelah refresh/navigasi.
+    const wasGenerating = parsed.status === "generating";
+    const hasRow = typeof parsed.rowId === "number";
+    const status: Status = wasGenerating
+      ? hasRow
+        ? "generating"
+        : "idle"
+      : parsed.status ?? "idle";
+
     return {
+      provider: normalizeProvider(parsed.provider),
+      model: typeof parsed.model === "string" ? parsed.model : "",
       text: parsed.text ?? "",
       styleInstruction: parsed.styleInstruction ?? "",
       speakers,
-      status: parsed.status === "generating" ? "idle" : parsed.status ?? "idle",
-      startedAt: null,
+      format: parsed.format === "mp3" ? "mp3" : "wav",
+      status,
+      startedAt: wasGenerating && hasRow ? parsed.startedAt ?? Date.now() : null,
+      rowId: hasRow ? (parsed.rowId as number) : null,
       resultUrl: parsed.resultUrl ?? null,
       error: parsed.error ?? null,
     };
@@ -197,12 +256,18 @@ function TtsSpeakerRail({
   speakers,
   voices,
   disabled,
+  singleVoice,
   onChange,
+  onPreview,
+  previewingVoice,
 }: {
   speakers: TtsSpeaker[];
   voices: readonly string[];
   disabled: boolean;
+  singleVoice: boolean;
   onChange: (speakers: TtsSpeaker[]) => void;
+  onPreview: (voiceName: string) => void;
+  previewingVoice: string | null;
 }) {
   function update(index: number, patch: Partial<TtsSpeaker>) {
     onChange(
@@ -235,64 +300,88 @@ function TtsSpeakerRail({
           Speakers
         </span>
         <span className="font-mono text-[10px] tabular-nums text-(--muted-foreground)">
-          {speakers.length.toString().padStart(2, "0")}/04
+          {singleVoice
+            ? "VOICE"
+            : `${speakers.length.toString().padStart(2, "0")}/04`}
         </span>
       </header>
 
       <div className="grid gap-2 p-2">
-        {speakers.map((speaker, index) => (
+        {(singleVoice ? speakers.slice(0, 1) : speakers).map((speaker, index) => (
           <div key={index} className="border border-(--line) p-2">
             <div className="mb-2 flex items-center justify-between gap-2">
               <span className="font-mono text-[10px] tracking-[0.18em] text-(--muted-foreground) uppercase">
-                {index === 0 ? "Primary" : `Voice ${index + 1}`}
+                {singleVoice ? "Voice" : index === 0 ? "Primary" : `Voice ${index + 1}`}
               </span>
+              {!singleVoice ? (
+                <button
+                  type="button"
+                  aria-label="Remove speaker"
+                  disabled={disabled || speakers.length <= 1}
+                  onClick={() => removeSpeaker(index)}
+                  className="inline-flex size-5 items-center justify-center text-(--muted-foreground) transition-colors hover:text-(--foreground) disabled:pointer-events-none disabled:opacity-30"
+                >
+                  <X className="size-3" aria-hidden />
+                </button>
+              ) : null}
+            </div>
+            {!singleVoice ? (
+              <Input
+                value={speaker.speaker}
+                disabled={disabled}
+                onChange={(event) =>
+                  update(index, { speaker: event.target.value })
+                }
+                className="mb-2 h-8 rounded-none border-(--line) font-mono text-[11px]"
+                aria-label={`Speaker ${index + 1} label`}
+              />
+            ) : null}
+            <div className="flex items-center gap-1.5">
+              <Select
+                value={speaker.voiceName}
+                disabled={disabled}
+                onValueChange={(voiceName) => update(index, { voiceName })}
+              >
+                <SelectTrigger className="h-8 w-full rounded-none border-(--line) font-mono text-[11px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="rounded-none border-(--line)">
+                  {voices.map((voice) => (
+                    <SelectItem key={voice} value={voice}>
+                      {voice}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <button
                 type="button"
-                aria-label="Remove speaker"
-                disabled={disabled || speakers.length <= 1}
-                onClick={() => removeSpeaker(index)}
-                className="inline-flex size-5 items-center justify-center text-(--muted-foreground) transition-colors hover:text-(--foreground) disabled:pointer-events-none disabled:opacity-30"
+                aria-label={`Preview voice ${speaker.voiceName}`}
+                title="Preview voice"
+                disabled={previewingVoice !== null}
+                onClick={() => onPreview(speaker.voiceName)}
+                className="inline-flex size-8 shrink-0 items-center justify-center border border-(--line) text-(--muted-foreground) transition-colors hover:text-(--foreground) disabled:pointer-events-none disabled:opacity-40"
               >
-                <X className="size-3" aria-hidden />
+                {previewingVoice === speaker.voiceName ? (
+                  <Loader2 className="size-3 animate-spin" aria-hidden />
+                ) : (
+                  <Play className="size-3" aria-hidden />
+                )}
               </button>
             </div>
-            <Input
-              value={speaker.speaker}
-              disabled={disabled}
-              onChange={(event) =>
-                update(index, { speaker: event.target.value })
-              }
-              className="mb-2 h-8 rounded-none border-(--line) font-mono text-[11px]"
-              aria-label={`Speaker ${index + 1} label`}
-            />
-            <Select
-              value={speaker.voiceName}
-              disabled={disabled}
-              onValueChange={(voiceName) => update(index, { voiceName })}
-            >
-              <SelectTrigger className="h-8 w-full rounded-none border-(--line) font-mono text-[11px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="rounded-none border-(--line)">
-                {voices.map((voice) => (
-                  <SelectItem key={voice} value={voice}>
-                    {voice}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
           </div>
         ))}
 
-        <button
-          type="button"
-          disabled={disabled || speakers.length >= MAX_SPEAKERS}
-          onClick={addSpeaker}
-          className="inline-flex h-9 items-center justify-center gap-2 border border-dashed border-(--line) font-mono text-[10px] tracking-[0.16em] text-(--muted-foreground) uppercase transition-colors hover:border-(--foreground) hover:text-(--foreground) disabled:pointer-events-none disabled:opacity-40"
-        >
-          <Plus className="size-3" aria-hidden />
-          Add speaker
-        </button>
+        {!singleVoice ? (
+          <button
+            type="button"
+            disabled={disabled || speakers.length >= MAX_SPEAKERS}
+            onClick={addSpeaker}
+            className="inline-flex h-9 items-center justify-center gap-2 border border-dashed border-(--line) font-mono text-[10px] tracking-[0.16em] text-(--muted-foreground) uppercase transition-colors hover:border-(--foreground) hover:text-(--foreground) disabled:pointer-events-none disabled:opacity-40"
+          >
+            <Plus className="size-3" aria-hidden />
+            Add speaker
+          </button>
+        ) : null}
       </div>
     </aside>
   );
@@ -301,10 +390,12 @@ function TtsSpeakerRail({
 function TtsHistoryPanel({
   entries,
   onDelete,
+  onLoad,
   isLoading,
 }: {
   entries: TtsHistoryEntry[];
   onDelete: (id: number) => void;
+  onLoad: (entry: TtsHistoryEntry) => void;
   isLoading: boolean;
 }) {
   return (
@@ -345,14 +436,30 @@ function TtsHistoryPanel({
                         {outputMeta.durationSeconds
                           ? `${outputMeta.durationSeconds}s`
                           : entry.status}
+                        {outputMeta.tokens?.total != null
+                          ? ` / ${outputMeta.tokens.total.toLocaleString()} tok`
+                          : ""}
                       </div>
                     </div>
                     <div className="flex shrink-0 items-center gap-1">
+                      <button
+                        type="button"
+                        aria-label="Load to form"
+                        title="Muat ke form"
+                        onClick={() => onLoad(entry)}
+                        className="inline-flex size-6 items-center justify-center border border-(--line) text-(--muted-foreground) transition-colors hover:text-(--foreground)"
+                      >
+                        <Import className="size-3" aria-hidden />
+                      </button>
                       {entry.fileUrl ? (
                         <a
                           href={`/api/download?url=${encodeURIComponent(
                             entry.fileUrl,
-                          )}&filename=${encodeURIComponent(`tts-${entry.id}.wav`)}`}
+                          )}&filename=${encodeURIComponent(
+                            `tts-${entry.id}.${
+                              entry.mimeType === "audio/mpeg" ? "mp3" : "wav"
+                            }`,
+                          )}`}
                           aria-label="Download audio"
                           className="inline-flex size-6 items-center justify-center border border-(--line) text-(--muted-foreground) transition-colors hover:text-(--foreground)"
                         >
@@ -398,28 +505,83 @@ export function TtsCard() {
   const historyQuery = trpc.tools.listMyTtsHistory.useQuery();
   const generateTts = trpc.tools.generateTts.useMutation();
   const deleteEntry = trpc.tools.deleteMyEntry.useMutation();
+  const previewVoice = trpc.tools.previewTtsVoice.useMutation();
 
-  const voiceOptions = useMemo(
-    () => configQuery.data?.voiceOptions ?? ["Kore"],
-    [configQuery.data?.voiceOptions],
-  );
-  const defaultVoice = configQuery.data?.defaultVoice ?? voiceOptions[0] ?? "Kore";
-  const [session, setSession] = useState<TtsSession>(() =>
-    defaultSession(defaultVoice, voiceOptions),
-  );
+  const [previewingVoice, setPreviewingVoice] = useState<string | null>(null);
+  const [lastTokens, setLastTokens] = useState<TtsTokens | null>(null);
+  // Cache data URL preview per voice agar tak memanggil ulang dalam sesi.
+  const previewCache = useRef<Map<string, string>>(new Map());
+
+  const config = configQuery.data;
+  const providerStatus = config?.providers;
+
+  const [session, setSession] = useState<TtsSession>(() => defaultSession());
   const [hasMounted, setHasMounted] = useState(false);
 
   useEffect(() => {
-    if (!configQuery.data) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setSession(readSession(configQuery.data.defaultVoice, configQuery.data.voiceOptions));
+    if (!config) return;
+    setSession(readSession(config.defaultVoice, config.voiceOptions));
     setHasMounted(true);
-  }, [configQuery.data]);
+  }, [config]);
 
   useEffect(() => {
     if (!hasMounted) return;
     writeSession(session);
   }, [hasMounted, session]);
+
+  const availableProviders = useMemo<TtsProviderId[]>(() => {
+    if (!providerStatus) return [];
+    return (["gemini", "vertex", "openrouter"] as TtsProviderId[]).filter(
+      (p) => providerStatus[p]?.hasApiKey,
+    );
+  }, [providerStatus]);
+
+  const providerReady = Boolean(providerStatus?.[session.provider]?.hasApiKey);
+
+  // Daftar model live untuk provider terpilih.
+  const modelsQuery = trpc.tools.listTtsModels.useQuery(
+    { provider: session.provider },
+    { enabled: hasMounted && providerReady, staleTime: 5 * 60_000, retry: false },
+  );
+  const models = modelsQuery.data?.models ?? [];
+  const voiceOptions = useMemo(
+    () => modelsQuery.data?.voices ?? config?.voiceOptions ?? ["Kore"],
+    [modelsQuery.data?.voices, config?.voiceOptions],
+  );
+  const defaultVoice = voiceOptions[0] ?? "Kore";
+  const isSingleVoice = session.provider === "openrouter";
+
+  // Pastikan provider terpilih punya key; jika tidak, pindah ke yang tersedia.
+  useEffect(() => {
+    if (!hasMounted || availableProviders.length === 0) return;
+    if (!availableProviders.includes(session.provider)) {
+      setSession((p) => ({ ...p, provider: availableProviders[0], model: "" }));
+    }
+  }, [hasMounted, availableProviders, session.provider]);
+
+  // Auto-pilih model pertama saat daftar termuat & model belum valid.
+  useEffect(() => {
+    const list = modelsQuery.data?.models;
+    if (!list || list.length === 0) return;
+    if (!session.model || !list.some((m) => m.id === session.model)) {
+      setSession((p) => ({ ...p, model: list[0]!.id }));
+    }
+  }, [modelsQuery.data?.models, session.model]);
+
+  // Samakan voiceName speakers dgn voice set provider terpilih. JANGAN memotong
+  // jumlah speaker (single-voice openrouter hanya ditampilkan/dikirim 1, tapi
+  // state speakers tetap utuh agar tak hilang saat balik ke gemini/vertex).
+  useEffect(() => {
+    const allowed = modelsQuery.data?.voices;
+    if (!allowed || allowed.length === 0) return;
+    setSession((p) => {
+      const speakers = p.speakers.map((s) =>
+        allowed.includes(s.voiceName) ? s : { ...s, voiceName: allowed[0]! },
+      );
+      const same = speakers.every((s, i) => s.voiceName === p.speakers[i]!.voiceName);
+      return same ? p : { ...p, speakers };
+    });
+  }, [modelsQuery.data?.voices]);
 
   const entries = useMemo(() => {
     return ((historyQuery.data ?? []) as TtsHistoryEntry[]).filter(
@@ -429,9 +591,52 @@ export function TtsCard() {
 
   const latestHistory = entries[0] ?? null;
   const previewUrl = session.resultUrl ?? latestHistory?.fileUrl ?? null;
+  const displayTokens =
+    lastTokens ?? readOutputMeta(latestHistory?.outputMeta).tokens ?? null;
   const isGenerating = session.status === "generating";
   const canGenerate =
-    Boolean(configQuery.data?.enabled) && Boolean(configQuery.data?.hasApiKey);
+    Boolean(config?.enabled) && providerReady && Boolean(session.model);
+
+  // Polling status job TTS saat sedang generating (tahan refresh via rowId).
+  const shouldPoll = isGenerating && session.rowId !== null;
+  const statusQuery = trpc.tools.getTtsStatus.useQuery(
+    { id: session.rowId ?? 0 },
+    {
+      enabled: shouldPoll,
+      refetchInterval: shouldPoll ? 5000 : false,
+      refetchOnWindowFocus: false,
+      retry: false,
+    },
+  );
+
+  useEffect(() => {
+    if (!shouldPoll) return;
+    const data = statusQuery.data;
+    if (!data) return;
+    if (data.status === "success" && data.url) {
+      setSession((prev) => ({
+        ...prev,
+        status: "idle",
+        startedAt: null,
+        resultUrl: data.url ?? null,
+        error: null,
+      }));
+      setLastTokens(data.tokens ?? null);
+      void utils.tools.listMyTtsHistory.invalidate();
+    } else if (data.status === "error") {
+      const message = data.error ?? "Generate TTS gagal";
+      setSession((prev) => ({
+        ...prev,
+        status: "error",
+        startedAt: null,
+        rowId: null,
+        resultUrl: null,
+        error: message,
+      }));
+      toast.error(message);
+      void utils.tools.listMyTtsHistory.invalidate();
+    }
+  }, [shouldPoll, statusQuery.data, utils]);
 
   function setSpeakerList(speakers: TtsSpeaker[]) {
     setSession((prev) =>
@@ -453,38 +658,54 @@ export function TtsCard() {
       return;
     }
 
-    const speakers = session.speakers.map((speaker) => ({
-      speaker: speaker.speaker.trim(),
+    // OpenRouter single-voice: kirim hanya speaker pertama (state tetap utuh).
+    const sourceSpeakers = isSingleVoice
+      ? session.speakers.slice(0, 1)
+      : session.speakers;
+    const speakers = sourceSpeakers.map((speaker) => ({
+      speaker: speaker.speaker.trim() || "Speaker",
       voiceName: speaker.voiceName.trim(),
     }));
-    if (speakers.some((speaker) => !speaker.speaker || !speaker.voiceName)) {
-      toast.error("Speaker dan voice wajib diisi");
+    if (speakers.some((speaker) => !speaker.voiceName)) {
+      toast.error("Voice wajib diisi");
+      return;
+    }
+
+    if (!session.model) {
+      toast.error("Pilih model dulu");
       return;
     }
 
     const startedAt = Date.now();
+    setLastTokens(null);
     setSession((prev) => ({
       ...prev,
       status: "generating",
       startedAt,
+      rowId: null,
       resultUrl: null,
       error: null,
     }));
 
     try {
+      // Job async: mutation hanya membuat row pending & mengembalikan id.
+      // Hasil dipantau via polling getTtsStatus (useEffect di bawah).
       const result = await generateTts.mutateAsync({
+        provider: session.provider,
+        model: session.model,
         text,
         styleInstruction: session.styleInstruction.trim(),
         speakers,
+        format: session.format,
       });
       setSession((prev) => ({
         ...prev,
-        status: "idle",
-        startedAt: null,
-        resultUrl: result.url,
+        status: "generating",
+        startedAt,
+        rowId: result.id,
+        resultUrl: null,
         error: null,
       }));
-      await utils.tools.listMyTtsHistory.invalidate();
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Generate TTS gagal";
@@ -492,11 +713,11 @@ export function TtsCard() {
         ...prev,
         status: "error",
         startedAt: null,
+        rowId: null,
         resultUrl: null,
         error: message,
       }));
       toast.error(message);
-      await utils.tools.listMyTtsHistory.invalidate();
     }
   }
 
@@ -513,11 +734,65 @@ export function TtsCard() {
     setSession(defaultSession(defaultVoice, voiceOptions));
   }
 
-  const configMessage = !configQuery.data?.enabled
+  function onLoadEntry(entry: TtsHistoryEntry) {
+    if (isGenerating) return;
+    const meta = readInputMeta(entry.inputMeta);
+    const provider = normalizeProvider(meta.provider);
+    const speakers =
+      meta.speakers && meta.speakers.length > 0
+        ? meta.speakers.slice(0, MAX_SPEAKERS).map((s) => ({
+            speaker: s.speaker,
+            voiceName: s.voiceName,
+          }))
+        : defaultSpeakers(defaultVoice, voiceOptions);
+    setSession((prev) => ({
+      ...prev,
+      provider,
+      model: meta.model ?? "",
+      text: entry.prompt ?? "",
+      styleInstruction: meta.styleInstruction ?? "",
+      speakers,
+    }));
+    toast.success("Dimuat ke form");
+  }
+
+  async function onPreview(voiceName: string) {
+    if (previewingVoice) return;
+    if (!session.model) {
+      toast.error("Pilih model dulu");
+      return;
+    }
+    const cacheKey = `${session.provider}:${session.model}:${voiceName}`;
+    const cached = previewCache.current.get(cacheKey);
+    if (cached) {
+      void new Audio(cached).play().catch(() => undefined);
+      return;
+    }
+    if (!canGenerate) {
+      toast.error("TTS belum aktif atau provider belum dikonfigurasi");
+      return;
+    }
+    setPreviewingVoice(voiceName);
+    try {
+      const result = await previewVoice.mutateAsync({
+        provider: session.provider,
+        model: session.model,
+        voiceName,
+      });
+      previewCache.current.set(cacheKey, result.dataUrl);
+      void new Audio(result.dataUrl).play().catch(() => undefined);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Preview voice gagal");
+    } finally {
+      setPreviewingVoice(null);
+    }
+  }
+
+  const configMessage = !config?.enabled
     ? "TTS belum aktif di AI Settings."
-    : !configQuery.data?.hasApiKey
-      ? "Gemini API key belum dikonfigurasi."
-      : "Multi-speaker TTS via Gemini. Atur speaker, voice, dan direction lalu generate audio WAV.";
+    : availableProviders.length === 0
+      ? "Belum ada provider dengan API key. Atur di AI Settings."
+      : "Multi-speaker (Gemini/Vertex) atau single-voice (OpenRouter). Pilih provider, model, voice lalu generate.";
 
   return (
     <article className="flex flex-col border-(--line) bg-(--background)">
@@ -573,7 +848,10 @@ export function TtsCard() {
             speakers={session.speakers}
             voices={voiceOptions}
             disabled={isGenerating}
+            singleVoice={isSingleVoice}
             onChange={setSpeakerList}
+            onPreview={onPreview}
+            previewingVoice={previewingVoice}
           />
 
           <div className="flex min-h-56 items-start justify-center lg:flex-1">
@@ -590,6 +868,11 @@ export function TtsCard() {
                   <div className="grid place-items-center gap-3 font-mono text-[10px] tracking-[0.2em] text-(--muted-foreground) uppercase">
                     <Mic2 className="size-8" aria-hidden />
                     Audio preview
+                    {displayTokens?.total != null ? (
+                      <span className="text-(--foreground)">
+                        {displayTokens.total.toLocaleString()} tokens
+                      </span>
+                    ) : null}
                   </div>
                   <audio controls src={previewUrl} className="w-full" />
                 </div>
@@ -604,6 +887,7 @@ export function TtsCard() {
           <TtsHistoryPanel
             entries={entries}
             onDelete={onDelete}
+            onLoad={onLoadEntry}
             isLoading={historyQuery.isPending}
           />
         </div>
@@ -614,10 +898,85 @@ export function TtsCard() {
         className="screen-line-top flex flex-col gap-3 px-4 py-4"
       >
         <fieldset disabled={isGenerating} className="grid gap-3">
+          <div className="grid gap-2 sm:grid-cols-2">
+            <div className="grid gap-2">
+              <div className="font-mono text-[10px] tracking-[0.2em] text-(--muted-foreground) uppercase">
+                Provider
+              </div>
+              <Select
+                value={availableProviders.includes(session.provider) ? session.provider : ""}
+                disabled={isGenerating || availableProviders.length === 0}
+                onValueChange={(value) =>
+                  setSession((prev) => ({
+                    ...prev,
+                    provider: normalizeProvider(value),
+                    model: "",
+                  }))
+                }
+              >
+                <SelectTrigger className="h-8 rounded-none border-(--line) font-mono text-[11px]">
+                  <SelectValue placeholder="Pilih provider" />
+                </SelectTrigger>
+                <SelectContent className="rounded-none border-(--line)">
+                  {availableProviders.map((p) => (
+                    <SelectItem key={p} value={p}>
+                      {PROVIDER_LABEL[p]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2">
+              <div className="flex items-center gap-1.5 font-mono text-[10px] tracking-[0.2em] text-(--muted-foreground) uppercase">
+                Model
+                {modelsQuery.isFetching ? (
+                  <Loader2 className="size-3 animate-spin" aria-hidden />
+                ) : null}
+              </div>
+              <Select
+                value={models.some((m) => m.id === session.model) ? session.model : ""}
+                disabled={isGenerating || models.length === 0}
+                onValueChange={(value) =>
+                  setSession((prev) => ({ ...prev, model: value }))
+                }
+              >
+                <SelectTrigger className="h-8 rounded-none border-(--line) font-mono text-[11px]">
+                  <SelectValue
+                    placeholder={
+                      modelsQuery.isLoading
+                        ? "Memuat model…"
+                        : models.length === 0
+                          ? "Tidak ada model"
+                          : "Pilih model"
+                    }
+                  />
+                </SelectTrigger>
+                <SelectContent className="rounded-none border-(--line)">
+                  {models.map((m) => (
+                    <SelectItem key={m.id} value={m.id}>
+                      {m.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
           <div className="grid gap-2">
             <div className="flex items-center justify-between font-mono text-[10px] tracking-[0.2em] uppercase text-(--muted-foreground)">
               <span>Script</span>
-              <span className="tabular-nums">{session.text.length}/8000</span>
+              <span
+                className={cn(
+                  "tabular-nums",
+                  session.text.length >= 8000
+                    ? "text-rose-500"
+                    : session.text.length > 7600
+                      ? "text-amber-500"
+                      : undefined,
+                )}
+              >
+                {session.text.length}/8000
+              </span>
             </div>
             <Textarea
               value={session.text}
@@ -625,6 +984,7 @@ export function TtsCard() {
                 setSession((prev) => ({ ...prev, text: event.target.value }))
               }
               rows={7}
+              maxLength={8000}
               placeholder="Narrator: Open with a calm technical tone..."
               className="min-h-40 rounded-none border-(--line) font-mono text-xs leading-6"
             />
@@ -655,8 +1015,38 @@ export function TtsCard() {
         ) : null}
 
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="font-mono text-[10px] tracking-[0.16em] text-(--muted-foreground) uppercase">
-            {configQuery.data?.model ?? "gemini tts"}
+          <div className="flex items-center gap-3">
+            <div className="font-mono text-[10px] tracking-[0.16em] text-(--muted-foreground) uppercase">
+              {session.model || "—"}
+              {displayTokens?.total != null ? (
+                <span className="ml-1.5 text-(--foreground)">
+                  · {displayTokens.total.toLocaleString()} tok
+                </span>
+              ) : null}
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="font-mono text-[10px] tracking-[0.18em] text-(--muted-foreground) uppercase">
+                Format
+              </span>
+              <Select
+                value={session.format}
+                disabled={isGenerating}
+                onValueChange={(value) =>
+                  setSession((prev) => ({
+                    ...prev,
+                    format: value === "mp3" ? "mp3" : "wav",
+                  }))
+                }
+              >
+                <SelectTrigger className="h-7 w-20 rounded-none border-(--line) font-mono text-[10px] uppercase">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="rounded-none border-(--line)">
+                  <SelectItem value="wav">WAV</SelectItem>
+                  <SelectItem value="mp3">MP3</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           <div className="flex gap-2">
             <Button
@@ -673,7 +1063,7 @@ export function TtsCard() {
             <Button
               type="submit"
               size="sm"
-              disabled={isGenerating || !canGenerate}
+              disabled={isGenerating || !canGenerate || !session.text.trim()}
               className="rounded-none font-mono text-[10px] tracking-[0.14em] uppercase"
             >
               <Send className="size-3.5" aria-hidden />
