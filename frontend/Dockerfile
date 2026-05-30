@@ -23,6 +23,7 @@ WORKDIR /app
 # ──────────────────────────────────────────────────────────────────────────
 FROM base AS deps
 COPY frontend/package.json frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml ./frontend/
+COPY frontend/patches ./frontend/patches
 RUN cd frontend && pnpm install --frozen-lockfile
 COPY backend/package.json backend/pnpm-lock.yaml backend/pnpm-workspace.yaml ./backend/
 RUN cd backend && pnpm install --frozen-lockfile
