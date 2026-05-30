@@ -212,7 +212,7 @@ export function ApiKeyField({ provider, label, hint, status }: ApiKeyFieldProps)
                         : '{ "type": "service_account", ... }'
                     }
                     className={cn(
-                      "min-w-0 max-w-full resize-y overflow-auto rounded-none border-(--line) font-mono text-[11px] whitespace-pre-wrap break-all [field-sizing:fixed]",
+                      "h-32 min-h-32 max-h-56 min-w-0 max-w-full resize-y overflow-y-auto rounded-none border-(--line) font-mono text-[11px] whitespace-pre-wrap break-all [field-sizing:fixed]",
                       !reveal && "[-webkit-text-security:disc] [text-security:disc]",
                     )}
                   />
