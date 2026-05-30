@@ -175,17 +175,17 @@ export function ApiKeyField({ provider, label, hint, status }: ApiKeyFieldProps)
         open={open}
         onOpenChange={(next) => (next ? openModal() : resetAndClose())}
       >
-        <DialogContent className="max-w-lg rounded-none border-(--line)">
+        <DialogContent className="max-w-lg overflow-hidden rounded-none border-(--line)">
           <DialogHeader>
             <DialogTitle className="font-mono text-sm tracking-[0.12em] uppercase">
               {label}
             </DialogTitle>
           </DialogHeader>
 
-          <div className="grid gap-3 p-4">
+          <div className="grid min-w-0 gap-3 p-4">
             {isVertex ? (
               <>
-                <div className="space-y-1.5">
+                <div className="flex min-w-0 flex-col gap-1.5">
                   <div className="flex items-center justify-between">
                     <Label htmlFor={`vertex-sa-${provider}`}>Service Account JSON</Label>
                     <button
@@ -212,7 +212,7 @@ export function ApiKeyField({ provider, label, hint, status }: ApiKeyFieldProps)
                         : '{ "type": "service_account", ... }'
                     }
                     className={cn(
-                      "rounded-none border-(--line) font-mono text-[11px]",
+                      "min-w-0 max-w-full resize-y overflow-auto rounded-none border-(--line) font-mono text-[11px] whitespace-pre-wrap break-all [field-sizing:fixed]",
                       !reveal && "[-webkit-text-security:disc] [text-security:disc]",
                     )}
                   />

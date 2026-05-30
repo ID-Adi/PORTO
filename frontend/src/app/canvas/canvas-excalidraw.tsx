@@ -1,6 +1,6 @@
 "use client";
 
-import { Excalidraw } from "@excalidraw/excalidraw";
+import { Excalidraw, MainMenu } from "@excalidraw/excalidraw";
 import { ChevronUp, Download } from "lucide-react";
 
 import {
@@ -157,6 +157,18 @@ export function CanvasExcalidraw({
       initialData={initialData}
       langCode="id-ID"
     >
+      <MainMenu>
+        <MainMenu.DefaultItems.LoadScene />
+        <MainMenu.DefaultItems.SaveToActiveFile />
+        <MainMenu.DefaultItems.Export />
+        <MainMenu.DefaultItems.SaveAsImage />
+        <MainMenu.DefaultItems.SearchMenu />
+        <MainMenu.DefaultItems.Help />
+        <MainMenu.DefaultItems.ClearCanvas />
+        <MainMenu.Separator />
+        <MainMenu.DefaultItems.ToggleTheme />
+        <MainMenu.DefaultItems.ChangeCanvasBackground />
+      </MainMenu>
       <CanvasExtraSidebar
         videoUrl={activeVideoUrl}
         apiRef={apiRef}

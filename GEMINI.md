@@ -21,9 +21,30 @@ The project is structured as a monolith with clear boundaries:
 ### Frontend Architecture
 The frontend follows a modular architecture to separate concerns:
 - `frontend/src/app/`: Routing, global layouts, and route-level composition.
+  - `/canvas`: Managed as a standalone intelligent whiteboard module. See `frontend/src/app/canvas/GEMINI.md` for specific guidelines.
 - `frontend/src/modules/`: Domain-based UI logic (e.g., `home`). Each module contains its own sections and specific needs.
 - `frontend/src/shared/`: Reusable primitives, site-level config, and types that cross module boundaries.
 - `frontend/src/components/ui/`: Isolated source for `shadcn/ui` components.
+
+## Agentic Workflow & Efficiency
+
+To optimize for performance and token usage (especially when using high-cost models like Claude 3.5), follow this delegation strategy:
+
+### Gemini's Role (Researcher & Planner)
+- **High-Volume Reading:** Use Gemini to scan the repository, read multiple files, and perform deep research using `grep_search` and `codebase_investigator`.
+- **Task Specification:** Gemini should summarize findings and create a `GEMINI_TASK.md` (or update `MEMORY.md`) with a clear implementation plan, logic requirements, and code snippets.
+- **Verification:** Use Gemini to verify the structural integrity of changes made by other agents.
+
+### Claude's Role (Surgical Executor)
+- **Implementation:** Claude should be triggered only after a clear plan is established. It should read the `GEMINI_TASK.md` and perform the minimal, surgical edits required.
+- **Precision Coding:** Use Claude for complex abstract reasoning and final code generation where highest accuracy is needed.
+
+### Workflow Pipeline
+1. **Gemini** researches the issue -> creates `GEMINI_TASK.md`.
+2. **User** reviews the plan.
+3. **Claude** reads `GEMINI_TASK.md` -> executes changes -> deletes task file upon completion.
+
+---
 
 ## Building and Running
 

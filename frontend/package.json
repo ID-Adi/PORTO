@@ -69,5 +69,10 @@
     "postcss": "8.5.6",
     "tailwindcss": "4.2.2",
     "typescript": "5.9.3"
+  },
+  "pnpm": {
+    "patchedDependencies": {
+      "@excalidraw/excalidraw@0.18.1": "patches/@excalidraw__excalidraw@0.18.1.patch"
+    }
   }
 }

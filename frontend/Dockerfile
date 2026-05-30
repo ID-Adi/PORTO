@@ -45,6 +45,10 @@ ENV NEXT_PUBLIC_BACKEND_URL=$NEXT_PUBLIC_BACKEND_URL
 ENV NEXT_PUBLIC_ADMIN_EMAIL=$NEXT_PUBLIC_ADMIN_EMAIL
 
 WORKDIR /app/frontend
+# Headroom heap untuk type-check Next.js: inferensi tipe tRPC end-to-end
+# (inferRouterOutputs<AppRouter>) berat memori. Di builder ber-RAM kecil,
+# `next build` bisa OOM saat fase "checking validity of types" — beri 4GB.
+ENV NODE_OPTIONS=--max-old-space-size=4096
 # prebuild (sync-excalidraw-assets) jalan otomatis sebelum `next build`.
 RUN pnpm build
 
