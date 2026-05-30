@@ -9,6 +9,7 @@ import {
   ArrowRight,
   Clock3,
   ImageIcon,
+  Layers,
   ShieldCheck,
   UserRound,
   Video,
@@ -49,20 +50,45 @@ function StatPanel({
   icon: typeof ImageIcon;
 }) {
   return (
-    <div className="border border-line p-4">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <div className="font-mono text-[10px] tracking-[0.18em] text-muted-foreground uppercase">
-            {label}
-          </div>
-          <div className="mt-2 text-2xl font-semibold tracking-tight">
-            {value}
-          </div>
+    <div className="flex items-start justify-between gap-3 p-4 md:p-6">
+      <div className="min-w-0">
+        <div className="font-mono text-[10px] tracking-[0.18em] text-muted-foreground uppercase">
+          {label}
         </div>
-        <div className="grid size-9 place-items-center border border-line bg-muted/30">
-          <Icon className="size-4" aria-hidden />
+        <div className="mt-2 truncate text-2xl font-semibold tracking-tight">
+          {value}
         </div>
       </div>
+      <div className="grid size-9 shrink-0 place-items-center border border-line bg-muted/30">
+        <Icon className="size-4" aria-hidden />
+      </div>
+    </div>
+  );
+}
+
+function SectionHeading({
+  title,
+  description,
+  icon: Icon,
+  action,
+}: {
+  title: string;
+  description: string;
+  icon?: typeof ImageIcon;
+  action?: React.ReactNode;
+}) {
+  return (
+    <div className="mb-4 flex items-start justify-between gap-3">
+      <div className="min-w-0">
+        <h2 className="font-mono text-[12px] tracking-[0.18em] uppercase">
+          {title}
+        </h2>
+        <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+      </div>
+      {action ??
+        (Icon ? (
+          <Icon className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+        ) : null)}
     </div>
   );
 }
@@ -121,11 +147,15 @@ export default function DashboardPage() {
     );
   }
 
+  const totalCount =
+    (imageHistory.data?.length ?? 0) + (videoHistory.data?.length ?? 0);
+
   return (
     <SiteShell>
       <div className="page-frame">
         <section className="border-x border-line">
-          <div className="border-b border-line px-4 py-6 md:px-6">
+          {/* Header */}
+          <header className="border-b border-line px-4 py-6 md:px-6">
             <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
               <div>
                 <div className="font-mono text-[11px] tracking-[0.22em] text-muted-foreground uppercase">
@@ -134,47 +164,62 @@ export default function DashboardPage() {
                 <h1 className="mt-2 text-3xl font-semibold tracking-tight md:text-4xl">
                   Workspace overview
                 </h1>
+                <p className="mt-2 max-w-md text-sm text-muted-foreground">
+                  Pantau aktivitas dan hasil generasi media dari akunmu.
+                </p>
               </div>
-              <Button asChild className="w-fit rounded-none font-mono text-[12px] uppercase">
+              <Button
+                asChild
+                className="w-fit rounded-none font-mono text-[12px] uppercase"
+              >
                 <Link href="/tools">
                   Open Tools <ArrowRight className="size-3.5" aria-hidden />
                 </Link>
               </Button>
             </div>
-          </div>
+          </header>
 
-          <div className="grid border-b border-line md:grid-cols-[1fr_1.4fr]">
-            <div className="border-b border-line p-4 md:border-r md:border-b-0 md:p-6">
-              <div className="flex items-start gap-4">
-                <div className="grid size-12 shrink-0 place-items-center border border-line bg-muted/30">
-                  <UserRound className="size-5" aria-hidden />
+          {/* Identity bar */}
+          <div className="flex flex-col gap-4 border-b border-line px-4 py-4 sm:flex-row sm:items-center sm:justify-between md:px-6">
+            <div className="flex min-w-0 items-center gap-4">
+              <div className="grid size-12 shrink-0 place-items-center border border-line bg-muted/30">
+                <UserRound className="size-5" aria-hidden />
+              </div>
+              <div className="min-w-0">
+                <div className="truncate text-base font-semibold">
+                  {user.name || "Signed user"}
                 </div>
-                <div className="min-w-0">
-                  <div className="truncate text-lg font-semibold">
-                    {user.name || "Signed user"}
-                  </div>
-                  <div className="mt-1 break-all text-sm text-muted-foreground">
-                    {user.email}
-                  </div>
-                  <div className="mt-4 inline-flex items-center gap-2 border border-line px-2 py-1 font-mono text-[10px] tracking-[0.16em] text-muted-foreground uppercase">
-                    <ShieldCheck className="size-3" aria-hidden />
-                    {isAdmin ? "Admin access" : "User access"}
-                  </div>
+                <div className="mt-0.5 truncate text-sm text-muted-foreground">
+                  {user.email}
                 </div>
               </div>
             </div>
+            <div className="inline-flex w-fit items-center gap-2 border border-line px-2.5 py-1 font-mono text-[10px] tracking-[0.16em] text-muted-foreground uppercase">
+              <ShieldCheck className="size-3" aria-hidden />
+              {isAdmin ? "Admin access" : "User access"}
+            </div>
+          </div>
 
-            <div className="grid gap-3 p-4 sm:grid-cols-3 md:p-6">
+          {/* Stats strip */}
+          <div className="grid grid-cols-2 border-b border-line lg:grid-cols-4">
+            <div className="border-r border-b border-line lg:border-b-0">
               <StatPanel
                 label="Image history"
                 value={imageHistory.data?.length ?? 0}
                 icon={ImageIcon}
               />
+            </div>
+            <div className="border-b border-line lg:border-r lg:border-b-0">
               <StatPanel
                 label="Video history"
                 value={videoHistory.data?.length ?? 0}
                 icon={Video}
               />
+            </div>
+            <div className="border-r border-line">
+              <StatPanel label="Total media" value={totalCount} icon={Layers} />
+            </div>
+            <div>
               <StatPanel
                 label="Latest"
                 value={
@@ -187,19 +232,14 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <div className="grid md:grid-cols-[1fr_1.15fr]">
+          {/* Content panels */}
+          <div className="grid md:grid-cols-2">
             <div className="border-b border-line p-4 md:border-r md:border-b-0 md:p-6">
-              <div className="mb-4 flex items-center justify-between gap-3">
-                <div>
-                  <h2 className="font-mono text-[12px] tracking-[0.18em] uppercase">
-                    Latest activity
-                  </h2>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Recent image and video generations from your account.
-                  </p>
-                </div>
-                <Activity className="size-4 text-muted-foreground" aria-hidden />
-              </div>
+              <SectionHeading
+                title="Latest activity"
+                description="Generasi image & video terbaru dari akunmu."
+                icon={Activity}
+              />
 
               <div className="space-y-2">
                 {latestActivity.length > 0 ? (
@@ -244,27 +284,23 @@ export default function DashboardPage() {
             </div>
 
             <div className="p-4 md:p-6">
-              <div className="mb-4 flex items-center justify-between gap-3">
-                <div>
-                  <h2 className="font-mono text-[12px] tracking-[0.18em] uppercase">
-                    Recent outputs
-                  </h2>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Preview of successful media from Tools.
-                  </p>
-                </div>
-                <Button
-                  asChild
-                  variant="outline"
-                  size="sm"
-                  className="rounded-none font-mono text-[11px] uppercase"
-                >
-                  <Link href="/tools">
-                    <Wrench className="size-3.5" aria-hidden />
-                    Tools
-                  </Link>
-                </Button>
-              </div>
+              <SectionHeading
+                title="Recent outputs"
+                description="Pratinjau media sukses dari Tools."
+                action={
+                  <Button
+                    asChild
+                    variant="outline"
+                    size="sm"
+                    className="rounded-none font-mono text-[11px] uppercase"
+                  >
+                    <Link href="/tools">
+                      <Wrench className="size-3.5" aria-hidden />
+                      Tools
+                    </Link>
+                  </Button>
+                }
+              />
 
               {recentOutputs.length > 0 ? (
                 <div className="grid gap-3 sm:grid-cols-2">
