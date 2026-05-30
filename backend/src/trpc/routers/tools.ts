@@ -59,6 +59,7 @@ const N8N_VIDEO_STATUS_TIMEOUT_MS = 60_000;
 const MAX_TTS_TEXT_LENGTH = 8000;
 const MAX_TTS_STYLE_LENGTH = 1000;
 const MAX_TTS_SPEAKERS = 4;
+const MAX_GEMINI_VERTEX_TTS_SPEAKERS = 2;
 const MAX_AUDIO_BYTES = 50 * 1024 * 1024;
 const TTS_SAMPLE_RATE = 24_000;
 const TTS_CHANNELS = 1;
@@ -450,7 +451,7 @@ function extractGeminiPcm(json: GeminiTtsResponse, label: string): Buffer {
 
 function geminiRequestBody(modelName: string, text: string, speakers: TtsSpeaker[]) {
   return {
-    contents: [{ parts: [{ text }] }],
+    contents: [{ role: "user", parts: [{ text }] }],
     generationConfig: {
       responseModalities: ["AUDIO"],
       speechConfig: buildSpeechConfig(speakers),
@@ -1228,6 +1229,21 @@ export const toolsRouter = router({
         speaker: speaker.speaker.trim(),
         voiceName: speaker.voiceName.trim(),
       }));
+      if (
+        (provider === "gemini" || provider === "vertex") &&
+        normalizedSpeakers.length > MAX_GEMINI_VERTEX_TTS_SPEAKERS
+      ) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Gemini/Vertex TTS hanya mendukung maksimal 2 speaker.",
+        });
+      }
+      if (provider === "openrouter" && normalizedSpeakers.length > 1) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "OpenRouter TTS hanya mendukung 1 voice.",
+        });
+      }
       for (const speaker of normalizedSpeakers) {
         if (!allowedVoices.has(speaker.voiceName)) {
           throw new TRPCError({

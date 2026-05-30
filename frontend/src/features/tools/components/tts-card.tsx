@@ -96,7 +96,7 @@ function readTokens(value: unknown): TtsTokens | undefined {
 
 const STORAGE_KEY = "porto.tools.session.tts";
 const SESSION_TTL_MS = 1000 * 60 * 30;
-const MAX_SPEAKERS = 4;
+const MAX_SPEAKERS = 2;
 
 const PROVIDER_LABEL: Record<TtsProviderId, string> = {
   gemini: "Gemini",
@@ -302,7 +302,7 @@ function TtsSpeakerRail({
         <span className="font-mono text-[10px] tabular-nums text-(--muted-foreground)">
           {singleVoice
             ? "VOICE"
-            : `${speakers.length.toString().padStart(2, "0")}/04`}
+            : `${speakers.length.toString().padStart(2, "0")}/02`}
         </span>
       </header>
 
@@ -661,7 +661,7 @@ export function TtsCard() {
     // OpenRouter single-voice: kirim hanya speaker pertama (state tetap utuh).
     const sourceSpeakers = isSingleVoice
       ? session.speakers.slice(0, 1)
-      : session.speakers;
+      : session.speakers.slice(0, MAX_SPEAKERS);
     const speakers = sourceSpeakers.map((speaker) => ({
       speaker: speaker.speaker.trim() || "Speaker",
       voiceName: speaker.voiceName.trim(),
