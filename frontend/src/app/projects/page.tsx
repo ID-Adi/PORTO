@@ -7,6 +7,7 @@ import { ChevronDown, Link2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SiteShell } from "@/layout/site-shell";
 import { trpc } from "@/lib/trpc";
+import { ThumbImage } from "@/components/common/thumb-image";
 import {
   Collapsible,
   CollapsibleContent,
@@ -20,30 +21,12 @@ type Project = {
   title: string;
   description: string | null;
   period: string | null;
+  imageUrl: string | null;
   url: string | null;
   repoUrl: string | null;
   highlights: string[];
   tags: string[];
 };
-
-function ProjectIcon() {
-  return (
-    <div className="relative size-10 shrink-0 overflow-hidden rounded-full border border-(--line) bg-zinc-950">
-      <svg className="absolute inset-0 size-full opacity-40" aria-hidden="true">
-        <pattern
-          id="hatch"
-          width="4"
-          height="4"
-          patternUnits="userSpaceOnUse"
-          patternTransform="rotate(45)"
-        >
-          <line x1="0" y1="0" x2="0" y2="4" stroke="white" strokeWidth="1" />
-        </pattern>
-        <rect width="100%" height="100%" fill="url(#hatch)" />
-      </svg>
-    </div>
-  );
-}
 
 function ProjectRow({ item }: { item: Project }) {
   const [open, setOpen] = useState(false);
@@ -53,7 +36,11 @@ function ProjectRow({ item }: { item: Project }) {
     <Collapsible open={open} onOpenChange={setOpen}>
       <div className="border-b border-(--line)">
         <div className="flex items-center gap-4 px-4 py-4 sm:px-5">
-          <ProjectIcon />
+          <ThumbImage
+            src={item.imageUrl}
+            alt={item.title}
+            className="size-10 shrink-0 rounded-full border border-(--line)"
+          />
           <div className="min-w-0 flex-1">
             <h3 className="text-sm font-medium tracking-[-0.03em]">{item.title}</h3>
             {item.period ? (

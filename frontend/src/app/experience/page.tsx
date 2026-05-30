@@ -6,6 +6,7 @@ import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SiteShell } from "@/layout/site-shell";
 import { trpc } from "@/lib/trpc";
+import { ThumbImage } from "@/components/common/thumb-image";
 import {
   Collapsible,
   CollapsibleContent,
@@ -25,22 +26,10 @@ type Company = {
   id: number;
   name: string;
   location: string | null;
+  logoUrl: string | null;
   isCurrent: boolean;
   positions: Position[];
 };
-
-function CompanyIcon() {
-  return (
-    <div className="relative size-10 shrink-0 overflow-hidden rounded-full border border-(--line) bg-zinc-950">
-      <svg className="absolute inset-0 size-full opacity-40" aria-hidden="true">
-        <pattern id="exp-hatch" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-          <line x1="0" y1="0" x2="0" y2="4" stroke="white" strokeWidth="1" />
-        </pattern>
-        <rect width="100%" height="100%" fill="url(#exp-hatch)" />
-      </svg>
-    </div>
-  );
-}
 
 function PositionBlock({ position, company }: { position: Position; company: Company }) {
   const [open, setOpen] = useState(false);
@@ -49,7 +38,11 @@ function PositionBlock({ position, company }: { position: Position; company: Com
     <Collapsible open={open} onOpenChange={setOpen} className="block border-b border-(--line) last:border-b-0">
       <div>
         <div className="flex items-center gap-4 px-4 py-4 sm:px-5">
-          <CompanyIcon />
+          <ThumbImage
+            src={company.logoUrl}
+            alt={company.name}
+            className="size-10 shrink-0 rounded-full border border-(--line)"
+          />
           <div className="h-10 border-l border-dotted border-(--line)" />
           <div className="min-w-0 flex-1">
             <h3 className="text-sm font-medium tracking-[-0.03em]">{position.title}</h3>

@@ -6,6 +6,7 @@ import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SiteShell } from "@/layout/site-shell";
 import { trpc } from "@/lib/trpc";
+import { ThumbImage } from "@/components/common/thumb-image";
 import {
   Collapsible,
   CollapsibleContent,
@@ -18,6 +19,7 @@ type Skill = {
   category: string;
   level: number;
   description: string | null;
+  iconUrl: string | null;
 };
 
 type CategoryGroup = {
@@ -67,19 +69,6 @@ function groupByCategory(skills: Skill[]): CategoryGroup[] {
   return groups;
 }
 
-function SkillIcon() {
-  return (
-    <div className="relative size-8 shrink-0 overflow-hidden rounded-full border border-(--line) bg-zinc-950">
-      <svg className="absolute inset-0 size-full opacity-40" aria-hidden="true">
-        <pattern id="skill-hatch" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-          <line x1="0" y1="0" x2="0" y2="4" stroke="white" strokeWidth="1" />
-        </pattern>
-        <rect width="100%" height="100%" fill="url(#skill-hatch)" />
-      </svg>
-    </div>
-  );
-}
-
 function ProficiencyDots({ level }: { level: number }) {
   return (
     <div className="flex gap-1">
@@ -99,7 +88,11 @@ function ProficiencyDots({ level }: { level: number }) {
 function SkillRow({ skill }: { skill: Skill }) {
   return (
     <div className="flex items-center gap-3 border-b border-(--line) px-4 py-3 last:border-b-0 sm:px-5">
-      <SkillIcon />
+      <ThumbImage
+        src={skill.iconUrl}
+        alt={skill.name}
+        className="size-8 shrink-0 rounded-full border border-(--line)"
+      />
       <div className="border-l border-dotted border-(--line) h-8" />
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2">
