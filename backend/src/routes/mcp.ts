@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 
 import { auth } from "../auth/index.js";
+import { resolveAdminUser, validateMcpToken } from "../lib/mcp-token.js";
 import {
   callPortoMcpTool,
   getPortoMcpCatalog,
@@ -54,6 +55,28 @@ async function requireMcpContext(
     return new Response("Forbidden MCP origin", { status: 403 });
   }
 
+  // Jalur utama agent eksternal: Authorization: Bearer porto_mcp_xxx.
+  const authHeader = request.headers.get("authorization");
+  if (authHeader?.startsWith("Bearer ")) {
+    const token = authHeader.slice(7).trim();
+    if (await validateMcpToken(token)) {
+      const admin = await resolveAdminUser();
+      if (!admin) {
+        return new Response("Admin user not provisioned", { status: 500 });
+      }
+      return {
+        requestedBy: admin.id,
+        userId: admin.id,
+        userEmail: admin.email,
+        isAdmin: true,
+        transport: "http-bearer",
+      };
+    }
+    // Bearer ada tapi tidak valid → tolak (jangan diam-diam fallback ke cookie).
+    return new Response("Invalid MCP token", { status: 401 });
+  }
+
+  // Fallback: cookie session (untuk uji langsung dari dashboard admin browser).
   const session = await auth.api.getSession({ headers: request.headers });
   const user = session?.user;
   const role = user ? (user as { role?: string }).role : null;

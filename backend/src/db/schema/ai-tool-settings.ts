@@ -67,5 +67,10 @@ export const aiToolSettings = pgTable("ai_tool_settings", {
     .notNull()
     .default(DEFAULT_CANVAS_AGENT_MODEL),
   canvasAgentSystemPrompt: text("canvas_agent_system_prompt"),
+  // Token MCP statis untuk agent eksternal (Claude/Cursor). Hanya hash SHA-256
+  // yang disimpan; raw token dikembalikan sekali saat generate.
+  mcpTokenHash: text("mcp_token_hash"),
+  mcpTokenLast4: text("mcp_token_last4"),
+  mcpTokenCreatedAt: timestamp("mcp_token_created_at"),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

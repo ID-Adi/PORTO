@@ -1,7 +1,7 @@
 "use client";
 
 import { Bot, Plus, Trash2 } from "lucide-react";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { trpc } from "@/lib/trpc";
@@ -23,12 +23,21 @@ import { CanvasAgentHistoryMenu } from "./canvas-agent-history-menu";
 import {
   useCanvasAgentChat,
   useCanvasAgentWorkflows,
+  useCanvasAgentConfig,
 } from "./canvas-agent-hooks";
 import { CanvasAgentMessageList } from "./canvas-agent-message-list";
 import { CanvasAgentProposalList } from "./canvas-agent-proposal-list";
 import { CanvasAgentRunErrors } from "./canvas-agent-run-errors";
 import { useCanvasWorkflow } from "./canvas-workflow-context";
 import { formatTimestamp } from "./canvas-agent-utils";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import type { RefObject } from "react";
@@ -50,6 +59,10 @@ export function CanvasAgentPanel({
   const utils = trpc.useUtils();
   const [input, setInput] = useState("");
   const [historyOpen, setHistoryOpen] = useState(false);
+  const { config, updateConfig } = useCanvasAgentConfig();
+  const [isCustomOpen, setIsCustomOpen] = useState(false);
+  const [customProvider, setCustomProvider] = useState<"gemini" | "vertex" | "openrouter">("gemini");
+  const [customModelId, setCustomModelId] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<WorkflowRow | null>(null);
   // Failed run yang disembunyikan user (sesi saja — run tetap ada di DB).
   const [dismissedRunIds, setDismissedRunIds] = useState<Set<number>>(
@@ -72,6 +85,23 @@ export function CanvasAgentPanel({
     () => chat.failedRuns.filter((run) => !dismissedRunIds.has(run.id)),
     [chat.failedRuns, dismissedRunIds],
   );
+
+  // Auto-scroll ke bawah saat pesan/ delta streaming bertambah, tetapi hormati
+  // user yang sengaja scroll ke atas membaca riwayat.
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const autoScrollRef = useRef(true);
+  const handleScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    autoScrollRef.current =
+      el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+  }, []);
+  useEffect(() => {
+    if (!autoScrollRef.current) return;
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+  }, [chat.messages, chat.streamState, chat.activeRuns.length]);
 
   const activeWorkflowRow = useMemo(() => {
     if (activeWorkflowId === null) return null;
@@ -148,7 +178,9 @@ export function CanvasAgentPanel({
     try {
       await chat.sendMessage(content);
     } catch (error) {
-      setInput(content);
+      // Pulihkan pesan yang gagal HANYA bila composer masih kosong, supaya draf
+      // baru yang sedang diketik user tidak tertimpa.
+      setInput((current) => (current.trim().length === 0 ? content : current));
       toast.error(error instanceof Error ? error.message : "Gagal mengirim chat");
     }
   }
@@ -201,7 +233,9 @@ export function CanvasAgentPanel({
         </header>
 
         <div
+          ref={scrollRef}
           className="canvas-agent-scroll"
+          onScroll={handleScroll}
           onWheelCapture={(event) => {
             event.stopPropagation();
           }}
@@ -262,8 +296,71 @@ export function CanvasAgentPanel({
           onStop={chat.stopStream}
           isSending={chat.isSending}
           streamState={chat.streamState}
+          activeProvider={config?.provider}
+          activeModel={config?.model}
+          config={config}
+          onSelectModel={(provider, model) => updateConfig({ provider, model })}
+          onOpenCustomModal={() => {
+            if (config) {
+              setCustomProvider(config.provider);
+              setCustomModelId(config.model);
+            }
+            setIsCustomOpen(true);
+          }}
         />
       </div>
+
+      <Dialog open={isCustomOpen} onOpenChange={setIsCustomOpen}>
+        <DialogContent className="max-w-sm font-mono border border-line bg-popover p-6 rounded-none shadow-none text-popover-foreground">
+          <DialogHeader className="border-b border-line pb-4 mb-4">
+            <DialogTitle className="text-[12px] font-bold tracking-widest uppercase text-foreground">Set Model Kustom</DialogTitle>
+            <DialogDescription className="text-[11px] text-muted-foreground leading-relaxed mt-1">
+              Masukkan ID model kustom sesuai dengan provider aktif Anda.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-2 text-xs">
+            <div className="grid gap-1">
+              <label className="text-[9px] text-muted-foreground uppercase tracking-widest">Provider</label>
+              <select
+                value={customProvider}
+                onChange={(e) => setCustomProvider(e.target.value as any)}
+                className="h-9 w-full border border-line bg-background px-3 outline-none focus:border-foreground rounded-none text-xs text-foreground"
+              >
+                {config?.geminiActive && <option value="gemini">Gemini</option>}
+                {config?.vertexActive && <option value="vertex">Vertex AI</option>}
+                {config?.openrouterActive && <option value="openrouter">OpenRouter</option>}
+              </select>
+            </div>
+            <div className="grid gap-1">
+              <label className="text-[9px] text-muted-foreground uppercase tracking-widest">Model ID</label>
+              <input
+                type="text"
+                value={customModelId}
+                onChange={(e) => setCustomModelId(e.target.value)}
+                placeholder="Contoh: gemini-3.5-flash"
+                className="h-9 w-full border border-line bg-background px-3 outline-none focus:border-foreground rounded-none text-xs text-foreground"
+              />
+            </div>
+          </div>
+          <DialogFooter className="border-t border-line pt-4 mt-4">
+            <Button variant="outline" size="sm" className="rounded-none text-xs" onClick={() => setIsCustomOpen(false)}>
+              Batal
+            </Button>
+            <Button
+              variant="default"
+              size="sm"
+              className="rounded-none text-xs"
+              disabled={!customModelId.trim()}
+              onClick={() => {
+                updateConfig({ provider: customProvider, model: customModelId.trim() });
+                setIsCustomOpen(false);
+              }}
+            >
+              Simpan
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <AlertDialog
         open={deleteTarget !== null}

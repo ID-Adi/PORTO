@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import {
   useInfiniteQuery,
   useMutation,
@@ -148,6 +148,20 @@ export function useCanvasAgentChat(args: {
   const queryClient = useQueryClient();
   const stream = useCanvasAgentStream();
   const workflowId = args.activeWorkflowId;
+
+  // Hentikan stream aktif saat user pindah antar-workflow agar tidak ada stream
+  // yang bocor memperbarui cache workflow lama di background. Jangan abort saat
+  // workflow baru dibuat dari null (kirim pesan pertama) — itu justru mematikan
+  // stream yang baru dimulai.
+  const stopStream = stream.stop;
+  const prevWorkflowIdRef = useRef(workflowId);
+  useEffect(() => {
+    const prev = prevWorkflowIdRef.current;
+    prevWorkflowIdRef.current = workflowId;
+    if (prev !== null && prev !== workflowId) {
+      stopStream();
+    }
+  }, [workflowId, stopStream]);
 
   const workflowQuery = useQuery({
     queryKey: workflowId ? canvasAgentKeys.workflow(workflowId) : ["disabled"],
@@ -324,5 +338,36 @@ export function useCanvasAgentChat(args: {
     stopStream: stream.stop,
     isSending: stream.isStreaming,
     isBusy: retryRunMutation.isPending || updateProposalMutation.isPending,
+  };
+}
+
+export function useCanvasAgentConfig() {
+  const queryClient = useQueryClient();
+
+  const configQuery = useQuery({
+    queryKey: ["canvasAgent", "config"],
+    queryFn: canvasAgentApi.getConfig,
+  });
+
+  const updateConfigMutation = useMutation({
+    mutationFn: canvasAgentApi.updateConfig,
+    onSuccess: (data) => {
+      queryClient.setQueryData(["canvasAgent", "config"], (prev: any) => ({
+        ...prev,
+        ...data,
+      }));
+      void queryClient.invalidateQueries({ queryKey: ["canvasAgent"] });
+      toast.success(`Model aktif diganti ke ${data.model} (${data.provider})`);
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : "Gagal mengganti model");
+    },
+  });
+
+  return {
+    config: configQuery.data ?? null,
+    isLoading: configQuery.isLoading,
+    updateConfig: updateConfigMutation.mutate,
+    isUpdating: updateConfigMutation.isPending,
   };
 }

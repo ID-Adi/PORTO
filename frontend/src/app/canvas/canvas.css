@@ -602,10 +602,15 @@
   display: grid;
   flex: none;
   grid-template-columns: minmax(0, 1fr) 2.5rem;
+  grid-template-rows: auto auto;
   gap: 0.5rem;
   border-top: 1px solid var(--color-surface-highest);
   padding: 0.75rem 1rem 1rem;
   overscroll-behavior: contain;
+}
+
+.canvas-porto-wrapper .canvas-agent-composer > div[class*="col-span-2"] {
+  grid-column: span 2 / span 2;
 }
 
 .canvas-porto-wrapper .canvas-agent-composer-input {

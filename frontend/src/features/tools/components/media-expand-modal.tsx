@@ -7,6 +7,8 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
+import { getProxiedVideoUrl } from "../lib/video-proxy";
+
 export type MediaExpandTarget = {
   kind: "image" | "video";
   url: string;
@@ -56,7 +58,7 @@ export function MediaExpandModal({
           ) : target?.kind === "video" && target.url ? (
             <video
               key={target.url}
-              src={target.url}
+              src={getProxiedVideoUrl(target.url)}
               controls
               playsInline
               className="block max-h-[78vh] w-auto max-w-full object-contain"

@@ -5,6 +5,7 @@ import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { McpConnectionPanel } from "@/features/admin/components/mcp-connection-panel";
 import { PageHeader } from "@/features/admin/components/page-header";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
@@ -47,6 +48,8 @@ export default function AdminMcpPage() {
         title="MCP"
         description="Approval queue and registry surface for PORTO MCP."
       />
+
+      <McpConnectionPanel />
 
       <section className="grid gap-3 border border-(--line) bg-(--card) p-4">
         <div className="flex items-center justify-between gap-3 border-b border-(--line) pb-3">

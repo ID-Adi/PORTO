@@ -70,6 +70,9 @@ const TTS_MP3_BITRATE_KBPS = 128;
 // besar dari worst-case retry (3×90s fetch + backoff ≈ 273s) agar tak salah-error.
 const TTS_JOB_TIMEOUT_MS = 300_000;
 const TTS_JOB_RETRY_ATTEMPTS = 3;
+// Reaper video: bila N8N/Vertex macet, jangan biarkan baris menggantung
+// "pending" selamanya. 15 menit jauh di atas durasi normal generate video.
+const VIDEO_JOB_TIMEOUT_MS = 15 * 60_000;
 // Rate limit per user (DB-based, tanpa infra tambahan).
 const TTS_RATE_WINDOW_MS = 60_000;
 const TTS_RATE_MAX_PER_WINDOW = 10;
@@ -1469,6 +1472,22 @@ export const toolsRouter = router({
           error: row.errorMessage ?? "Unknown error",
         };
       }
+
+      // Reaper: row pending yang terlalu tua (N8N/Vertex macet atau tak pernah
+      // merespons) ditandai error agar tidak menggantung selamanya di DB.
+      const ageMs = Date.now() - new Date(row.createdAt).getTime();
+      if (ageMs > VIDEO_JOB_TIMEOUT_MS) {
+        const message =
+          "Video timeout — proses tidak selesai dalam 15 menit. Coba lagi.";
+        await db
+          .update(toolGeneration)
+          .set({ status: "error", errorMessage: message })
+          .where(
+            and(eq(toolGeneration.id, row.id), eq(toolGeneration.status, "pending")),
+          );
+        return { status: "error" as const, error: message };
+      }
+
       if (!row.operationName || !row.requestId) {
         return { status: "pending" as const };
       }

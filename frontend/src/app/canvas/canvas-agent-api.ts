@@ -44,6 +44,9 @@ export const canvasAgentApi = {
     status: ProposalStatus;
     errorMessage?: string | null;
   }) => canvasAgentTrpc.canvasAgent.updateProposalStatus.mutate(input),
+  getConfig: () => canvasAgentTrpc.canvasAgent.getConfig.query(),
+  updateConfig: (input: { provider: "gemini" | "vertex" | "openrouter"; model: string }) =>
+    canvasAgentTrpc.canvasAgent.updateConfig.mutate(input),
 };
 
 export async function streamCanvasAgentMessage(input: {
@@ -92,7 +95,15 @@ export async function streamCanvasAgentMessage(input: {
         .filter((line) => line.startsWith("data:"))
         .map((line) => line.slice(5).trimStart());
       if (dataLines.length === 0) continue;
-      await input.onEvent(JSON.parse(dataLines.join("\n")));
+      // Lindungi dari potongan/noise jaringan yang belum lengkap: parse gagal
+      // jangan mematikan reader, cukup lewati chunk ini.
+      let event: unknown;
+      try {
+        event = JSON.parse(dataLines.join("\n"));
+      } catch {
+        continue;
+      }
+      await input.onEvent(event);
     }
   }
 }

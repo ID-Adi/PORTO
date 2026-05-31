@@ -28,6 +28,7 @@ import {
   type MediaExpandTarget,
 } from "./media-expand-modal";
 import { REFERENCE_SLOTS, ReferenceRail } from "./reference-rail";
+import { getProxiedVideoUrl } from "../lib/video-proxy";
 
 export type GenerateKind = "image" | "video";
 
@@ -756,6 +757,24 @@ export function GenerateCard({ kind }: GenerateCardProps) {
     }
   }, [shouldPollVideo, videoStatusQuery.data, utils, kind]);
 
+  // Bug-fix: bila polling status video gagal permanen (mis. 403/404 karena sesi
+  // kedaluwarsa atau row dihapus), reset UI dari "generating" agar tidak terkunci
+  // selamanya. retry:false memastikan error muncul tanpa retry beruntun.
+  useEffect(() => {
+    if (!shouldPollVideo) return;
+    if (!videoStatusQuery.error) return;
+    const message =
+      "Gagal memantau status video — sesi mungkin kedaluwarsa. Coba generate ulang.";
+    setSession((prev) => ({
+      ...prev,
+      status: "error",
+      startedAt: null,
+      resultUrl: null,
+      error: message,
+    }));
+    toast.error(message);
+  }, [shouldPollVideo, videoStatusQuery.error]);
+
   const onSubmit = useCallback(
     async (event: React.FormEvent<HTMLFormElement>) => {
       event.preventDefault();
@@ -1167,7 +1186,7 @@ export function GenerateCard({ kind }: GenerateCardProps) {
                     ) : (
                       <video
                         key={previewEntry.resultUrl}
-                        src={previewEntry.resultUrl}
+                        src={getProxiedVideoUrl(previewEntry.resultUrl)}
                         controls
                         preload="auto"
                         muted

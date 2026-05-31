@@ -16,6 +16,8 @@ import {
 import { useInView } from "@/hooks/use-in-view";
 import { cn } from "@/lib/utils";
 
+import { getProxiedVideoUrl } from "../lib/video-proxy";
+
 import type { GenerateKind } from "./generate-card";
 
 function VideoThumb({ src, className }: { src: string; className?: string }) {
@@ -42,7 +44,7 @@ function VideoThumb({ src, className }: { src: string; className?: string }) {
       {isInView && (
         <video
           ref={videoRef}
-          src={src}
+          src={getProxiedVideoUrl(src)}
           muted
           playsInline
           autoPlay

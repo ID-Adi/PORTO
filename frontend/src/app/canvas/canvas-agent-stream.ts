@@ -181,27 +181,30 @@ export function useCanvasAgentStream() {
           },
         });
       } catch (error) {
-        if (!controller.signal.aborted) {
-          failed = true;
-          setStreamState("failed");
-          removeMessage(
-            queryClient,
-            input.workflowId,
-            (message) => message.id === optimisticMessageId(input.clientMessageId),
-          );
-          await Promise.all([
-            queryClient.invalidateQueries({
-              queryKey: canvasAgentKeys.messages(input.workflowId),
-            }),
-            queryClient.invalidateQueries({
-              queryKey: canvasAgentKeys.runs(input.workflowId),
-            }),
-            queryClient.invalidateQueries({
-              queryKey: canvasAgentKeys.proposals(input.workflowId),
-            }),
-          ]);
-          throw error;
-        }
+        const aborted = controller.signal.aborted;
+        failed = !aborted;
+        setStreamState(aborted ? "idle" : "failed");
+        // Bersihkan pesan optimis user yang mungkin nyangkut. Draft asisten
+        // (stream:*) ikut hilang saat messages di-invalidate & refetch dari DB.
+        // Tanpa ini, menekan "Stop" meninggalkan ghost message yang loading abadi.
+        removeMessage(
+          queryClient,
+          input.workflowId,
+          (message) => message.id === optimisticMessageId(input.clientMessageId),
+        );
+        await Promise.all([
+          queryClient.invalidateQueries({
+            queryKey: canvasAgentKeys.messages(input.workflowId),
+          }),
+          queryClient.invalidateQueries({
+            queryKey: canvasAgentKeys.runs(input.workflowId),
+          }),
+          queryClient.invalidateQueries({
+            queryKey: canvasAgentKeys.proposals(input.workflowId),
+          }),
+        ]);
+        // Abort = aksi sengaja user, jangan dilempar sebagai error.
+        if (!aborted) throw error;
       } finally {
         if (abortRef.current === controller) abortRef.current = null;
         if (!controller.signal.aborted && !failed) {

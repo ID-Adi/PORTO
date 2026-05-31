@@ -159,21 +159,63 @@ export const canvasAgentRouter = router({
         enabled: aiToolSettings.canvasAgentEnabled,
         provider: aiToolSettings.canvasAgentProvider,
         model: aiToolSettings.canvasAgentModel,
+        ttsApiKeyEncrypted: aiToolSettings.ttsApiKeyEncrypted,
+        openrouterApiKeyEncrypted: aiToolSettings.openrouterApiKeyEncrypted,
+        vertexServiceAccountEncrypted: aiToolSettings.vertexServiceAccountEncrypted,
         updatedAt: aiToolSettings.updatedAt,
       })
       .from(aiToolSettings)
       .where(eq(aiToolSettings.id, 1))
       .limit(1);
 
-    return (
-      settings ?? {
+    if (!settings) {
+      return {
         enabled: false,
-        provider: "gemini",
+        provider: "gemini" as const,
         model: "",
+        geminiActive: false,
+        openrouterActive: false,
+        vertexActive: false,
         updatedAt: null,
-      }
-    );
+      };
+    }
+
+    return {
+      enabled: settings.enabled,
+      provider: settings.provider as "gemini" | "vertex" | "openrouter",
+      model: settings.model,
+      geminiActive: Boolean(settings.ttsApiKeyEncrypted),
+      openrouterActive: Boolean(settings.openrouterApiKeyEncrypted),
+      vertexActive: Boolean(settings.vertexServiceAccountEncrypted),
+      updatedAt: settings.updatedAt,
+    };
   }),
+
+  updateConfig: authenticatedProcedure
+    .input(
+      z.object({
+        provider: z.enum(["gemini", "vertex", "openrouter"]),
+        model: z.string().min(1).max(160),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const [row] = await db
+        .update(aiToolSettings)
+        .set({
+          canvasAgentProvider: input.provider,
+          canvasAgentModel: input.model,
+          updatedAt: new Date(),
+        })
+        .where(eq(aiToolSettings.id, 1))
+        .returning();
+
+      return {
+        enabled: row.canvasAgentEnabled,
+        provider: row.canvasAgentProvider as "gemini" | "vertex" | "openrouter",
+        model: row.canvasAgentModel,
+        updatedAt: row.updatedAt,
+      };
+    }),
 
   listWorkflows: authenticatedProcedure.query(async ({ ctx }) => {
     // Ringkas tanpa sceneData — scene di-fetch via getWorkflowScene saat dibuka.

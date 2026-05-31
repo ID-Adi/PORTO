@@ -292,16 +292,34 @@ async function callVertex(args: {
   systemPrompt: string;
   prompt: string;
 }) {
-  const token = await vertexAccessToken(args.saJson);
+  let headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+
+  const saTrimmed = args.saJson.trim();
+  let isJson = false;
+  try {
+    JSON.parse(saTrimmed);
+    isJson = true;
+  } catch {}
+
+  if (isJson) {
+    const token = await vertexAccessToken(saTrimmed);
+    headers["Authorization"] = `Bearer ${token}`;
+  } else {
+    if (saTrimmed.startsWith("ya29.")) {
+      headers["Authorization"] = `Bearer ${saTrimmed}`;
+    } else {
+      headers["x-goog-api-key"] = saTrimmed;
+    }
+  }
+
   const model = normalizeModel("vertex", args.model);
   const res = await fetch(
     `${vertexBaseUrl(args.location, args.projectId)}/${model}:generateContent`,
     {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
+      headers,
       body: JSON.stringify({
         system_instruction: {
           parts: [{ text: args.systemPrompt }],

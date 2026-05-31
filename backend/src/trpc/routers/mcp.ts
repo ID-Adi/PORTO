@@ -2,11 +2,15 @@ import { count, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "../../db/index.js";
-import { mcpActionRequests } from "../../db/schema/index.js";
+import { aiToolSettings, mcpActionRequests } from "../../db/schema/index.js";
 import {
   approveMcpActionRequest,
   rejectMcpActionRequest,
 } from "../../lib/mcp-action-executor.js";
+import {
+  generateMcpTokenValue,
+  hashMcpToken,
+} from "../../lib/mcp-token.js";
 import { getPortoMcpCatalog } from "../../mcp/server.js";
 import { protectedProcedure, router } from "../init.js";
 
@@ -89,4 +93,49 @@ export const mcpRouter = router({
         reason: input.reason,
       });
     }),
+
+  // Info token MCP untuk dashboard — TIDAK mengembalikan token/hash.
+  getMcpTokenInfo: protectedProcedure.query(async () => {
+    const [settings] = await db
+      .select({
+        last4: aiToolSettings.mcpTokenLast4,
+        createdAt: aiToolSettings.mcpTokenCreatedAt,
+        hash: aiToolSettings.mcpTokenHash,
+      })
+      .from(aiToolSettings)
+      .where(eq(aiToolSettings.id, 1))
+      .limit(1);
+    return {
+      configured: Boolean(settings?.hash),
+      last4: settings?.last4 ?? null,
+      createdAt: settings?.createdAt ?? null,
+    };
+  }),
+
+  // Generate (atau rotasi) token MCP. Token mentah dikembalikan SEKALI saja.
+  generateMcpToken: protectedProcedure.mutation(async () => {
+    const token = generateMcpTokenValue();
+    const hash = hashMcpToken(token);
+    const last4 = token.slice(-4);
+    const createdAt = new Date();
+    await db
+      .insert(aiToolSettings)
+      .values({
+        id: 1,
+        mcpTokenHash: hash,
+        mcpTokenLast4: last4,
+        mcpTokenCreatedAt: createdAt,
+        updatedAt: createdAt,
+      })
+      .onConflictDoUpdate({
+        target: aiToolSettings.id,
+        set: {
+          mcpTokenHash: hash,
+          mcpTokenLast4: last4,
+          mcpTokenCreatedAt: createdAt,
+          updatedAt: createdAt,
+        },
+      });
+    return { token, last4, createdAt };
+  }),
 });

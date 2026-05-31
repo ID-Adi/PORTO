@@ -10,7 +10,7 @@ export type PortoMcpContext = {
   userId: string | null;
   userEmail: string | null;
   isAdmin: boolean;
-  transport: "http" | "stdio";
+  transport: "http" | "http-bearer" | "stdio";
 };
 
 export type PortoMcpResourceDefinition = {

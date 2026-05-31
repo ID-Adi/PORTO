@@ -1,9 +1,45 @@
 "use client";
 
-import { Loader2, Send, Square } from "lucide-react";
+import { Loader2, Send, Square, Cpu } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+
+const presetModels = {
+  gemini: [
+    "gemini-3.1-flash",
+    "gemini-2.5-flash",
+    "gemini-2.5-pro",
+    "gemini-1.5-pro",
+    "gemini-1.5-flash",
+  ],
+  vertex: [
+    "gemini-3-flash-preview", // Gemini 3 Flash (Preview)
+    "gemini-2.5-flash",
+    "gemini-2.5-pro",
+    "gemini-1.5-flash",
+    "gemini-1.5-pro",
+    "gemini-3.5-flash",
+  ],
+  openrouter: [
+    "x-ai/grok-4.1-fast", // Grok 4.1 Fast
+    "x-ai/grok-4.20", // Grok 4.20
+    "google/gemini-2.5-flash",
+    "google/gemini-2.5-pro",
+    "anthropic/claude-3.5-sonnet",
+    "meta-llama/llama-3.3-70b-instruct",
+    "deepseek/deepseek-chat",
+  ],
+};
 
 export function CanvasAgentComposer({
   input,
@@ -12,6 +48,11 @@ export function CanvasAgentComposer({
   onStop,
   isSending,
   streamState,
+  activeProvider,
+  activeModel,
+  config,
+  onSelectModel,
+  onOpenCustomModal,
 }: {
   input: string;
   onInputChange: (value: string) => void;
@@ -19,6 +60,11 @@ export function CanvasAgentComposer({
   onStop: () => void;
   isSending: boolean;
   streamState: "idle" | "thinking" | "streaming" | "saving" | "failed";
+  activeProvider?: string;
+  activeModel?: string;
+  config: any;
+  onSelectModel: (provider: "gemini" | "vertex" | "openrouter", model: string) => void;
+  onOpenCustomModal: () => void;
 }) {
   const statusText =
     streamState === "idle"
@@ -41,6 +87,12 @@ export function CanvasAgentComposer({
         onSubmit();
       }}
     >
+      {activeModel && (
+        <div className="col-span-2 flex items-center justify-between border-b border-line pb-2 mb-2 font-mono text-[9px] text-muted-foreground uppercase tracking-widest">
+          <span>[ AGENT MODEL: {activeProvider}{" // "}{activeModel} ]</span>
+        </div>
+      )}
+
       <div
         className="canvas-agent-composer-input"
         data-status={statusText ?? undefined}
@@ -65,33 +117,115 @@ export function CanvasAgentComposer({
         />
         {statusText ? <span>{statusText}</span> : null}
       </div>
-      {isSending ? (
-        <Button
-          type="button"
-          variant="outline"
-          size="icon-lg"
-          aria-label="Stop stream"
-          title="Stop stream"
-          onClick={onStop}
-        >
-          <Square aria-hidden />
-        </Button>
-      ) : (
-        <Button
-          type="submit"
-          variant="outline"
-          size="icon-lg"
-          aria-label="Kirim chat"
-          title="Kirim chat"
-          disabled={!input.trim()}
-        >
-          {streamState === "thinking" ? (
-            <Loader2 aria-hidden className="animate-spin" />
-          ) : (
-            <Send aria-hidden />
-          )}
-        </Button>
-      )}
+
+      <div className="flex flex-col gap-1.5 justify-start">
+        {isSending ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="icon-lg"
+            aria-label="Stop stream"
+            title="Stop stream"
+            onClick={onStop}
+          >
+            <Square aria-hidden />
+          </Button>
+        ) : (
+          <Button
+            type="submit"
+            variant="outline"
+            size="icon-lg"
+            aria-label="Kirim chat"
+            title="Kirim chat"
+            disabled={!input.trim()}
+          >
+            {streamState === "thinking" ? (
+              <Loader2 aria-hidden className="animate-spin" />
+            ) : (
+              <Send aria-hidden />
+            )}
+          </Button>
+        )}
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon-lg"
+              aria-label="Pilih model"
+              title="Pilih model"
+            >
+              <Cpu className="size-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            align="end"
+            className="w-56 font-mono text-[11px] rounded-none bg-popover border border-line p-1 shadow-none text-popover-foreground"
+          >
+            {config?.geminiActive && (
+              <DropdownMenuGroup>
+                <DropdownMenuLabel className="px-2 py-1 text-[9px] text-muted-foreground tracking-widest">GEMINI</DropdownMenuLabel>
+                {presetModels.gemini.map((m) => (
+                  <DropdownMenuItem
+                    key={m}
+                    onClick={() => onSelectModel("gemini", m)}
+                    className="flex items-center justify-between px-2 py-1 cursor-pointer hover:bg-muted focus:bg-muted outline-none rounded-none"
+                  >
+                    <span>{m}</span>
+                    {activeModel === m && <span className="text-[10px]">✓</span>}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuGroup>
+            )}
+            {config?.vertexActive && (
+              <>
+                <DropdownMenuSeparator className="h-px bg-line my-1" />
+                <DropdownMenuGroup>
+                  <DropdownMenuLabel className="px-2 py-1 text-[9px] text-muted-foreground tracking-widest">VERTEX AI</DropdownMenuLabel>
+                  {presetModels.vertex.map((m) => (
+                    <DropdownMenuItem
+                      key={m}
+                      onClick={() => onSelectModel("vertex", m)}
+                      className="flex items-center justify-between px-2 py-1 cursor-pointer hover:bg-muted focus:bg-muted outline-none rounded-none"
+                    >
+                      <span>{m === "gemini-3-flash-preview" ? "Gemini 3 Flash (Prev)" : m}</span>
+                      {activeModel === m && <span className="text-[10px]">✓</span>}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuGroup>
+              </>
+            )}
+            {config?.openrouterActive && (
+              <>
+                <DropdownMenuSeparator className="h-px bg-line my-1" />
+                <DropdownMenuGroup>
+                  <DropdownMenuLabel className="px-2 py-1 text-[9px] text-muted-foreground tracking-widest">OPENROUTER</DropdownMenuLabel>
+                  {presetModels.openrouter.map((m) => (
+                    <DropdownMenuItem
+                      key={m}
+                      onClick={() => onSelectModel("openrouter", m)}
+                      className="flex items-center justify-between px-2 py-1 cursor-pointer hover:bg-muted focus:bg-muted outline-none rounded-none"
+                    >
+                      <span>
+                        {m.replace("x-ai/", "").replace("google/", "").replace("anthropic/", "").replace("meta-llama/", "").replace("deepseek/", "")}
+                      </span>
+                      {activeModel === m && <span className="text-[10px]">✓</span>}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuGroup>
+              </>
+            )}
+            <DropdownMenuSeparator className="h-px bg-line my-1" />
+            <DropdownMenuItem
+              onClick={onOpenCustomModal}
+              className="flex items-center px-2 py-1.5 cursor-pointer text-primary font-bold hover:bg-muted focus:bg-muted outline-none rounded-none text-[10px]"
+            >
+              CUSTOM MODEL...
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
     </form>
   );
 }
