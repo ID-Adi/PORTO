@@ -41,9 +41,17 @@ mcpRoute.post("/", async (c) => {
     const responses = await Promise.all(
       body.map((request) => handleJsonRpc(context, request)),
     );
-    return c.json(responses);
+    const validResponses = responses.filter((r) => r !== null);
+    if (validResponses.length === 0) {
+      return c.body(null, 204);
+    }
+    return c.json(validResponses);
   }
-  return c.json(await handleJsonRpc(context, body));
+  const res = await handleJsonRpc(context, body);
+  if (res === null) {
+    return c.body(null, 204);
+  }
+  return c.json(res);
 });
 
 async function requireMcpContext(
@@ -100,6 +108,13 @@ async function requireMcpContext(
 async function handleJsonRpc(context: PortoMcpContext, request: JsonRpcRequest) {
   try {
     const id = request.id ?? null;
+    const isNotification = !("id" in request) || request.id === undefined || request.id === null;
+
+    if (isNotification || request.method?.startsWith("notifications/")) {
+      // JSON-RPC notifications do not expect any response.
+      return null;
+    }
+
     if (request.method === "initialize") {
       return ok(id, {
         protocolVersion: "2025-06-18",

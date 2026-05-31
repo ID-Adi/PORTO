@@ -23,7 +23,19 @@ if (!TOKEN) {
 
 const client = ENDPOINT.startsWith("https") ? https : http;
 
+const fs = require("fs");
+const LOG_FILE = "/Users/bravo/Documents/PORTO/scripts/mcp-bridge.log";
+
+function log(text) {
+  try {
+    fs.appendFileSync(LOG_FILE, `${new Date().toISOString()} - ${text}\n`);
+  } catch (err) {
+    // abaikan error log
+  }
+}
+
 function forward(message) {
+  log(`Forwarding: ${JSON.stringify(message)}`);
   return new Promise((resolve) => {
     const payload = Buffer.from(JSON.stringify(message), "utf8");
     const req = client.request(
@@ -42,10 +54,14 @@ function forward(message) {
         res.on("data", (chunk) => {
           body += chunk;
         });
-        res.on("end", () => resolve(body.trim()));
+        res.on("end", () => {
+          log(`Response: ${body.trim()}`);
+          resolve(body.trim());
+        });
       },
     );
     req.on("error", (err) => {
+      log(`Error on forward: ${err.message}`);
       // Balas error JSON-RPC agar client tidak menggantung.
       resolve(
         JSON.stringify({
@@ -64,6 +80,7 @@ let buffer = "";
 
 process.stdin.setEncoding("utf8");
 process.stdin.on("data", (chunk) => {
+  log(`Stdin data: ${chunk}`);
   buffer += chunk;
   let index;
   // Proses tiap baris JSON-RPC lengkap (newline-delimited).
@@ -71,14 +88,22 @@ process.stdin.on("data", (chunk) => {
     const line = buffer.slice(0, index).trim();
     buffer = buffer.slice(index + 1);
     if (!line) continue;
+    log(`Parsed line: ${line}`);
     let message;
     try {
       message = JSON.parse(line);
-    } catch {
+    } catch (e) {
+      log(`JSON parse error: ${e.message}`);
       continue; // baris tak valid — lewati, jangan matikan bridge.
     }
+    
+    const isNotification = !("id" in message) || message.id === undefined || message.id === null;
     void forward(message).then((responseText) => {
-      if (responseText) process.stdout.write(`${responseText}\n`);
+      if (!isNotification && responseText) {
+        process.stdout.write(`${responseText}\n`);
+      } else {
+        log(`Notification response discarded: isNotification=${isNotification}`);
+      }
     });
   }
 });
