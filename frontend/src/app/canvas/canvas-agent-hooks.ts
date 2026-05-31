@@ -352,11 +352,7 @@ export function useCanvasAgentConfig() {
   const updateConfigMutation = useMutation({
     mutationFn: canvasAgentApi.updateConfig,
     onSuccess: (data) => {
-      queryClient.setQueryData(["canvasAgent", "config"], (prev: any) => ({
-        ...prev,
-        ...data,
-      }));
-      void queryClient.invalidateQueries({ queryKey: ["canvasAgent"] });
+      queryClient.setQueryData(["canvasAgent", "config"], data);
       toast.success(`Model aktif diganti ke ${data.model} (${data.provider})`);
     },
     onError: (err) => {

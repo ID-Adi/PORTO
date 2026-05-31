@@ -163,6 +163,7 @@ async function handleJsonRpc(context: PortoMcpContext, request: JsonRpcRequest) 
           name: tool.name,
           title: tool.title,
           description: tool.description,
+          inputSchema: tool.inputSchema,
           annotations: tool.annotations,
         })),
       });

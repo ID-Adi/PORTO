@@ -302,8 +302,21 @@ export function CanvasAgentPanel({
           onSelectModel={(provider, model) => updateConfig({ provider, model })}
           onOpenCustomModal={() => {
             if (config) {
-              setCustomProvider(config.provider);
-              setCustomModelId(config.model);
+              // Guard: ensure the pre-selected provider is actually active.
+              // If it's not, fall back to the first active provider.
+              const providerActive =
+                (config.provider === "gemini" && config.geminiActive) ||
+                (config.provider === "vertex" && config.vertexActive) ||
+                (config.provider === "openrouter" && config.openrouterActive);
+              const fallbackProvider = config.geminiActive
+                ? "gemini"
+                : config.vertexActive
+                  ? "vertex"
+                  : config.openrouterActive
+                    ? "openrouter"
+                    : "gemini";
+              setCustomProvider(providerActive ? config.provider : fallbackProvider);
+              setCustomModelId(providerActive ? config.model : "");
             }
             setIsCustomOpen(true);
           }}
@@ -337,9 +350,19 @@ export function CanvasAgentPanel({
                 type="text"
                 value={customModelId}
                 onChange={(e) => setCustomModelId(e.target.value)}
-                placeholder="Contoh: gemini-3.5-flash"
+                placeholder={
+                  customProvider === "openrouter"
+                    ? "Contoh: x-ai/grok-4.1-fast"
+                    : "Contoh: gemini-3.5-flash"
+                }
                 className="h-9 w-full border border-line bg-background px-3 outline-none focus:border-foreground rounded-none text-xs text-foreground"
               />
+              {customProvider === "vertex" && (
+                <p className="text-[9px] text-muted-foreground leading-relaxed mt-1">
+                  Vertex AI membutuhkan <strong>Project ID</strong> yang diisi di API Settings.
+                  Pastikan project ID sudah dikonfigurasi sebelum menggunakan model Vertex.
+                </p>
+              )}
             </div>
           </div>
           <DialogFooter className="border-t border-line pt-4 mt-4">

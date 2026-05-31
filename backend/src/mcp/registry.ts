@@ -72,6 +72,12 @@ export function getPortoMcpCatalog() {
       name: tool.name,
       title: tool.title,
       description: tool.description,
+      // MCP spec mewajibkan inputSchema berupa JSON Schema object. Konversi dari
+      // Zod shape; tanpa ini client (Claude) menolak tools/list.
+      inputSchema: z.toJSONSchema(z.object(tool.inputSchema)) as Record<
+        string,
+        unknown
+      >,
       annotations: tool.annotations ?? {},
     })),
   };
