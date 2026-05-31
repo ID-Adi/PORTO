@@ -12,9 +12,23 @@ type Context = Awaited<ReturnType<typeof createTRPCContext>>;
 const t = initTRPC.context<Context>().create();
 
 export const router = t.router;
-export const publicProcedure = t.procedure;
 
-export const protectedProcedure = t.procedure.use(({ ctx, next }) => {
+// Timing log minimal — request lambat (incl canvasAgent.*) terlihat di logs.
+const timingMiddleware = t.middleware(async ({ path, type, next }) => {
+  const start = Date.now();
+  const res = await next();
+  const ms = Date.now() - start;
+  if (ms > 200) {
+    console.log(`[trpc] ${type} ${path} ${ms}ms ${res.ok ? "ok" : "err"}`);
+  }
+  return res;
+});
+
+const baseProcedure = t.procedure.use(timingMiddleware);
+
+export const publicProcedure = baseProcedure;
+
+export const protectedProcedure = baseProcedure.use(({ ctx, next }) => {
   if (!ctx.session?.user) {
     throw new TRPCError({ code: "UNAUTHORIZED", message: "Not signed in" });
   }

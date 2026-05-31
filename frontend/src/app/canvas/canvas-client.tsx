@@ -164,10 +164,9 @@ export function CanvasClient({ headerCollapsed, onToggleHeader }: CanvasClientPr
   const loadWorkflowScene = useCallback(
     async (id: number) => {
       try {
-        const data = await utils.canvasAgent.getWorkflow.fetch({ id });
-        applyWorkflowScene(
-          (data?.workflow?.sceneData ?? null) as RemoteScene | null
-        );
+        // Endpoint khusus scene — tak menarik messages/proposals/runs.
+        const data = await utils.canvasAgent.getWorkflowScene.fetch({ id });
+        applyWorkflowScene((data?.sceneData ?? null) as RemoteScene | null);
       } catch {
         // workflow tak ditemukan / belum login — biarkan canvas apa adanya.
       }
@@ -217,20 +216,18 @@ export function CanvasClient({ headerCollapsed, onToggleHeader }: CanvasClientPr
   // Pastikan ada workflow aktif; bila belum ada, buat baru & ADOPSI scene canvas
   // saat ini (tanpa mengosongkan kanvas). Return id workflow aktif.
   const ensureWorkflow = useCallback(
-    async (title = "Untitled workflow") => {
-      let id = activeWorkflowIdRef.current;
-      if (id === null) {
-        const row = await createWorkflowMutation.mutateAsync({ title });
-        id = row.id;
-        setActiveWorkflowId(id);
-        try {
-          await saveCurrentSceneTo(id);
-        } catch {
-          // best-effort adopsi scene
-        }
-        void utils.canvasAgent.listWorkflows.invalidate();
+    async (title = "Untitled workflow"): Promise<number> => {
+      const existing = activeWorkflowIdRef.current;
+      if (existing !== null) return existing;
+      const row = await createWorkflowMutation.mutateAsync({ title });
+      setActiveWorkflowId(row.id);
+      try {
+        await saveCurrentSceneTo(row.id);
+      } catch {
+        // best-effort adopsi scene
       }
-      return id;
+      void utils.canvasAgent.listWorkflows.invalidate();
+      return row.id;
     },
     [createWorkflowMutation, setActiveWorkflowId, saveCurrentSceneTo, utils]
   );

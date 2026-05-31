@@ -7,8 +7,10 @@ import {
   aiToolSettings,
   canvasAgentMessages,
   canvasAgentProposals,
+  canvasAgentRuns,
   canvasAgentWorkflows,
 } from "../../db/schema/index.js";
+import { enqueueCanvasAgentRun } from "../../lib/canvas-agent-runner.js";
 import { authenticatedProcedure, router } from "../init.js";
 
 const WORKFLOW_TITLE_MAX = 120;
@@ -27,6 +29,20 @@ const proposalStatus = z.enum([
 ]);
 
 const metadataSchema = z.record(z.string(), z.unknown());
+
+// Kolom ringkas workflow TANPA sceneData (scene Excalidraw bisa ~MB). Dipakai
+// untuk list/detail/ownership agar payload kecil; scene di-fetch terpisah.
+const workflowSummaryColumns = {
+  id: canvasAgentWorkflows.id,
+  userId: canvasAgentWorkflows.userId,
+  title: canvasAgentWorkflows.title,
+  status: canvasAgentWorkflows.status,
+  isPinned: canvasAgentWorkflows.isPinned,
+  activeFrameIds: canvasAgentWorkflows.activeFrameIds,
+  metadata: canvasAgentWorkflows.metadata,
+  createdAt: canvasAgentWorkflows.createdAt,
+  updatedAt: canvasAgentWorkflows.updatedAt,
+} as const;
 
 const frameRefSchema = z.object({
   id: z.string().min(1).max(120),
@@ -67,7 +83,7 @@ const proposalInput = z.object({
 
 async function requireWorkflow(workflowId: number, userId: string) {
   const [workflow] = await db
-    .select()
+    .select(workflowSummaryColumns)
     .from(canvasAgentWorkflows)
     .where(
       and(
@@ -107,6 +123,29 @@ async function requireProposal(proposalId: number, userId: string) {
   return row.proposal;
 }
 
+async function requireRun(runId: number, userId: string) {
+  const [row] = await db
+    .select({ run: canvasAgentRuns })
+    .from(canvasAgentRuns)
+    .innerJoin(
+      canvasAgentWorkflows,
+      eq(canvasAgentWorkflows.id, canvasAgentRuns.workflowId),
+    )
+    .where(
+      and(
+        eq(canvasAgentRuns.id, runId),
+        eq(canvasAgentWorkflows.userId, userId),
+      ),
+    )
+    .limit(1);
+
+  if (!row) {
+    throw new TRPCError({ code: "NOT_FOUND", message: "Run not found" });
+  }
+
+  return row.run;
+}
+
 export const canvasAgentRouter = router({
   getConfig: authenticatedProcedure.query(async () => {
     const [settings] = await db
@@ -131,8 +170,9 @@ export const canvasAgentRouter = router({
   }),
 
   listWorkflows: authenticatedProcedure.query(async ({ ctx }) => {
+    // Ringkas tanpa sceneData — scene di-fetch via getWorkflowScene saat dibuka.
     return db
-      .select()
+      .select(workflowSummaryColumns)
       .from(canvasAgentWorkflows)
       .where(eq(canvasAgentWorkflows.userId, ctx.session.user.id))
       .orderBy(
@@ -141,11 +181,31 @@ export const canvasAgentRouter = router({
       );
   }),
 
+  // Endpoint khusus scene (satu-satunya yang membawa sceneData berukuran besar).
+  getWorkflowScene: authenticatedProcedure
+    .input(z.object({ id: z.number().int().positive() }))
+    .query(async ({ ctx, input }) => {
+      const [row] = await db
+        .select({ sceneData: canvasAgentWorkflows.sceneData })
+        .from(canvasAgentWorkflows)
+        .where(
+          and(
+            eq(canvasAgentWorkflows.id, input.id),
+            eq(canvasAgentWorkflows.userId, ctx.session.user.id),
+          ),
+        )
+        .limit(1);
+      if (!row) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Workflow not found" });
+      }
+      return { sceneData: row.sceneData ?? null };
+    }),
+
   getWorkflow: authenticatedProcedure
     .input(z.object({ id: z.number().int().positive() }))
     .query(async ({ ctx, input }) => {
       const workflow = await requireWorkflow(input.id, ctx.session.user.id);
-      const [messages, proposals] = await Promise.all([
+      const [messages, proposals, runs] = await Promise.all([
         db
           .select()
           .from(canvasAgentMessages)
@@ -156,9 +216,15 @@ export const canvasAgentRouter = router({
           .from(canvasAgentProposals)
           .where(eq(canvasAgentProposals.workflowId, workflow.id))
           .orderBy(desc(canvasAgentProposals.createdAt)),
+        db
+          .select()
+          .from(canvasAgentRuns)
+          .where(eq(canvasAgentRuns.workflowId, workflow.id))
+          .orderBy(desc(canvasAgentRuns.createdAt))
+          .limit(20),
       ]);
 
-      return { workflow, messages, proposals };
+      return { workflow, messages, proposals, runs };
     }),
 
   createWorkflow: authenticatedProcedure
@@ -183,7 +249,7 @@ export const canvasAgentRouter = router({
           activeFrameIds: input?.activeFrameIds ?? [],
           metadata: input?.metadata ?? {},
         })
-        .returning();
+        .returning(workflowSummaryColumns);
       return row;
     }),
 
@@ -221,7 +287,7 @@ export const canvasAgentRouter = router({
           ...(shouldTouchUpdatedAt ? { updatedAt: new Date() } : {}),
         })
         .where(eq(canvasAgentWorkflows.id, input.id))
-        .returning();
+        .returning(workflowSummaryColumns);
       return row;
     }),
 
@@ -238,7 +304,11 @@ export const canvasAgentRouter = router({
           updatedAt: new Date(),
         })
         .where(eq(canvasAgentWorkflows.id, input.id))
-        .returning();
+        // Jangan balikin sceneData (~MB) — frontend tak memakainya.
+        .returning({
+          id: canvasAgentWorkflows.id,
+          updatedAt: canvasAgentWorkflows.updatedAt,
+        });
       return row;
     }),
 
@@ -279,6 +349,100 @@ export const canvasAgentRouter = router({
         .set({ updatedAt: new Date() })
         .where(eq(canvasAgentWorkflows.id, input.workflowId));
 
+      return row;
+    }),
+
+  sendMessage: authenticatedProcedure
+    .input(
+      z.object({
+        workflowId: z.number().int().positive(),
+        content: z.string().min(1).max(MESSAGE_CONTENT_MAX),
+        frameRefs: z.array(frameRefSchema).max(MAX_FRAME_REFS).default([]),
+        metadata: metadataSchema.optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const workflow = await requireWorkflow(
+        input.workflowId,
+        ctx.session.user.id,
+      );
+      const content = input.content.trim();
+      const [message] = await db
+        .insert(canvasAgentMessages)
+        .values({
+          workflowId: workflow.id,
+          role: "user",
+          content,
+          frameRefs: input.frameRefs,
+          metadata: input.metadata ?? {},
+        })
+        .returning();
+
+      const titlePatch =
+        workflow.title === "Untitled workflow"
+          ? { title: content.slice(0, WORKFLOW_TITLE_MAX) || workflow.title }
+          : {};
+
+      await db
+        .update(canvasAgentWorkflows)
+        .set({ ...titlePatch, updatedAt: new Date() })
+        .where(eq(canvasAgentWorkflows.id, workflow.id));
+
+      const [settings] = await db
+        .select({
+          enabled: aiToolSettings.canvasAgentEnabled,
+          provider: aiToolSettings.canvasAgentProvider,
+          model: aiToolSettings.canvasAgentModel,
+        })
+        .from(aiToolSettings)
+        .where(eq(aiToolSettings.id, 1))
+        .limit(1);
+
+      let run: typeof canvasAgentRuns.$inferSelect | null = null;
+      if (settings?.enabled) {
+        const [createdRun] = await db
+          .insert(canvasAgentRuns)
+          .values({
+            workflowId: workflow.id,
+            userMessageId: message.id,
+            status: "pending",
+            provider: settings.provider,
+            model: settings.model,
+            inputSnapshot: {
+              frameRefs: input.frameRefs,
+              source: input.metadata?.source ?? "canvas-agent-panel",
+            },
+          })
+          .returning();
+        run = createdRun;
+        enqueueCanvasAgentRun(createdRun.id);
+      }
+
+      return { message, run };
+    }),
+
+  retryRun: authenticatedProcedure
+    .input(z.object({ id: z.number().int().positive() }))
+    .mutation(async ({ ctx, input }) => {
+      const run = await requireRun(input.id, ctx.session.user.id);
+      if (run.status !== "failed") {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Hanya run failed yang bisa di-retry",
+        });
+      }
+      const [row] = await db
+        .update(canvasAgentRuns)
+        .set({
+          status: "pending",
+          errorMessage: null,
+          startedAt: null,
+          completedAt: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(canvasAgentRuns.id, run.id))
+        .returning();
+      enqueueCanvasAgentRun(row.id);
       return row;
     }),
 

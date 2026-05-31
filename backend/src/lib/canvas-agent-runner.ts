@@ -1,0 +1,524 @@
+import { and, eq } from "drizzle-orm";
+import { z } from "zod";
+
+import { db } from "../db/index.js";
+import {
+  aiToolSettings,
+  canvasAgentMessages,
+  canvasAgentProposals,
+  canvasAgentRuns,
+  canvasAgentWorkflows,
+  type CanvasAgentChange,
+  type CanvasAgentFrameRef,
+  type CanvasAgentSceneData,
+} from "../db/schema/index.js";
+import { decryptSecret } from "./encrypted-secret.js";
+import {
+  OPENROUTER_BASE_URL,
+  TtsError,
+  vertexAccessToken,
+  vertexBaseUrl,
+} from "./tts-providers.js";
+
+const GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta";
+const AGENT_TIMEOUT_MS = 90_000;
+const MAX_HISTORY_MESSAGES = 24;
+const MAX_SCENE_ELEMENTS = 120;
+
+type CanvasAgentProvider = "gemini" | "vertex" | "openrouter";
+
+type CanvasAgentMessage = typeof canvasAgentMessages.$inferSelect;
+type CanvasAgentWorkflow = typeof canvasAgentWorkflows.$inferSelect;
+type CanvasAgentSettings = typeof aiToolSettings.$inferSelect;
+
+const proposalChangeSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("add"), element: z.unknown() }),
+  z.object({
+    type: z.literal("update"),
+    elementId: z.string().min(1).max(120),
+    patch: z.record(z.string(), z.unknown()),
+  }),
+  z.object({ type: z.literal("delete"), elementId: z.string().min(1).max(120) }),
+]);
+
+const agentOutputSchema = z.object({
+  content: z.string().min(1).max(12_000),
+  proposal: z
+    .object({
+      summary: z.string().min(1).max(2_000),
+      frameIds: z.array(z.string().min(1).max(120)).max(50).default([]),
+      changes: z.array(proposalChangeSchema).max(200).default([]),
+    })
+    .optional()
+    .nullable(),
+});
+
+type AgentOutput = z.infer<typeof agentOutputSchema>;
+
+type GeminiResponse = {
+  candidates?: Array<{
+    content?: {
+      parts?: Array<{ text?: string }>;
+    };
+  }>;
+  error?: { message?: string };
+};
+
+type OpenRouterResponse = {
+  choices?: Array<{
+    message?: {
+      content?:
+        | string
+        | Array<{
+            type?: string;
+            text?: string;
+          }>;
+    };
+  }>;
+  error?: { message?: string };
+};
+
+function isProvider(value: string): value is CanvasAgentProvider {
+  return value === "gemini" || value === "vertex" || value === "openrouter";
+}
+
+function normalizeModel(provider: CanvasAgentProvider, model: string) {
+  if (provider === "openrouter") return model.trim();
+  return model.trim().replace(/^(publishers\/google\/models\/|models\/)/, "");
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function sceneSummary(sceneData: CanvasAgentSceneData | null | undefined) {
+  const scene = asRecord(sceneData);
+  const elements = Array.isArray(scene?.elements) ? scene.elements : [];
+  return elements.slice(0, MAX_SCENE_ELEMENTS).map((raw) => {
+    const element = asRecord(raw);
+    const customData = asRecord(element?.customData);
+    return {
+      id: typeof element?.id === "string" ? element.id : null,
+      type: typeof element?.type === "string" ? element.type : null,
+      frameId: typeof element?.frameId === "string" ? element.frameId : null,
+      text: typeof element?.text === "string" ? element.text : undefined,
+      x: typeof element?.x === "number" ? element.x : undefined,
+      y: typeof element?.y === "number" ? element.y : undefined,
+      width: typeof element?.width === "number" ? element.width : undefined,
+      height: typeof element?.height === "number" ? element.height : undefined,
+      customData: customData
+        ? {
+            kind:
+              typeof customData.kind === "string" ? customData.kind : undefined,
+            role:
+              typeof customData.role === "string" ? customData.role : undefined,
+            description:
+              typeof customData.description === "string"
+                ? customData.description
+                : undefined,
+          }
+        : undefined,
+    };
+  });
+}
+
+function frameSummary(frameRefs: CanvasAgentFrameRef[]) {
+  return frameRefs.map((frame) => ({
+    id: frame.id,
+    name: frame.name,
+    mention: frame.mention,
+    elementIds: frame.elementIds.slice(0, 80),
+    bounds: frame.bounds,
+  }));
+}
+
+function messageHistory(messages: CanvasAgentMessage[]) {
+  return messages.slice(-MAX_HISTORY_MESSAGES).map((message) => ({
+    role: message.role,
+    content: message.content,
+    frameRefs: frameSummary((message.frameRefs ?? []) as CanvasAgentFrameRef[]),
+    createdAt: message.createdAt,
+  }));
+}
+
+function buildSystemPrompt(settings: CanvasAgentSettings) {
+  const custom = settings.canvasAgentSystemPrompt?.trim();
+  return [
+    custom || "You are Canvas Agent for PORTO /canvas.",
+    "Answer in the same language as the user unless they ask otherwise.",
+    "You can help with normal conversation even when no frame is mentioned.",
+    "When the user mentions frame refs, use the provided frame context.",
+    "Never claim the canvas was changed directly.",
+    "If you suggest canvas edits, return them as a proposal. Keep proposal changes empty unless you are confident about exact Excalidraw element mutations.",
+    "Return only valid JSON with shape: {\"content\":\"assistant reply\",\"proposal\":{\"summary\":\"optional summary\",\"frameIds\":[],\"changes\":[]}}. Omit proposal when no canvas change is needed.",
+  ].join("\n");
+}
+
+function buildPrompt(args: {
+  workflow: CanvasAgentWorkflow;
+  userMessage: CanvasAgentMessage;
+  messages: CanvasAgentMessage[];
+}) {
+  const frameRefs = (args.userMessage.frameRefs ?? []) as CanvasAgentFrameRef[];
+  return JSON.stringify(
+    {
+      workflow: {
+        id: args.workflow.id,
+        title: args.workflow.title,
+        activeFrameIds: args.workflow.activeFrameIds,
+      },
+      currentUserMessage: {
+        content: args.userMessage.content,
+        frameRefs: frameSummary(frameRefs),
+      },
+      history: messageHistory(args.messages),
+      scene: {
+        elements: sceneSummary(args.workflow.sceneData),
+      },
+    },
+    null,
+    2,
+  );
+}
+
+function parseAgentOutput(raw: string): AgentOutput {
+  const cleaned = raw
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
+  let json: unknown;
+  try {
+    json = JSON.parse(cleaned);
+  } catch {
+    return {
+      content: cleaned.slice(0, 12_000),
+    };
+  }
+  const parsed = agentOutputSchema.safeParse(json);
+  if (!parsed.success) {
+    return {
+      content: [
+        "Agent membalas, tetapi format proposal tidak valid.",
+        "",
+        cleaned.slice(0, 11_500),
+      ].join("\n"),
+    };
+  }
+  return {
+    content: parsed.data.content.trim(),
+    proposal: parsed.data.proposal ?? undefined,
+  };
+}
+
+function geminiText(json: GeminiResponse, label: string) {
+  const text = json.candidates?.[0]?.content?.parts
+    ?.map((part) => part.text ?? "")
+    .join("")
+    .trim();
+  if (!text) {
+    throw new Error(json.error?.message ?? `${label} tidak mengembalikan teks`);
+  }
+  return text;
+}
+
+function openRouterText(json: OpenRouterResponse) {
+  const content = json.choices?.[0]?.message?.content;
+  if (typeof content === "string" && content.trim()) return content.trim();
+  if (Array.isArray(content)) {
+    const text = content
+      .map((part) => part.text ?? "")
+      .join("")
+      .trim();
+    if (text) return text;
+  }
+  throw new Error(json.error?.message ?? "OpenRouter tidak mengembalikan teks");
+}
+
+async function callGemini(args: {
+  apiKey: string;
+  model: string;
+  systemPrompt: string;
+  prompt: string;
+}) {
+  const model = normalizeModel("gemini", args.model);
+  const res = await fetch(`${GEMINI_BASE_URL}/models/${model}:generateContent`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-goog-api-key": args.apiKey,
+    },
+    body: JSON.stringify({
+      system_instruction: {
+        parts: [{ text: args.systemPrompt }],
+      },
+      contents: [{ role: "user", parts: [{ text: args.prompt }] }],
+      generationConfig: {
+        responseMimeType: "application/json",
+      },
+    }),
+    signal: AbortSignal.timeout(AGENT_TIMEOUT_MS),
+  });
+  const json = (await res.json()) as GeminiResponse;
+  if (!res.ok) {
+    throw new Error(json.error?.message ?? `Gemini HTTP ${res.status}`);
+  }
+  return geminiText(json, "Gemini");
+}
+
+async function callVertex(args: {
+  saJson: string;
+  projectId: string;
+  location: string;
+  model: string;
+  systemPrompt: string;
+  prompt: string;
+}) {
+  const token = await vertexAccessToken(args.saJson);
+  const model = normalizeModel("vertex", args.model);
+  const res = await fetch(
+    `${vertexBaseUrl(args.location, args.projectId)}/${model}:generateContent`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        system_instruction: {
+          parts: [{ text: args.systemPrompt }],
+        },
+        contents: [{ role: "user", parts: [{ text: args.prompt }] }],
+        generationConfig: {
+          responseMimeType: "application/json",
+        },
+      }),
+      signal: AbortSignal.timeout(AGENT_TIMEOUT_MS),
+    },
+  );
+  const json = (await res.json()) as GeminiResponse;
+  if (!res.ok) {
+    throw new Error(json.error?.message ?? `Vertex HTTP ${res.status}`);
+  }
+  return geminiText(json, "Vertex");
+}
+
+async function callOpenRouter(args: {
+  apiKey: string;
+  model: string;
+  systemPrompt: string;
+  prompt: string;
+}) {
+  const res = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${args.apiKey}`,
+      "Content-Type": "application/json",
+      "X-OpenRouter-Title": "PORTO Canvas Agent",
+    },
+    body: JSON.stringify({
+      model: args.model,
+      messages: [
+        { role: "system", content: args.systemPrompt },
+        { role: "user", content: args.prompt },
+      ],
+      response_format: { type: "json_object" },
+    }),
+    signal: AbortSignal.timeout(AGENT_TIMEOUT_MS),
+  });
+  const json = (await res.json()) as OpenRouterResponse;
+  if (!res.ok) {
+    throw new Error(json.error?.message ?? `OpenRouter HTTP ${res.status}`);
+  }
+  return openRouterText(json);
+}
+
+async function settingsOrThrow() {
+  const [settings] = await db
+    .select()
+    .from(aiToolSettings)
+    .where(eq(aiToolSettings.id, 1))
+    .limit(1);
+  if (!settings || !settings.canvasAgentEnabled) {
+    throw new Error("Canvas Agent belum enabled di AI Settings");
+  }
+  if (!isProvider(settings.canvasAgentProvider)) {
+    throw new Error("Canvas Agent provider tidak valid");
+  }
+  return settings;
+}
+
+async function callProvider(args: {
+  settings: CanvasAgentSettings;
+  systemPrompt: string;
+  prompt: string;
+}) {
+  const provider = args.settings.canvasAgentProvider as CanvasAgentProvider;
+  const model = args.settings.canvasAgentModel;
+
+  if (provider === "gemini") {
+    if (!args.settings.ttsApiKeyEncrypted) {
+      throw new Error("Gemini API key belum dikonfigurasi");
+    }
+    return callGemini({
+      apiKey: decryptSecret(args.settings.ttsApiKeyEncrypted),
+      model,
+      systemPrompt: args.systemPrompt,
+      prompt: args.prompt,
+    });
+  }
+
+  if (provider === "openrouter") {
+    if (!args.settings.openrouterApiKeyEncrypted) {
+      throw new Error("OpenRouter API key belum dikonfigurasi");
+    }
+    return callOpenRouter({
+      apiKey: decryptSecret(args.settings.openrouterApiKeyEncrypted),
+      model,
+      systemPrompt: args.systemPrompt,
+      prompt: args.prompt,
+    });
+  }
+
+  if (
+    !args.settings.vertexServiceAccountEncrypted ||
+    !args.settings.vertexProjectId
+  ) {
+    throw new Error("Kredensial Vertex belum dikonfigurasi");
+  }
+  return callVertex({
+    saJson: decryptSecret(args.settings.vertexServiceAccountEncrypted),
+    projectId: args.settings.vertexProjectId,
+    location: args.settings.vertexLocation,
+    model,
+    systemPrompt: args.systemPrompt,
+    prompt: args.prompt,
+  });
+}
+
+async function failRun(runId: number, error: unknown) {
+  const message =
+    error instanceof TtsError || error instanceof Error
+      ? error.message
+      : "Canvas Agent gagal memproses pesan";
+  await db
+    .update(canvasAgentRuns)
+    .set({
+      status: "failed",
+      errorMessage: message,
+      completedAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(eq(canvasAgentRuns.id, runId));
+}
+
+export async function runCanvasAgentRun(runId: number): Promise<void> {
+  try {
+    const [run] = await db
+      .select()
+      .from(canvasAgentRuns)
+      .where(eq(canvasAgentRuns.id, runId))
+      .limit(1);
+    if (!run || (run.status !== "pending" && run.status !== "failed")) return;
+
+    await db
+      .update(canvasAgentRuns)
+      .set({
+        status: "running",
+        errorMessage: null,
+        startedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(canvasAgentRuns.id, run.id));
+
+    const [workflow] = await db
+      .select()
+      .from(canvasAgentWorkflows)
+      .where(eq(canvasAgentWorkflows.id, run.workflowId))
+      .limit(1);
+    const [userMessage] = await db
+      .select()
+      .from(canvasAgentMessages)
+      .where(
+        and(
+          eq(canvasAgentMessages.id, run.userMessageId),
+          eq(canvasAgentMessages.workflowId, run.workflowId),
+        ),
+      )
+      .limit(1);
+
+    if (!workflow || !userMessage) {
+      throw new Error("Workflow atau user message tidak ditemukan");
+    }
+
+    const [settings, messages] = await Promise.all([
+      settingsOrThrow(),
+      db
+        .select()
+        .from(canvasAgentMessages)
+        .where(eq(canvasAgentMessages.workflowId, workflow.id))
+        .orderBy(canvasAgentMessages.createdAt),
+    ]);
+
+    const prompt = buildPrompt({ workflow, userMessage, messages });
+    const raw = await callProvider({
+      settings,
+      systemPrompt: buildSystemPrompt(settings),
+      prompt,
+    });
+    const output = parseAgentOutput(raw);
+    const frameRefs = (userMessage.frameRefs ?? []) as CanvasAgentFrameRef[];
+
+    const [assistantMessage] = await db
+      .insert(canvasAgentMessages)
+      .values({
+        workflowId: workflow.id,
+        role: "assistant",
+        content: output.content,
+        frameRefs,
+        metadata: {
+          source: "canvas-agent-runner",
+          provider: settings.canvasAgentProvider,
+          model: settings.canvasAgentModel,
+          runId: run.id,
+        },
+      })
+      .returning();
+
+    if (output.proposal) {
+      await db.insert(canvasAgentProposals).values({
+        workflowId: workflow.id,
+        createdFromMessageId: assistantMessage.id,
+        summary: output.proposal.summary,
+        frameIds: output.proposal.frameIds,
+        changes: output.proposal.changes as CanvasAgentChange[],
+      });
+    }
+
+    await Promise.all([
+      db
+        .update(canvasAgentRuns)
+        .set({
+          status: "succeeded",
+          errorMessage: null,
+          completedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(canvasAgentRuns.id, run.id)),
+      db
+        .update(canvasAgentWorkflows)
+        .set({ updatedAt: new Date() })
+        .where(eq(canvasAgentWorkflows.id, workflow.id)),
+    ]);
+  } catch (error) {
+    await failRun(runId, error);
+  }
+}
+
+export function enqueueCanvasAgentRun(runId: number) {
+  void runCanvasAgentRun(runId).catch((error) => {
+    void failRun(runId, error);
+  });
+}
