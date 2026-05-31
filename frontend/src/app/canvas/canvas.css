@@ -481,6 +481,18 @@
   line-height: 1.55;
 }
 
+/* Panel agent berada di dalam DOM Excalidraw yang memakai user-select: none.
+   Override agar teks percakapan/proposal/error bisa diseleksi & disalin. */
+.canvas-porto-wrapper .canvas-agent-message p,
+.canvas-porto-wrapper .canvas-agent-message-kicker,
+.canvas-porto-wrapper .canvas-agent-proposal h4,
+.canvas-porto-wrapper .canvas-agent-proposal p,
+.canvas-porto-wrapper .canvas-agent-run-error p {
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: text;
+}
+
 .canvas-porto-wrapper .canvas-agent-frame-chips {
   display: flex;
   flex-wrap: wrap;
@@ -563,6 +575,13 @@
   color: var(--color-on-surface-muted);
 }
 
+.canvas-porto-wrapper .canvas-agent-run-error-actions {
+  display: flex;
+  flex: none;
+  align-items: flex-start;
+  gap: 0.35rem;
+}
+
 .canvas-porto-wrapper .canvas-agent-run-error button {
   flex: none;
   gap: 0.35rem;
@@ -572,6 +591,11 @@
   font-size: 10px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+.canvas-porto-wrapper .canvas-agent-run-error-actions button[aria-label="Tutup error"] {
+  min-height: 2rem;
+  padding: 0;
 }
 
 .canvas-porto-wrapper .canvas-agent-composer {

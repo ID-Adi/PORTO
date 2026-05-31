@@ -11,6 +11,7 @@ import {
 } from "../db/schema/index.js";
 import {
   createCanvasAgentUserMessageRun,
+  friendlyAgentError,
   runCanvasAgentRun,
 } from "../lib/canvas-agent-runner.js";
 
@@ -200,10 +201,7 @@ canvasAgentStreamRoute.post(
         await writeEvent(stream, {
           type: "run_failed",
           run: null,
-          errorMessage:
-            error instanceof Error
-              ? error.message
-              : "Canvas Agent stream gagal",
+          errorMessage: friendlyAgentError(error),
         });
       } finally {
         clearInterval(heartbeat);

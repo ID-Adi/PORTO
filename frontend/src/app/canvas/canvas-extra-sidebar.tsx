@@ -12,6 +12,7 @@ import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import type { RefObject } from "react";
 
 const LAST_SIDEBAR_TAB_KEY = "porto:canvas:default-sidebar-tab:v1";
+const SIDEBAR_DOCKED_KEY = "porto:canvas:sidebar-docked:v1";
 
 type CanvasExtraSidebarProps = {
   videoUrl: string | null;
@@ -37,14 +38,39 @@ function writeLastSidebarTab(tab: string) {
   }
 }
 
+function readSidebarDocked() {
+  if (typeof window === "undefined") return true;
+  try {
+    // Default docked agar sidebar tetap terbuka saat user beraktivitas di canvas.
+    return window.localStorage.getItem(SIDEBAR_DOCKED_KEY) !== "false";
+  } catch {
+    return true;
+  }
+}
+
+function writeSidebarDocked(docked: boolean) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(SIDEBAR_DOCKED_KEY, docked ? "true" : "false");
+  } catch {
+    // abaikan kegagalan localStorage (private mode).
+  }
+}
+
 export function CanvasExtraSidebar({
   videoUrl,
   apiRef,
   isAuthed,
 }: CanvasExtraSidebarProps) {
   const [agentEnabled, setAgentEnabled] = useState(false);
+  const [docked, setDocked] = useState(readSidebarDocked);
   const sidebarOpenRef = useRef(false);
   const restoringRef = useRef(false);
+
+  const handleDock = useCallback((next: boolean) => {
+    setDocked(next);
+    writeSidebarDocked(next);
+  }, []);
 
   const handleSidebarStateChange = useCallback(
     (state: { name: string; tab?: string } | null) => {
@@ -98,7 +124,11 @@ export function CanvasExtraSidebar({
   );
 
   return (
-    <DefaultSidebar onStateChange={handleSidebarStateChange}>
+    <DefaultSidebar
+      docked={docked}
+      onDock={handleDock}
+      onStateChange={handleSidebarStateChange}
+    >
       <CanvasSidebarResizeHandle />
       <DefaultSidebar.TabTriggers>
         <Sidebar.TabTrigger

@@ -84,7 +84,17 @@ export function CanvasClient({ headerCollapsed, onToggleHeader }: CanvasClientPr
   const mounted = useHasMounted();
   const apiRef = useRef<ExcalidrawImperativeAPI | null>(null);
   const saveTimer = useRef<number | null>(null);
+  const cloudSaveTimer = useRef<number | null>(null);
   const cloudBootstrappedRef = useRef(false);
+  // Scene workflow aktif sudah dimuat dari cloud → autosave cloud boleh jalan.
+  const cloudReadyRef = useRef(false);
+  // Ada perubahan canvas yang belum tersimpan ke DB.
+  const dirtyRef = useRef(false);
+  // Ref ke saveCurrentSceneTo (didefinisikan di bawah) agar bisa dipakai oleh
+  // flushCloudSave tanpa masalah urutan deklarasi.
+  const saveCurrentSceneToRef = useRef<(id: number) => Promise<void>>(
+    async () => {},
+  );
   const [activeVideoUrl, setActiveVideoUrl] = useState<string | null>(null);
 
   const { data: session } = authClient.useSession();
@@ -117,6 +127,20 @@ export function CanvasClient({ headerCollapsed, onToggleHeader }: CanvasClientPr
     persistWorkflowId(id);
   }, []);
 
+  // Simpan scene aktif ke DB di background. Dipanggil oleh autosave & saat unload.
+  const flushCloudSave = useCallback(async () => {
+    const id = activeWorkflowIdRef.current;
+    if (!isAuthedRef.current || id === null || !cloudReadyRef.current) return;
+    if (!apiRef.current) return;
+    try {
+      await saveCurrentSceneToRef.current(id);
+      dirtyRef.current = false;
+      void utils.canvasAgent.listWorkflows.invalidate();
+    } catch {
+      // Biarkan dirty tetap true agar dicoba lagi / beforeunload memperingatkan.
+    }
+  }, [utils]);
+
   const handleChange = useCallback(
     (
       elements: readonly OrderedExcalidrawElement[],
@@ -129,8 +153,22 @@ export function CanvasClient({ headerCollapsed, onToggleHeader }: CanvasClientPr
         saveLocalScene(elements, appState);
         void saveLocalFiles(files);
       }, 400);
+
+      // Autosave cloud (debounce lebih panjang) hanya bila scene workflow aktif
+      // sudah dimuat, supaya tidak menimpa DB dengan kanvas kosong saat awal.
+      if (
+        isAuthedRef.current &&
+        activeWorkflowIdRef.current !== null &&
+        cloudReadyRef.current
+      ) {
+        dirtyRef.current = true;
+        if (cloudSaveTimer.current) window.clearTimeout(cloudSaveTimer.current);
+        cloudSaveTimer.current = window.setTimeout(() => {
+          void flushCloudSave();
+        }, 1500);
+      }
     },
-    []
+    [flushCloudSave]
   );
 
   const applyRemoteScene = useCallback((remote: RemoteScene) => {
@@ -169,6 +207,10 @@ export function CanvasClient({ headerCollapsed, onToggleHeader }: CanvasClientPr
         applyWorkflowScene((data?.sceneData ?? null) as RemoteScene | null);
       } catch {
         // workflow tak ditemukan / belum login — biarkan canvas apa adanya.
+      } finally {
+        // Scene workflow aktif sudah final di canvas → autosave cloud boleh jalan.
+        cloudReadyRef.current = true;
+        dirtyRef.current = false;
       }
     },
     [utils, applyWorkflowScene]
@@ -188,21 +230,36 @@ export function CanvasClient({ headerCollapsed, onToggleHeader }: CanvasClientPr
     [saveSceneMutation]
   );
 
+  useEffect(() => {
+    saveCurrentSceneToRef.current = saveCurrentSceneTo;
+  }, [saveCurrentSceneTo]);
+
   // Pindah workflow (2-arah): auto-save scene aktif → set aktif → muat scene baru.
   const switchWorkflow = useCallback(
     async (nextId: number | null) => {
       const prev = activeWorkflowIdRef.current;
-      if (prev !== null && prev !== nextId && apiRef.current) {
-        try {
-          await saveCurrentSceneTo(prev);
-        } catch {
-          // best-effort — jangan blok perpindahan kalau gagal simpan.
-        }
-      }
+      // Scene baru belum dimuat → matikan autosave cloud sementara agar tidak
+      // menimpa workflow tujuan dengan kanvas lama.
+      cloudReadyRef.current = false;
+      if (cloudSaveTimer.current) window.clearTimeout(cloudSaveTimer.current);
+
+      // UI berpindah instan; simpan scene lama & muat scene baru paralel
+      // karena keduanya menyasar workflow berbeda (independen).
       setActiveWorkflowId(nextId);
       void utils.canvasAgent.listWorkflows.invalidate();
-      if (nextId !== null) await loadWorkflowScene(nextId);
-      else applyWorkflowScene(null);
+
+      const savePrev =
+        prev !== null && prev !== nextId && apiRef.current
+          ? saveCurrentSceneTo(prev).catch(() => {
+              // best-effort — jangan blok perpindahan kalau gagal simpan.
+            })
+          : Promise.resolve();
+      const loadNext =
+        nextId !== null
+          ? loadWorkflowScene(nextId)
+          : Promise.resolve(applyWorkflowScene(null));
+
+      await Promise.all([savePrev, loadNext]);
     },
     [
       saveCurrentSceneTo,
@@ -221,11 +278,12 @@ export function CanvasClient({ headerCollapsed, onToggleHeader }: CanvasClientPr
       if (existing !== null) return existing;
       const row = await createWorkflowMutation.mutateAsync({ title });
       setActiveWorkflowId(row.id);
-      try {
-        await saveCurrentSceneTo(row.id);
-      } catch {
+      // Kanvas saat ini menjadi scene workflow baru → cloud boleh autosave.
+      cloudReadyRef.current = true;
+      // Adopsi scene non-blocking supaya create terasa instan.
+      void saveCurrentSceneTo(row.id).catch(() => {
         // best-effort adopsi scene
-      }
+      });
       void utils.canvasAgent.listWorkflows.invalidate();
       return row.id;
     },
@@ -236,6 +294,7 @@ export function CanvasClient({ headerCollapsed, onToggleHeader }: CanvasClientPr
     try {
       const id = await ensureWorkflow("Canvas workflow");
       await saveCurrentSceneTo(id);
+      dirtyRef.current = false;
       void utils.canvasAgent.listWorkflows.invalidate();
       void utils.canvasAgent.getWorkflow.invalidate({ id });
       toast.success("Tersimpan ke workflow");
@@ -273,6 +332,24 @@ export function CanvasClient({ headerCollapsed, onToggleHeader }: CanvasClientPr
   useEffect(() => {
     if (isAuthed) maybeBootstrapCloud();
   }, [isAuthed, maybeBootstrapCloud]);
+
+  // Peringatkan user bila masih ada perubahan yang belum tersimpan ke DB.
+  useEffect(() => {
+    const handler = (event: BeforeUnloadEvent) => {
+      if (!dirtyRef.current) return;
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, []);
+
+  // Bersihkan timer autosave cloud saat unmount.
+  useEffect(() => {
+    return () => {
+      if (cloudSaveTimer.current) window.clearTimeout(cloudSaveTimer.current);
+    };
+  }, []);
 
   const isDark = resolvedTheme === "dark";
 

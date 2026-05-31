@@ -26,6 +26,7 @@ export function CanvasAgentHistoryMenu({
   activeWorkflowTitle,
   busy,
   onSwitchWorkflow,
+  onPrefetchWorkflow,
   onRenameWorkflow,
   onTogglePin,
   onDeleteWorkflow,
@@ -37,6 +38,7 @@ export function CanvasAgentHistoryMenu({
   activeWorkflowTitle: string;
   busy: boolean;
   onSwitchWorkflow: (id: number) => void;
+  onPrefetchWorkflow: (id: number) => void;
   onRenameWorkflow: (workflow: WorkflowRow, nextTitle: string) => void;
   onTogglePin: (workflow: WorkflowRow) => void;
   onDeleteWorkflow: (workflow: WorkflowRow) => void;
@@ -89,6 +91,12 @@ export function CanvasAgentHistoryMenu({
                   workflow.id === activeWorkflowId &&
                     "canvas-agent-history-item-active",
                 )}
+                onPointerEnter={() => {
+                  onPrefetchWorkflow(workflow.id);
+                }}
+                onFocus={() => {
+                  onPrefetchWorkflow(workflow.id);
+                }}
                 onClick={(event) => {
                   event.stopPropagation();
                 }}

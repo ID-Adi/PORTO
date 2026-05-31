@@ -419,9 +419,56 @@ function errorMessage(error: unknown) {
     : "Canvas Agent gagal memproses pesan";
 }
 
+// Petakan error teknis (timeout/network/HTTP) ke pesan yang bisa dibaca user.
+// Pesan mentah tetap di-log untuk debugging server.
+export function friendlyAgentError(error: unknown): string {
+  const raw =
+    typeof error === "string"
+      ? error
+      : error instanceof Error
+        ? `${error.name}: ${error.message}`
+        : "";
+  const text = raw.toLowerCase();
+
+  if (
+    text.includes("aborterror") ||
+    text.includes("timeouterror") ||
+    text.includes("aborted") ||
+    text.includes("timeout") ||
+    text.includes("timed out")
+  ) {
+    return "Agent timeout — model terlalu lama merespons. Coba lagi.";
+  }
+  if (
+    text.includes("fetch failed") ||
+    text.includes("enotfound") ||
+    text.includes("econnrefused") ||
+    text.includes("econnreset") ||
+    text.includes("eai_again") ||
+    text.includes("terminated") ||
+    text.includes("network")
+  ) {
+    return "Tidak bisa terhubung ke server model. Cek koneksi atau konfigurasi provider.";
+  }
+  if (text.includes("429") || text.includes("rate limit") || text.includes("quota")) {
+    return "Model sedang sibuk atau kena limit (429). Coba beberapa saat lagi.";
+  }
+  if (text.includes("401") || text.includes("403") || text.includes("unauthorized") || text.includes("permission")) {
+    return "Akses model ditolak — periksa API key atau izin provider.";
+  }
+  if (/\b5\d\d\b/.test(text) || text.includes("internal error") || text.includes("unavailable")) {
+    return "Server model sedang bermasalah (5xx). Coba lagi sebentar lagi.";
+  }
+
+  // Pesan asli bila pendek & informatif (mis. "Canvas Agent belum enabled...").
+  const message = errorMessage(error);
+  if (message && message.length <= 160) return message;
+  return "Agent gagal memproses pesan.";
+}
+
 async function failRun(runId: number, error: unknown) {
-  const message =
-    typeof error === "string" ? error : errorMessage(error);
+  const rawMessage = typeof error === "string" ? error : errorMessage(error);
+  const message = typeof error === "string" ? error : friendlyAgentError(error);
   const [run] = await db
     .update(canvasAgentRuns)
     .set({
@@ -432,7 +479,7 @@ async function failRun(runId: number, error: unknown) {
     })
     .where(eq(canvasAgentRuns.id, runId))
     .returning();
-  console.log(`[canvas-agent] run ${runId} failed: ${message}`);
+  console.log(`[canvas-agent] run ${runId} failed: ${rawMessage}`);
   return run ?? null;
 }
 
@@ -637,7 +684,7 @@ export async function runCanvasAgentRun(
     await callbacks.onRunCompleted?.(completedRun ?? run);
   } catch (error) {
     const run = await failRun(runId, error);
-    await callbacks.onRunFailed?.(run, errorMessage(error));
+    await callbacks.onRunFailed?.(run, friendlyAgentError(error));
   }
 }
 

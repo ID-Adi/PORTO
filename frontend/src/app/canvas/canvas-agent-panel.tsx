@@ -1,8 +1,10 @@
 "use client";
 
 import { Bot, Plus, Trash2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
+
+import { trpc } from "@/lib/trpc";
 
 import {
   AlertDialog,
@@ -45,9 +47,14 @@ export function CanvasAgentPanel({
 }: CanvasAgentPanelProps) {
   const { activeWorkflowId, switchWorkflow, ensureWorkflow } =
     useCanvasWorkflow();
+  const utils = trpc.useUtils();
   const [input, setInput] = useState("");
   const [historyOpen, setHistoryOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<WorkflowRow | null>(null);
+  // Failed run yang disembunyikan user (sesi saja — run tetap ada di DB).
+  const [dismissedRunIds, setDismissedRunIds] = useState<Set<number>>(
+    () => new Set(),
+  );
 
   const workflowAccess = useCanvasAgentWorkflows({
     enabled: enabled && isAuthed,
@@ -60,6 +67,11 @@ export function CanvasAgentPanel({
     ensureWorkflow,
     apiRef,
   });
+
+  const visibleFailedRuns = useMemo(
+    () => chat.failedRuns.filter((run) => !dismissedRunIds.has(run.id)),
+    [chat.failedRuns, dismissedRunIds],
+  );
 
   const activeWorkflowRow = useMemo(() => {
     if (activeWorkflowId === null) return null;
@@ -88,6 +100,15 @@ export function CanvasAgentPanel({
       toast.error(error instanceof Error ? error.message : "Gagal membuat workflow");
     }
   }
+
+  // Hangatkan cache scene saat hover item history agar switch terasa instan.
+  const handlePrefetchWorkflow = useCallback(
+    (id: number) => {
+      if (id === activeWorkflowId) return;
+      void utils.canvasAgent.getWorkflowScene.prefetch({ id });
+    },
+    [utils, activeWorkflowId],
+  );
 
   function handleSwitchWorkflow(id: number) {
     void switchWorkflow(id)
@@ -171,6 +192,7 @@ export function CanvasAgentPanel({
               activeWorkflowTitle={activeWorkflowTitle}
               busy={busy}
               onSwitchWorkflow={handleSwitchWorkflow}
+              onPrefetchWorkflow={handlePrefetchWorkflow}
               onRenameWorkflow={handleRenameWorkflow}
               onTogglePin={handleTogglePin}
               onDeleteWorkflow={setDeleteTarget}
@@ -198,13 +220,20 @@ export function CanvasAgentPanel({
             activeRunCount={chat.activeRuns.length}
           />
           <CanvasAgentRunErrors
-            runs={chat.failedRuns}
+            runs={visibleFailedRuns}
             busy={chat.isBusy}
             onRetry={(run) => {
               void chat.retryRun(run).catch((error) => {
                 toast.error(
                   error instanceof Error ? error.message : "Gagal retry agent",
                 );
+              });
+            }}
+            onDismiss={(run) => {
+              setDismissedRunIds((prev) => {
+                const next = new Set(prev);
+                next.add(run.id);
+                return next;
               });
             }}
           />

@@ -90,7 +90,9 @@ export async function applyProposalChanges(
   api: ExcalidrawImperativeAPI,
   changes: ProposalChange[],
 ) {
-  const { CaptureUpdateAction } = await import("@excalidraw/excalidraw");
+  const { CaptureUpdateAction, convertToExcalidrawElements } = await import(
+    "@excalidraw/excalidraw"
+  );
   const deleteIds = new Set(
     changes
       .filter((change): change is Extract<ProposalChange, { type: "delete" }> => {
@@ -105,11 +107,21 @@ export async function applyProposalChanges(
       })
       .map((change) => [change.elementId, change.patch]),
   );
-  const additions = changes
+  // Elemen "add" dari AI umumnya berupa skeleton (tanpa id/seed/versionNonce/...).
+  // convertToExcalidrawElements melengkapinya jadi elemen valid sebelum updateScene;
+  // tanpa ini Excalidraw mengabaikan elemen sehingga apply tampak gagal.
+  const additionSkeletons = changes
     .filter((change): change is Extract<ProposalChange, { type: "add" }> => {
       return change.type === "add" && isRecord(change.element);
     })
-    .map((change) => change.element as OrderedExcalidrawElement);
+    .map((change) => change.element as Record<string, unknown>);
+  const additions =
+    additionSkeletons.length > 0
+      ? (convertToExcalidrawElements(
+          additionSkeletons as never,
+          { regenerateIds: true },
+        ) as unknown as OrderedExcalidrawElement[])
+      : [];
 
   const now = Date.now();
   const elements = api.getSceneElements().map((element) => {

@@ -153,6 +153,9 @@ export function CanvasExcalidraw({
           changeViewBackgroundColor: false,
         },
         tools: { image: true },
+        // Sidebar selalu dockable di ukuran layar apa pun, sehingga bisa
+        // di-pin terbuka dan tidak auto-close saat user berinteraksi di canvas.
+        dockedSidebarBreakpoint: 0,
       }}
       initialData={initialData}
       langCode="id-ID"
