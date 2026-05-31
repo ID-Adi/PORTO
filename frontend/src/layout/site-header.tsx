@@ -123,13 +123,13 @@ export function SiteHeader() {
               </Link>
             )}
 
-            <div className="ml-auto flex items-center">
+            <div className="ml-auto flex items-center gap-1.5">
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-8 w-8 rounded-none border-r border-line px-0 text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+                    className="h-8 w-8 rounded-none border border-line px-0 text-muted-foreground hover:bg-muted/40 hover:text-foreground"
                     aria-label="Search"
                     onClick={() => openCommandMenu()}
                   >
@@ -155,7 +155,7 @@ export function SiteHeader() {
 
               <section
                 aria-label="Theme and profile controls"
-                className="flex items-center"
+                className="flex items-center gap-1.5"
               >
                 <ThemeToggle />
                 <HeaderProfileMenu />

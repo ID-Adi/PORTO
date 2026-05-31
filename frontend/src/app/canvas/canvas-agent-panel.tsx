@@ -1,22 +1,9 @@
 "use client";
 
-import { CaptureUpdateAction } from "@excalidraw/excalidraw";
-import {
-  Bot,
-  Check,
-  History,
-  Loader2,
-  Pin,
-  PinOff,
-  Plus,
-  Send,
-  Trash2,
-  X,
-} from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Bot, Plus, Trash2 } from "lucide-react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
-import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -28,61 +15,22 @@ import {
   AlertDialogMedia,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
+import { CanvasAgentComposer } from "./canvas-agent-composer";
+import { CanvasAgentHistoryMenu } from "./canvas-agent-history-menu";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { cn } from "@/lib/utils";
-import { trpc } from "@/lib/trpc";
-
+  useCanvasAgentChat,
+  useCanvasAgentWorkflows,
+} from "./canvas-agent-hooks";
+import { CanvasAgentMessageList } from "./canvas-agent-message-list";
+import { CanvasAgentProposalList } from "./canvas-agent-proposal-list";
+import { CanvasAgentRunErrors } from "./canvas-agent-run-errors";
 import { useCanvasWorkflow } from "./canvas-workflow-context";
+import { formatTimestamp } from "./canvas-agent-utils";
 
-import type { AppRouter } from "@porto/api";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
-import type {
-  ExcalidrawFrameElement,
-  OrderedExcalidrawElement,
-} from "@excalidraw/excalidraw/element/types";
-import type { inferRouterOutputs } from "@trpc/server";
 import type { RefObject } from "react";
-
-type RouterOutputs = inferRouterOutputs<AppRouter>;
-type WorkflowRow = RouterOutputs["canvasAgent"]["listWorkflows"][number];
-type WorkflowDetail = RouterOutputs["canvasAgent"]["getWorkflow"];
-type MessageRow = WorkflowDetail["messages"][number];
-type ProposalRow = WorkflowDetail["proposals"][number];
-type RunRow = WorkflowDetail["runs"][number];
-type ProposalStatus =
-  | "pending_approval"
-  | "approved"
-  | "rejected"
-  | "applied"
-  | "failed";
-
-type FrameRef = {
-  id: string;
-  name: string | null;
-  mention: string;
-  elementIds: string[];
-  bounds?: {
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-  };
-};
-
-type ProposalChange =
-  | { type: "add"; element: unknown }
-  | { type: "update"; elementId: string; patch: Record<string, unknown> }
-  | { type: "delete"; elementId: string };
+import type { WorkflowRow } from "./canvas-agent-types";
 
 type CanvasAgentPanelProps = {
   apiRef: RefObject<ExcalidrawImperativeAPI | null>;
@@ -90,374 +38,83 @@ type CanvasAgentPanelProps = {
   enabled: boolean;
 };
 
-function normalizeMention(value: string) {
-  return value
-    .replace(/^@/, "")
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, "_");
-}
-
-function mentionFromName(name: string | null, index: number) {
-  const rawName = name?.trim() || `Frame ${index + 1}`;
-  const normalized = normalizeMention(rawName).replace(/[^a-z0-9_-]/g, "");
-  return `@${normalized || `frame_${index + 1}`}`;
-}
-
-function extractMentions(content: string) {
-  const mentions = new Set<string>();
-  for (const match of content.matchAll(/@([a-zA-Z0-9_-]+)/g)) {
-    mentions.add(normalizeMention(match[1]));
-  }
-  return mentions;
-}
-
-function isFrame(
-  element: OrderedExcalidrawElement,
-): element is OrderedExcalidrawElement & ExcalidrawFrameElement {
-  return element.type === "frame";
-}
-
-function collectFrameRefs(
-  api: ExcalidrawImperativeAPI | null,
-  content: string,
-): FrameRef[] {
-  if (!api) return [];
-  const elements = api.getSceneElements().filter((element) => !element.isDeleted);
-  const frames = elements.filter(isFrame);
-  const mentions = extractMentions(content);
-
-  const refs = frames.map((frame, index) => {
-    const elementIds = elements
-      .filter((element) => element.frameId === frame.id)
-      .map((element) => element.id);
-    return {
-      id: frame.id,
-      name: frame.name,
-      mention: mentionFromName(frame.name, index),
-      elementIds,
-      bounds: {
-        x: frame.x,
-        y: frame.y,
-        width: frame.width,
-        height: frame.height,
-      },
-    };
-  });
-
-  if (mentions.size > 0) {
-    return refs.filter((ref) => {
-      const keys = [
-        normalizeMention(ref.mention),
-        ref.name ? normalizeMention(ref.name) : "",
-      ];
-      return keys.some((key) => mentions.has(key));
-    });
-  }
-
-  return [];
-}
-
-function formatTimestamp(value: Date | string | null) {
-  if (!value) return "-";
-  return new Intl.DateTimeFormat("id-ID", {
-    day: "2-digit",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(value));
-}
-
-function sortWorkflowRows(rows: WorkflowRow[]) {
-  return [...rows].sort((a, b) => {
-    if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1;
-    return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
-  });
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function applyProposalChanges(
-  api: ExcalidrawImperativeAPI,
-  changes: ProposalChange[],
-) {
-  const deleteIds = new Set(
-    changes
-      .filter((change): change is Extract<ProposalChange, { type: "delete" }> => {
-        return change.type === "delete";
-      })
-      .map((change) => change.elementId),
-  );
-  const updatePatches = new Map(
-    changes
-      .filter((change): change is Extract<ProposalChange, { type: "update" }> => {
-        return change.type === "update";
-      })
-      .map((change) => [change.elementId, change.patch]),
-  );
-  const additions = changes
-    .filter((change): change is Extract<ProposalChange, { type: "add" }> => {
-      return change.type === "add" && isRecord(change.element);
-    })
-    .map((change) => change.element as OrderedExcalidrawElement);
-
-  const now = Date.now();
-  const elements = api.getSceneElements().map((element) => {
-    if (deleteIds.has(element.id)) {
-      return { ...element, isDeleted: true, updated: now };
-    }
-
-    const patch = updatePatches.get(element.id);
-    if (!patch) return element;
-    return { ...element, ...patch, updated: now } as OrderedExcalidrawElement;
-  });
-
-  api.updateScene({
-    elements: [...elements, ...additions],
-    captureUpdate: CaptureUpdateAction.IMMEDIATELY,
-  });
-}
-
-function MessageBubble({ message }: { message: MessageRow }) {
-  const frameRefs = (message.frameRefs ?? []) as FrameRef[];
-  return (
-    <div
-      className={cn(
-        "canvas-agent-message",
-        message.role === "user" && "canvas-agent-message-user",
-      )}
-    >
-      <div className="canvas-agent-message-kicker">
-        <span>{message.role}</span>
-        <span>{formatTimestamp(message.createdAt)}</span>
-      </div>
-      <p>{message.content}</p>
-      {frameRefs.length > 0 ? (
-        <div className="canvas-agent-frame-chips">
-          {frameRefs.map((frame) => (
-            <span key={frame.id}>{frame.mention}</span>
-          ))}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function ProposalItem({
-  proposal,
-  busy,
-  onStatus,
-  onApply,
-}: {
-  proposal: ProposalRow;
-  busy: boolean;
-  onStatus: (status: ProposalStatus) => void;
-  onApply: () => void;
-}) {
-  const changes = (proposal.changes ?? []) as ProposalChange[];
-  return (
-    <div className="canvas-agent-proposal">
-      <div className="canvas-agent-proposal-head">
-        <div>
-          <span className="canvas-agent-section-kicker">proposal</span>
-          <h4>{proposal.summary}</h4>
-        </div>
-        <span className="canvas-agent-status-pill">{proposal.status}</span>
-      </div>
-      <p>
-        {proposal.frameIds.length} frame linked / {changes.length} change
-      </p>
-      <div className="canvas-agent-proposal-actions">
-        {proposal.status === "pending_approval" ? (
-          <>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={busy}
-              onClick={() => onStatus("approved")}
-            >
-              <Check aria-hidden />
-              Approve
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={busy}
-              onClick={() => onStatus("rejected")}
-            >
-              <X aria-hidden />
-              Reject
-            </Button>
-          </>
-        ) : null}
-        {proposal.status === "approved" ? (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={busy}
-            onClick={onApply}
-          >
-            <Check aria-hidden />
-            Apply
-          </Button>
-        ) : null}
-      </div>
-    </div>
-  );
-}
-
 export function CanvasAgentPanel({
   apiRef,
   isAuthed,
   enabled,
 }: CanvasAgentPanelProps) {
-  const utils = trpc.useUtils();
-  // Workflow aktif dibagikan dengan canvas (canvas-client) lewat context, jadi
-  // ganti workflow di sini juga memuat scene canvas-nya (unifikasi 2-arah).
   const { activeWorkflowId, switchWorkflow, ensureWorkflow } =
     useCanvasWorkflow();
   const [input, setInput] = useState("");
   const [historyOpen, setHistoryOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<WorkflowRow | null>(null);
 
-  const workflowsQuery = trpc.canvasAgent.listWorkflows.useQuery(undefined, {
+  const workflowAccess = useCanvasAgentWorkflows({
     enabled: enabled && isAuthed,
+    activeWorkflowId,
+    switchWorkflow,
   });
-  const workflows = useMemo(
-    () => workflowsQuery.data ?? [],
-    [workflowsQuery.data],
-  );
-  const workflowQuery = trpc.canvasAgent.getWorkflow.useQuery(
-    { id: activeWorkflowId ?? 0 },
-    { enabled: enabled && isAuthed && activeWorkflowId !== null },
-  );
-
-  const createWorkflowMutation = trpc.canvasAgent.createWorkflow.useMutation();
-  const updateWorkflowMutation = trpc.canvasAgent.updateWorkflow.useMutation();
-  const deleteWorkflowMutation = trpc.canvasAgent.deleteWorkflow.useMutation();
-  const sendMessageMutation = trpc.canvasAgent.sendMessage.useMutation();
-  const retryRunMutation = trpc.canvasAgent.retryRun.useMutation();
-  const updateProposalMutation =
-    trpc.canvasAgent.updateProposalStatus.useMutation();
-
-  const activeWorkflow = workflowQuery.data?.workflow ?? null;
-  const busy =
-    createWorkflowMutation.isPending ||
-    updateWorkflowMutation.isPending ||
-    deleteWorkflowMutation.isPending ||
-    retryRunMutation.isPending ||
-    updateProposalMutation.isPending;
-  const isSending = sendMessageMutation.isPending;
-  const runs = workflowQuery.data?.runs ?? [];
-  const activeRuns = runs.filter(
-    (run) => run.status === "pending" || run.status === "running",
-  );
-  const failedRuns = runs.filter((run) => run.status === "failed").slice(0, 3);
+  const chat = useCanvasAgentChat({
+    enabled: enabled && isAuthed,
+    activeWorkflowId,
+    ensureWorkflow,
+    apiRef,
+  });
 
   const activeWorkflowRow = useMemo(() => {
     if (activeWorkflowId === null) return null;
-    return workflows.find((workflow) => workflow.id === activeWorkflowId) ?? null;
-  }, [activeWorkflowId, workflows]);
+    return (
+      workflowAccess.workflows.find(
+        (workflow) => workflow.id === activeWorkflowId,
+      ) ?? null
+    );
+  }, [activeWorkflowId, workflowAccess.workflows]);
+
   const activeWorkflowTitle =
-    activeWorkflow?.title ?? activeWorkflowRow?.title ?? "Workflow baru";
+    chat.workflow?.title ?? activeWorkflowRow?.title ?? "Workflow baru";
   const activeWorkflowUpdatedAt =
-    activeWorkflow?.updatedAt ?? activeWorkflowRow?.updatedAt ?? null;
+    chat.workflow?.updatedAt ?? activeWorkflowRow?.updatedAt ?? null;
   const activeWorkflowMeta = activeWorkflowUpdatedAt
     ? formatTimestamp(activeWorkflowUpdatedAt)
     : "belum ada percakapan";
 
-  const invalidateWorkflow = useCallback(
-    (id: number | null) => {
-      void utils.canvasAgent.listWorkflows.invalidate();
-      if (id !== null) {
-        void utils.canvasAgent.getWorkflow.invalidate({ id });
-      }
-    },
-    [utils],
-  );
-
-  useEffect(() => {
-    if (!activeWorkflowId || activeRuns.length === 0) return;
-    const timer = window.setInterval(() => {
-      void workflowQuery.refetch();
-      void utils.canvasAgent.listWorkflows.invalidate();
-    }, 1800);
-    return () => window.clearInterval(timer);
-  }, [activeRuns.length, activeWorkflowId, workflowQuery, utils]);
-
-  // "+ Workflow baru" eksplisit → buat lalu pindah (canvas jadi blank).
-  const createWorkflow = useCallback(
-    async (title = "Untitled workflow") => {
-      const row = await createWorkflowMutation.mutateAsync({ title });
-      invalidateWorkflow(row.id);
-      await switchWorkflow(row.id);
-      return row;
-    },
-    [createWorkflowMutation, invalidateWorkflow, switchWorkflow],
-  );
-
-  async function commitWorkflowTitle(workflow: WorkflowRow, nextTitle: string) {
-    if (nextTitle.trim() === workflow.title) return;
-    const title = nextTitle.trim() || "Untitled workflow";
-    try {
-      await updateWorkflowMutation.mutateAsync({
-        id: workflow.id,
-        title,
-      });
-      invalidateWorkflow(workflow.id);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Gagal rename workflow");
-    }
-  }
+  const busy = workflowAccess.isBusy || chat.isBusy;
 
   async function handleCreateWorkflow() {
     try {
-      await createWorkflow();
+      await workflowAccess.createWorkflow("Untitled workflow");
       toast.success("Workflow agent dibuat");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Gagal membuat workflow");
     }
   }
 
-  async function handleTogglePin(workflow: WorkflowRow) {
-    try {
-      const row = await updateWorkflowMutation.mutateAsync({
-        id: workflow.id,
-        isPinned: !workflow.isPinned,
-      });
-      utils.canvasAgent.listWorkflows.setData(undefined, (current) => {
-        if (!current) return current;
-        return sortWorkflowRows(
-          current.map((item) =>
-            item.id === row.id ? { ...item, isPinned: row.isPinned } : item,
-          ),
+  function handleSwitchWorkflow(id: number) {
+    void switchWorkflow(id)
+      .then(() => setHistoryOpen(false))
+      .catch((error) => {
+        toast.error(
+          error instanceof Error ? error.message : "Gagal memuat workflow",
         );
       });
-      invalidateWorkflow(workflow.id);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Gagal pin workflow");
-    }
   }
 
-  function requestDeleteWorkflow(workflow: WorkflowRow) {
-    setDeleteTarget(workflow);
+  function handleRenameWorkflow(workflow: WorkflowRow, nextTitle: string) {
+    void workflowAccess.renameWorkflow(workflow, nextTitle).catch((error) => {
+      toast.error(error instanceof Error ? error.message : "Gagal rename workflow");
+    });
+  }
+
+  function handleTogglePin(workflow: WorkflowRow) {
+    void workflowAccess.togglePinWorkflow(workflow).catch((error) => {
+      toast.error(error instanceof Error ? error.message : "Gagal pin workflow");
+    });
   }
 
   async function handleDeleteWorkflow(workflowId: number) {
-    if (!workflowId) return;
     try {
-      await deleteWorkflowMutation.mutateAsync({ id: workflowId });
-      if (workflowId === activeWorkflowId) {
-        const fallback = workflows.find((workflow) => workflow.id !== workflowId);
-        await switchWorkflow(fallback?.id ?? null);
-      }
+      await workflowAccess.deleteWorkflow(workflowId);
       setDeleteTarget(null);
-      invalidateWorkflow(workflowId);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Gagal hapus workflow");
     }
@@ -465,131 +122,13 @@ export function CanvasAgentPanel({
 
   async function handleSend() {
     const content = input.trim();
-    if (!content || isSending) return;
-    const optimisticId = -Date.now();
+    if (!content || chat.isSending) return;
+    setInput("");
     try {
-      // Pastikan ada workflow aktif TANPA mengosongkan kanvas (adopsi scene
-      // saat ini bila workflow baru dibuat).
-      const workflowId = activeWorkflow?.id ?? (await ensureWorkflow());
-      const frameRefs = collectFrameRefs(apiRef.current, content);
-      setInput("");
-      const optimisticMessage: MessageRow = {
-        id: optimisticId,
-        workflowId,
-        role: "user",
-        content,
-        frameRefs,
-        metadata: {
-          source: "canvas-agent-panel",
-          optimistic: true,
-        },
-        createdAt: new Date().toISOString(),
-      };
-      utils.canvasAgent.getWorkflow.setData({ id: workflowId }, (current) => {
-        if (!current) return current;
-        return {
-          ...current,
-          messages: [...current.messages, optimisticMessage],
-        };
-      });
-
-      const result = await sendMessageMutation.mutateAsync({
-        workflowId,
-        content,
-        frameRefs,
-        metadata: {
-          source: "canvas-agent-panel",
-        },
-      });
-      utils.canvasAgent.getWorkflow.setData({ id: workflowId }, (current) => {
-        if (!current) return current;
-        return {
-          ...current,
-          messages: current.messages.map((message) =>
-            message.id === optimisticId ? result.message : message,
-          ),
-          runs: result.run
-            ? [
-                result.run,
-                ...current.runs.filter((run) => run.id !== result.run?.id),
-              ]
-            : current.runs,
-        };
-      });
-      if (!result.run) {
-        toast.info("Pesan tersimpan. Canvas Agent belum enabled di AI Settings.");
-      }
-      invalidateWorkflow(workflowId);
+      await chat.sendMessage(content);
     } catch (error) {
       setInput(content);
-      if (activeWorkflowId !== null) {
-        utils.canvasAgent.getWorkflow.setData(
-          { id: activeWorkflowId },
-          (current) => {
-            if (!current) return current;
-            return {
-              ...current,
-              messages: current.messages.filter(
-                (message) => message.id !== optimisticId,
-              ),
-            };
-          },
-        );
-      }
       toast.error(error instanceof Error ? error.message : "Gagal mengirim chat");
-    }
-  }
-
-  async function handleRetryRun(run: RunRow) {
-    try {
-      await retryRunMutation.mutateAsync({ id: run.id });
-      invalidateWorkflow(run.workflowId);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Gagal retry agent");
-    }
-  }
-
-  async function handleProposalStatus(
-    proposal: ProposalRow,
-    status: ProposalStatus,
-  ) {
-    try {
-      await updateProposalMutation.mutateAsync({
-        id: proposal.id,
-        status,
-      });
-      invalidateWorkflow(proposal.workflowId);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Gagal update proposal");
-    }
-  }
-
-  async function handleApplyProposal(proposal: ProposalRow) {
-    if (!apiRef.current) {
-      toast.error("Canvas belum siap");
-      return;
-    }
-
-    try {
-      applyProposalChanges(
-        apiRef.current,
-        (proposal.changes ?? []) as ProposalChange[],
-      );
-      await updateProposalMutation.mutateAsync({
-        id: proposal.id,
-        status: "applied",
-      });
-      invalidateWorkflow(proposal.workflowId);
-      toast.success("Proposal diterapkan ke canvas");
-    } catch (error) {
-      await updateProposalMutation.mutateAsync({
-        id: proposal.id,
-        status: "failed",
-        errorMessage:
-          error instanceof Error ? error.message : "Gagal apply proposal",
-      });
-      invalidateWorkflow(proposal.workflowId);
-      toast.error(error instanceof Error ? error.message : "Gagal apply proposal");
     }
   }
 
@@ -605,293 +144,42 @@ export function CanvasAgentPanel({
   return (
     <>
       <div className="canvas-agent-panel">
-      <header className="canvas-agent-header">
-        <div>
-          <span className="canvas-agent-section-kicker">active workflow</span>
-          <h3 title={activeWorkflowTitle}>{activeWorkflowTitle}</h3>
-          <p>{activeWorkflowMeta}</p>
-        </div>
-        <div className="canvas-agent-header-actions">
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            aria-label="New workflow"
-            title="New workflow"
-            className="canvas-agent-icon-button"
-            disabled={busy}
-            onClick={handleCreateWorkflow}
-          >
-            <Plus aria-hidden />
-          </Button>
-          <DropdownMenu
-            modal={false}
-            open={historyOpen}
-            onOpenChange={setHistoryOpen}
-          >
-            <DropdownMenuTrigger asChild>
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                aria-label="Workflow history"
-                title="Workflow history"
-                className="canvas-agent-icon-button"
-                disabled={busy}
-              >
-                <History aria-hidden />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-              align="end"
-              sideOffset={8}
-              className="canvas-agent-history-menu"
-              onPointerDown={(event) => {
-                event.stopPropagation();
-              }}
-              onClick={(event) => {
-                event.stopPropagation();
-              }}
+        <header className="canvas-agent-header">
+          <div>
+            <span className="canvas-agent-section-kicker">active workflow</span>
+            <h3 title={activeWorkflowTitle}>{activeWorkflowTitle}</h3>
+            <p>{activeWorkflowMeta}</p>
+          </div>
+          <div className="canvas-agent-header-actions">
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              aria-label="New workflow"
+              title="New workflow"
+              className="canvas-agent-icon-button"
+              disabled={busy}
+              onClick={handleCreateWorkflow}
             >
-              <div className="canvas-agent-history-sticky">
-                <DropdownMenuLabel>Workflow history</DropdownMenuLabel>
-                <div className="canvas-agent-history-current">
-                  <span>Active</span>
-                  <strong title={activeWorkflowTitle}>{activeWorkflowTitle}</strong>
-                </div>
-                <DropdownMenuSeparator />
-              </div>
-              <DropdownMenuGroup>
-                {workflows.length === 0 ? (
-                  <DropdownMenuItem disabled>Belum ada workflow</DropdownMenuItem>
-                ) : (
-                  workflows.map((workflow) => (
-                    <div
-                      key={workflow.id}
-                      role="button"
-                      tabIndex={0}
-                      className={cn(
-                        "canvas-agent-history-item",
-                        workflow.id === activeWorkflowId &&
-                          "canvas-agent-history-item-active",
-                      )}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                      }}
-                      onDoubleClick={(event) => {
-                        event.stopPropagation();
-                        void switchWorkflow(workflow.id);
-                        setHistoryOpen(false);
-                      }}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter" || event.key === " ") {
-                          event.preventDefault();
-                          event.stopPropagation();
-                          void switchWorkflow(workflow.id);
-                          setHistoryOpen(false);
-                        }
-                      }}
-                    >
-                      <div className="canvas-agent-history-copy">
-                        <Input
-                          key={workflow.id}
-                          defaultValue={workflow.title}
-                          aria-label={`Rename workflow ${workflow.title}`}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                          }}
-                          onFocus={(event) => {
-                            event.stopPropagation();
-                          }}
-                          onBlur={(event) => {
-                            void commitWorkflowTitle(
-                              workflow,
-                              event.currentTarget.value,
-                            );
-                          }}
-                          onKeyDown={(event) => {
-                            event.stopPropagation();
-                            if (event.key === "Enter") {
-                              event.currentTarget.blur();
-                            }
-                          }}
-                        />
-                        <small>
-                          {workflow.id === activeWorkflowId ? "active / " : ""}
-                          {workflow.isPinned ? "pinned / " : ""}
-                          {workflow.status === "archived"
-                            ? "archived"
-                            : formatTimestamp(workflow.updatedAt)}
-                        </small>
-                      </div>
-                      <div className="canvas-agent-history-actions">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-xs"
-                          className="canvas-agent-history-pin-button"
-                          data-pinned={workflow.isPinned ? "true" : undefined}
-                          disabled={busy}
-                          aria-label={
-                            workflow.isPinned
-                              ? "Unpin workflow"
-                              : "Pin workflow"
-                          }
-                          title={
-                            workflow.isPinned
-                              ? "Unpin workflow"
-                              : "Pin workflow"
-                          }
-                          onPointerDown={(event) => {
-                            event.stopPropagation();
-                          }}
-                          onClick={(event) => {
-                            event.preventDefault();
-                            event.stopPropagation();
-                            void handleTogglePin(workflow);
-                          }}
-                          onDoubleClick={(event) => {
-                            event.preventDefault();
-                            event.stopPropagation();
-                          }}
-                        >
-                          {workflow.isPinned ? (
-                            <PinOff aria-hidden />
-                          ) : (
-                            <Pin aria-hidden />
-                          )}
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-xs"
-                          className="canvas-agent-history-delete-button"
-                          disabled={busy}
-                          aria-label="Delete workflow"
-                          title="Delete workflow"
-                          onPointerDown={(event) => {
-                            event.stopPropagation();
-                          }}
-                          onClick={(event) => {
-                            event.preventDefault();
-                            event.stopPropagation();
-                            requestDeleteWorkflow(workflow);
-                          }}
-                          onDoubleClick={(event) => {
-                            event.preventDefault();
-                            event.stopPropagation();
-                          }}
-                        >
-                          <Trash2 aria-hidden />
-                        </Button>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </DropdownMenuGroup>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </header>
-
-      <div
-        className="canvas-agent-scroll"
-        onWheelCapture={(event) => {
-          event.stopPropagation();
-        }}
-        onTouchMoveCapture={(event) => {
-          event.stopPropagation();
-        }}
-      >
-        {workflowQuery.isLoading && activeWorkflowId !== null ? (
-          <div className="canvas-agent-loading">
-            <Loader2 aria-hidden className="size-3.5 animate-spin" />
-            Memuat chat
+              <Plus aria-hidden />
+            </Button>
+            <CanvasAgentHistoryMenu
+              open={historyOpen}
+              onOpenChange={setHistoryOpen}
+              workflows={workflowAccess.workflows}
+              activeWorkflowId={activeWorkflowId}
+              activeWorkflowTitle={activeWorkflowTitle}
+              busy={busy}
+              onSwitchWorkflow={handleSwitchWorkflow}
+              onRenameWorkflow={handleRenameWorkflow}
+              onTogglePin={handleTogglePin}
+              onDeleteWorkflow={setDeleteTarget}
+            />
           </div>
-        ) : null}
+        </header>
 
-        {workflowQuery.data?.messages.length === 0 ? (
-          <div className="canvas-agent-placeholder">
-            <Bot aria-hidden className="size-4" />
-            <p>Mulai chat, atau mention @nama_frame untuk mengikat Agent ke frame.</p>
-          </div>
-        ) : null}
-
-        {workflowQuery.data?.messages.map((message) => (
-          <MessageBubble key={message.id} message={message} />
-        ))}
-
-        {activeRuns.length > 0 ? (
-          <div className="canvas-agent-loading">
-            <Loader2 aria-hidden className="size-3.5 animate-spin" />
-            Agent thinking...
-          </div>
-        ) : null}
-
-        {failedRuns.length > 0 ? (
-          <div className="canvas-agent-run-errors">
-            {failedRuns.map((run) => (
-              <div key={run.id} className="canvas-agent-run-error">
-                <div>
-                  <span className="canvas-agent-section-kicker">agent failed</span>
-                  <p>{run.errorMessage ?? "Agent gagal memproses pesan."}</p>
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={retryRunMutation.isPending}
-                  onClick={() => {
-                    void handleRetryRun(run);
-                  }}
-                >
-                  <Loader2
-                    aria-hidden
-                    className={cn(
-                      retryRunMutation.isPending && "animate-spin",
-                    )}
-                  />
-                  Retry
-                </Button>
-              </div>
-            ))}
-          </div>
-        ) : null}
-
-        {workflowQuery.data?.proposals.length ? (
-          <div className="canvas-agent-proposals">
-            {workflowQuery.data.proposals.map((proposal) => (
-              <ProposalItem
-                key={proposal.id}
-                proposal={proposal}
-                busy={busy}
-                onStatus={(status) => {
-                  void handleProposalStatus(proposal, status);
-                }}
-                onApply={() => {
-                  void handleApplyProposal(proposal);
-                }}
-              />
-            ))}
-          </div>
-        ) : null}
-      </div>
-
-      <form
-        className="canvas-agent-composer"
-        onWheelCapture={(event) => {
-          event.stopPropagation();
-        }}
-        onTouchMoveCapture={(event) => {
-          event.stopPropagation();
-        }}
-        onSubmit={(event) => {
-          event.preventDefault();
-          void handleSend();
-        }}
-      >
         <div
-          className="canvas-agent-composer-input"
+          className="canvas-agent-scroll"
           onWheelCapture={(event) => {
             event.stopPropagation();
           }}
@@ -899,41 +187,59 @@ export function CanvasAgentPanel({
             event.stopPropagation();
           }}
         >
-          <Textarea
-            value={input}
-            disabled={isSending}
-            onChange={(event) => setInput(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
-                event.preventDefault();
-                void handleSend();
-              }
+          <CanvasAgentMessageList
+            messages={chat.messages}
+            isLoading={chat.messagesQuery.isLoading && activeWorkflowId !== null}
+            isFetchingNextPage={chat.messagesQuery.isFetchingNextPage}
+            hasNextPage={Boolean(chat.messagesQuery.hasNextPage)}
+            onLoadMore={() => {
+              void chat.messagesQuery.fetchNextPage();
             }}
-            placeholder="Chat Agent. Contoh: bantu rapikan @frame_1"
+            activeRunCount={chat.activeRuns.length}
+          />
+          <CanvasAgentRunErrors
+            runs={chat.failedRuns}
+            busy={chat.isBusy}
+            onRetry={(run) => {
+              void chat.retryRun(run).catch((error) => {
+                toast.error(
+                  error instanceof Error ? error.message : "Gagal retry agent",
+                );
+              });
+            }}
+          />
+          <CanvasAgentProposalList
+            proposals={chat.proposals}
+            busy={chat.isBusy}
+            onStatus={(proposal, status) => {
+              void chat.updateProposalStatus(proposal, status).catch((error) => {
+                toast.error(
+                  error instanceof Error
+                    ? error.message
+                    : "Gagal update proposal",
+                );
+              });
+            }}
+            onApply={(proposal) => {
+              void chat.applyProposal(proposal);
+            }}
           />
         </div>
-        <Button
-          type="submit"
-          variant="outline"
-          size="icon-lg"
-          aria-label="Kirim chat"
-          title="Kirim chat"
-          disabled={!input.trim() || isSending}
-        >
-          {isSending ? (
-            <Loader2 aria-hidden className="animate-spin" />
-          ) : (
-            <Send aria-hidden />
-          )}
-        </Button>
-      </form>
+
+        <CanvasAgentComposer
+          input={input}
+          onInputChange={setInput}
+          onSubmit={handleSend}
+          onStop={chat.stopStream}
+          isSending={chat.isSending}
+          streamState={chat.streamState}
+        />
       </div>
+
       <AlertDialog
         open={deleteTarget !== null}
         onOpenChange={(open) => {
-          if (!open) {
-            setDeleteTarget(null);
-          }
+          if (!open) setDeleteTarget(null);
         }}
       >
         <AlertDialogContent
@@ -955,19 +261,19 @@ export function CanvasAgentPanel({
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={deleteWorkflowMutation.isPending}>
+            <AlertDialogCancel disabled={workflowAccess.isBusy}>
               Batal
             </AlertDialogCancel>
             <AlertDialogAction
               variant="destructive"
-              disabled={!deleteTarget || deleteWorkflowMutation.isPending}
+              disabled={!deleteTarget || workflowAccess.isBusy}
               onClick={(event) => {
                 event.preventDefault();
                 if (!deleteTarget) return;
                 void handleDeleteWorkflow(deleteTarget.id);
               }}
             >
-              {deleteWorkflowMutation.isPending ? "Menghapus..." : "Hapus"}
+              {workflowAccess.isBusy ? "Menghapus..." : "Hapus"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

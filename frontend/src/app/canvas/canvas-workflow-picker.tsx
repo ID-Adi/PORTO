@@ -10,9 +10,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 
+import { useCanvasAgentWorkflows } from "./canvas-agent-hooks";
 import { useCanvasWorkflow } from "./canvas-workflow-context";
 
 type CanvasWorkflowPickerProps = {
@@ -38,16 +38,13 @@ export function CanvasWorkflowPicker({
   isAuthed,
 }: CanvasWorkflowPickerProps) {
   const { activeWorkflowId, switchWorkflow } = useCanvasWorkflow();
-  const utils = trpc.useUtils();
   const [pendingId, setPendingId] = useState<number | "new" | null>(null);
-
-  const workflowsQuery = trpc.canvasAgent.listWorkflows.useQuery(undefined, {
+  const workflowAccess = useCanvasAgentWorkflows({
     enabled: open && isAuthed,
-    staleTime: 30_000,
+    activeWorkflowId,
+    switchWorkflow,
   });
-  const createWorkflow = trpc.canvasAgent.createWorkflow.useMutation();
-
-  const workflows = workflowsQuery.data ?? [];
+  const workflows = workflowAccess.workflows;
 
   async function handleSelect(id: number) {
     if (pendingId !== null) return;
@@ -68,10 +65,7 @@ export function CanvasWorkflowPicker({
     if (pendingId !== null) return;
     setPendingId("new");
     try {
-      const row = await createWorkflow.mutateAsync({ title: "Untitled workflow" });
-      // Non-blocking — jangan tunggu refetch daftar sebelum pindah workflow.
-      void utils.canvasAgent.listWorkflows.invalidate();
-      await switchWorkflow(row.id);
+      await workflowAccess.createWorkflow("Untitled workflow");
       onOpenChange(false);
     } catch (error) {
       toast.error(
@@ -102,7 +96,7 @@ export function CanvasWorkflowPicker({
             <p className="flex flex-1 items-center justify-center px-4 text-center font-mono text-xs text-muted-foreground">
               Login dulu untuk memuat workflow.
             </p>
-          ) : workflowsQuery.isLoading ? (
+          ) : workflowAccess.workflowsQuery.isLoading ? (
             <div className="flex flex-1 items-center justify-center gap-2 font-mono text-xs text-muted-foreground">
               <Loader2 className="size-3.5 animate-spin" aria-hidden />
               Memuat workflow…

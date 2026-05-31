@@ -50,6 +50,123 @@ Masalah yang perlu diselesaikan:
 - Komponen agent panel terlalu banyak memegang concern: UI, mutation, optimistic update, polling, proposal action, workflow history, dan frame parsing.
 - Jika migrasi ke TanStack Start dilakukan tanpa batas route yang jelas, Excalidraw bisa bermasalah karena route `/canvas` sangat bergantung browser APIs.
 
+## Agent Handoff Runbook
+
+Bagian ini adalah checkpoint utama untuk agent berikutnya. Update bagian ini setiap selesai satu fase bermakna, terutama bila konteks/token hampir habis.
+
+### Current Status
+
+- Dokumen ini adalah sumber utama untuk refactor AI Agent Chat `/canvas`.
+- Arah kerja sudah dikunci: implementasi **SSE streaming di repo Next.js/Hono saat ini dulu**, lalu migrasi TanStack Start setelah chat streaming, cache, dan cleanup stabil.
+- Fase 1-5 sudah diimplementasikan di current Next.js/Hono structure: panel dipecah, query cache native TanStack Query dipakai, SSE route backend ditambahkan, dan polling run aktif dihapus dari panel.
+- Streaming provider masih memakai chunked final-response fallback dari runner karena provider call existing belum token-level streaming. Data final tetap masuk `canvas_agent_messages`, `canvas_agent_runs`, dan `canvas_agent_proposals`.
+
+### Next Recommended Phase
+
+Lanjutkan ke **Fase 6 - TanStack Start migration planning** hanya setelah manual test `/canvas` selesai di environment auth/backend aktif.
+
+### Active Constraints
+
+- `frontend/src/app/canvas/canvas-client.tsx` tetap owner scene canvas, `apiRef`, `activeWorkflowId`, `switchWorkflow`, dan `ensureWorkflow`.
+- `frontend/src/app/canvas/canvas-workflow-context.tsx` harus tetap tipis dan tidak menyimpan state chat, stream, messages, runs, atau proposals.
+- `frontend/src/app/canvas/canvas-agent-panel.tsx` harus diturunkan bertahap menjadi container.
+- Backend SSE harus menjadi route khusus, tetapi data final tetap masuk tabel `canvas_agent_messages`, `canvas_agent_runs`, dan `canvas_agent_proposals`.
+- Runner logic dari `backend/src/lib/canvas-agent-runner.ts` harus diekstrak atau dipakai ulang, bukan dicopy-paste.
+- Satu QueryClient harus tetap dipakai selama tRPC dan TanStack Query native hidup berdampingan.
+- `sceneData` tidak boleh masuk ke payload chat, SSE, workflow list, atau query messages.
+
+### Files Touched by Latest Agent
+
+- Inspected: `docs/canvas_agent_tanstack_sse_refactor_plan.md`
+- Inspected: `frontend/src/app/canvas/canvas-agent-panel.tsx`
+- Inspected: `frontend/src/app/canvas/canvas-client.tsx`
+- Inspected: `frontend/src/app/canvas/canvas-workflow-context.tsx`
+- Inspected: `frontend/src/app/canvas/canvas-workflow-picker.tsx`
+- Inspected: `backend/src/trpc/routers/canvas-agent.ts`
+- Inspected: `backend/src/lib/canvas-agent-runner.ts`
+- Changed: `frontend/src/app/canvas/canvas-agent-panel.tsx`
+- Changed: `frontend/src/app/canvas/canvas-workflow-picker.tsx`
+- Changed: `frontend/src/app/canvas/canvas.css`
+- Changed: `frontend/src/app/canvas/canvas-agent-*.ts(x)` helper/hook/component files
+- Changed: `backend/src/index.ts`
+- Changed: `backend/src/routes/canvas-agent-stream.ts`
+- Changed: `backend/src/lib/canvas-agent-runner.ts`
+- Changed: `backend/src/trpc/routers/canvas-agent.ts`
+- Changed: `docs/canvas_agent_tanstack_sse_refactor_plan.md`
+
+### Verification Commands
+
+Untuk update dokumentasi:
+
+```bash
+sed -n '1,260p' docs/canvas_agent_tanstack_sse_refactor_plan.md
+sed -n '260,620p' docs/canvas_agent_tanstack_sse_refactor_plan.md
+git diff -- docs/canvas_agent_tanstack_sse_refactor_plan.md
+```
+
+Untuk fase implementasi kode nanti:
+
+```bash
+pnpm --dir frontend lint
+pnpm --dir frontend build
+pnpm --dir backend exec tsc --noEmit
+```
+
+Jika backend schema berubah:
+
+```bash
+pnpm --dir backend db:generate
+```
+
+### Unresolved Blockers / Follow-up
+
+- Token-level provider streaming belum diaktifkan. SSE sekarang mengirim `assistant_delta` dari chunked final response fallback; hapus fallback ini setelah Gemini/Vertex/OpenRouter call path dipindah ke streaming API provider.
+- Manual test `/canvas` masih perlu dilakukan dengan backend dan sesi login aktif.
+- TanStack Start migration belum boleh dimulai sebelum SSE-first path di current app stabil.
+
+### Continuation Notes for Next Agent
+
+- Jalur submit chat utama sekarang `POST /api/canvas-agent/workflows/:workflowId/messages/stream`.
+- tRPC `sendMessage` lama sudah dihapus dari router; panel memakai stream hook.
+- `retryRun` masih tRPC request-response dan masih enqueue runner async untuk run gagal.
+- `sceneData` tetap hanya lewat endpoint scene dan tidak masuk query messages/SSE/workflow list.
+
+## Rundown Pengerjaan
+
+Checklist ini adalah urutan wajib. Jangan melompat ke TanStack Start sebelum fase SSE-first selesai.
+
+- [x] Audit current canvas/chat flow dan dokumentasikan kondisi sekarang.
+- [x] Pecah `canvas-agent-panel.tsx` tanpa perubahan behavior.
+- [x] Samakan akses workflow list untuk agent panel dan workflow picker.
+- [x] Tambahkan query keys dan cache patch helpers.
+- [x] Tambahkan backend SSE route dan shared runner helpers.
+- [x] Tambahkan frontend stream hook.
+- [x] Ganti polling dengan cache update berbasis SSE event.
+- [x] Hapus old/fallback paths yang sudah tidak dipakai.
+- [ ] Rencanakan TanStack Start route migration setelah current app stabil.
+
+## Progress Log
+
+Append satu baris setiap selesai fase bermakna. Gunakan tanggal absolut.
+
+| Date | Agent | Phase | Files inspected | Files changed | Verification | Next handoff |
+| --- | --- | --- | --- | --- | --- | --- |
+| 2026-05-31 | Codex | Documentation runbook setup | `docs/canvas_agent_tanstack_sse_refactor_plan.md`, `/canvas` frontend files, canvas agent backend files | `docs/canvas_agent_tanstack_sse_refactor_plan.md` | Markdown readback + `git diff -- docs/canvas_agent_tanstack_sse_refactor_plan.md` | Start Fase 1: split panel into hooks/components without behavior changes. |
+| 2026-05-31 | Codex | Fase 1-5 SSE-first implementation | `frontend/src/app/canvas/*`, `backend/src/trpc/routers/canvas-agent.ts`, `backend/src/lib/canvas-agent-runner.ts`, `backend/src/index.ts` | Split `canvas-agent-panel.tsx` into hooks/components, added native TanStack Query keys/cache/API wrappers, added Hono SSE stream route, shared runner callbacks, removed panel polling and tRPC `sendMessage` path | `pnpm --dir frontend lint`, `pnpm --dir frontend build`, `pnpm --dir backend exec tsc --noEmit` | Manual `/canvas` SSE test, then Fase 6 TanStack Start migration planning. |
+
+## Strict Cleanup Rules
+
+- Tidak boleh ada dua sistem chat aktif permanen.
+- Tidak boleh ada duplicate `QueryClientProvider`.
+- Tidak boleh ada folder eksperimen `frontend-start/` yang abandoned.
+- Tidak boleh ada unused files, unused exports, atau debug logs.
+- Tidak boleh copy-paste provider call, prompt builder, parser, atau persist logic dari runner.
+- Tidak boleh memasukkan `sceneData` ke chat query, SSE payload, atau workflow list.
+- Tidak boleh menyisakan polling setelah SSE event final terbukti mengupdate cache.
+- Tidak boleh mengganti istilah teknis Excalidraw import/type/API untuk kebutuhan rebrand UI.
+- Tidak boleh menambah TODO generik; setiap TODO harus punya owner/fase penghapusan yang jelas.
+- Tidak boleh menyelesaikan fase tanpa update `Progress Log`.
+
 ## Catatan Implementasi dari Source Code Saat Ini
 
 Bagian ini wajib dibaca sebelum implementasi. Tujuannya menjaga refactor tetap sesuai kondisi repo sekarang, tidak meninggalkan code sampah, dan mudah dilanjutkan oleh AI agent lain.
@@ -369,6 +486,12 @@ Untuk TanStack Start final, backend agent routes bisa dipindahkan ke server func
 
 ## Rundown Implementasi
 
+Implementasi wajib mengikuti jalur **SSE-first di repo sekarang**:
+
+- Fase 0-4 dikerjakan di current Next.js/Hono structure: `frontend/src/app/canvas` dan `backend/src`.
+- TanStack Start tetap menjadi arah akhir, tetapi tidak menjadi fase pertama.
+- TanStack Start baru disentuh setelah stream, cache update, cleanup old path, dan validasi `/canvas` stabil.
+
 ### Fase 0 - Audit dan kontrak
 
 Tujuan: mengunci kontrak sebelum pindah framework.
@@ -394,7 +517,7 @@ Validasi:
 
 ### Fase 1 - Pecah panel menjadi hook dan komponen kecil
 
-Tujuan: mengurangi risiko migrasi TanStack Start.
+Tujuan: mengurangi risiko refactor SSE dan migrasi TanStack Start nanti tanpa mengubah behavior user-facing.
 
 Checklist:
 
@@ -405,6 +528,7 @@ Checklist:
 - Pindahkan composer ke `CanvasAgentComposer`.
 - Pindahkan proposal list dan run errors ke komponen sendiri.
 - `canvas-agent-panel.tsx` hanya menjadi orchestrator UI.
+- Update `Progress Log` setelah split selesai.
 
 Output:
 
@@ -425,12 +549,14 @@ Checklist:
 
 - Buat wrapper API function biasa untuk agent data.
 - Gunakan `useQuery`, `useInfiniteQuery`, dan `useMutation` langsung dari TanStack Query.
+- Pastikan wrapper memakai QueryClient yang sudah ada di `frontend/src/lib/query-client.ts`.
 - Messages dibuat pagination atau infinite query.
 - Workflow history memakai `staleTime` pendek dan background refetch.
 - Optimistic user message memakai `onMutate`.
 - Rename/pin/delete workflow update cache langsung.
 - Proposal status update memakai optimistic cache patch.
 - Hapus polling umum dari panel setelah SSE siap.
+- Update `Progress Log` setelah query layer dipakai oleh panel/picker.
 
 Query behavior:
 
@@ -455,12 +581,14 @@ Checklist:
 - Tambah Hono route `POST /api/canvas-agent/workflows/:workflowId/messages/stream`.
 - Auth endpoint sama ketat dengan tRPC authenticated procedure.
 - Endpoint membuat user message, run, lalu mulai stream.
+- Jangan panggil `enqueueCanvasAgentRun` untuk message yang sedang diproses oleh stream route.
 - Runner menghasilkan token delta atau chunk text.
 - Stream mengirim event `assistant_delta` sepanjang AI menjawab.
 - Saat final, simpan assistant message ke database.
 - Jika ada proposal, simpan proposal dan kirim event `proposal_created`.
 - Kirim heartbeat comment setiap 15-25 detik agar koneksi tidak idle.
 - Gunakan `AbortSignal` untuk membatalkan proses saat client disconnect.
+- Update `Progress Log` dengan detail apakah provider sudah token-level streaming atau masih chunked fallback.
 
 Validasi:
 
@@ -483,6 +611,8 @@ Checklist:
 - Saat `proposal_created`, patch query `proposals(workflowId)`.
 - Saat `run_completed`, patch `runs(workflowId)` dan invalidate `workflows`.
 - Saat `run_failed`, patch run error dan restore composer input bila perlu.
+- Setelah event final terbukti stabil, hapus `setInterval` polling run aktif.
+- Update `Progress Log` setelah polling dihapus.
 
 State UI:
 
@@ -496,12 +626,42 @@ Validasi:
 - Scroll tetap nyaman di sidebar Excalidraw.
 - Error stream terlihat di panel, bukan hanya toast.
 
-### Fase 5 - TanStack Start migration
+### Fase 5 - Cleanup old path dan hardening
 
-Tujuan: memindahkan `/canvas` ke stack wajib.
+Tujuan: menghapus jalur lama agar tidak ada dua sistem chat yang hidup permanen.
 
 Checklist:
 
+- Hapus polling `setInterval` agent run.
+- Hapus fallback mutation lama yang sudah tidak dipakai setelah SSE parity.
+- Tambahkan retry policy untuk stream disconnect.
+- Tambahkan pagination messages.
+- Tambahkan empty/error/loading state yang konsisten dengan PORTO: thin border, icon-only controls, monokrom, compact.
+- Tambahkan logging run lifecycle di backend.
+- Tambahkan guard rate limit bila endpoint stream mulai dipakai publik.
+- Update `Progress Log` dengan daftar fallback yang dihapus.
+
+Validasi akhir SSE-first:
+
+- `pnpm --dir frontend lint`
+- `pnpm --dir frontend build`
+- Manual test `/canvas`:
+  - create workflow
+  - send prompt
+  - stream response
+  - mention frame
+  - proposal approve/apply
+  - retry failed run
+  - switch workflow
+  - reload page
+
+### Fase 6 - TanStack Start migration planning
+
+Tujuan: merencanakan dan baru kemudian memindahkan `/canvas` ke stack wajib setelah SSE-first stabil.
+
+Checklist:
+
+- Review ulang dokumentasi TanStack Start terbaru sebelum implementasi migration.
 - Scaffold TanStack Start app dengan React, TanStack Router, TanStack Query, Vite.
 - Buat route `/canvas`.
 - Setup QueryClient provider di root route.
@@ -524,35 +684,6 @@ Validasi:
 - Excalidraw tampil dan interaktif.
 - Agent chat streaming berjalan.
 - Build TanStack Start sukses.
-
-### Fase 6 - Cleanup dan hardening
-
-Tujuan: menghapus pola lama dan memperkuat reliability.
-
-Checklist:
-
-- Hapus polling `setInterval` agent run.
-- Hapus path mutation lama yang tidak dipakai.
-- Tambahkan retry policy untuk stream disconnect.
-- Tambahkan pagination messages.
-- Tambahkan empty/error/loading state yang konsisten dengan PORTO: thin border, icon-only controls, monokrom, compact.
-- Tambahkan logging run lifecycle di backend.
-- Tambahkan guard rate limit bila endpoint stream mulai dipakai publik.
-
-Validasi akhir:
-
-- `pnpm --dir frontend lint`
-- `pnpm --dir frontend build`
-- `pnpm --dir backend db:generate` bila schema berubah
-- Manual test `/canvas`:
-  - create workflow
-  - send prompt
-  - stream response
-  - mention frame
-  - proposal approve/apply
-  - retry failed run
-  - switch workflow
-  - reload page
 
 ## Acceptance Criteria
 
@@ -609,9 +740,10 @@ Mitigasi:
 ## Urutan Prioritas Singkat
 
 1. Pecah `canvas-agent-panel.tsx` menjadi hooks dan komponen kecil.
-2. Definisikan TanStack Query keys dan event SSE.
-3. Buat SSE endpoint untuk streaming chat.
-4. Hubungkan SSE ke cache TanStack Query.
-5. Matikan polling run aktif.
-6. Migrasikan `/canvas` ke TanStack Start dengan Excalidraw client-only.
+2. Samakan workflow picker dan agent panel ke hook workflow yang sama.
+3. Definisikan TanStack Query keys dan event SSE.
+4. Buat SSE endpoint untuk streaming chat.
+5. Hubungkan SSE ke cache TanStack Query.
+6. Matikan polling run aktif dan hapus fallback lama setelah parity aman.
 7. Tambahkan pagination, retry stream, dan hardening.
+8. Rencanakan/migrasikan `/canvas` ke TanStack Start dengan Excalidraw client-only setelah current app stabil.

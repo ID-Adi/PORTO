@@ -30,6 +30,21 @@ type CanvasAgentProvider = "gemini" | "vertex" | "openrouter";
 type CanvasAgentMessage = typeof canvasAgentMessages.$inferSelect;
 type CanvasAgentWorkflow = typeof canvasAgentWorkflows.$inferSelect;
 type CanvasAgentSettings = typeof aiToolSettings.$inferSelect;
+type CanvasAgentRun = typeof canvasAgentRuns.$inferSelect;
+type CanvasAgentProposal = typeof canvasAgentProposals.$inferSelect;
+
+type CanvasAgentRunCallbacks = {
+  signal?: AbortSignal;
+  onRunStarted?: (run: CanvasAgentRun) => void | Promise<void>;
+  onAssistantDelta?: (delta: string) => void | Promise<void>;
+  onAssistantMessage?: (message: CanvasAgentMessage) => void | Promise<void>;
+  onProposalCreated?: (proposal: CanvasAgentProposal) => void | Promise<void>;
+  onRunCompleted?: (run: CanvasAgentRun) => void | Promise<void>;
+  onRunFailed?: (
+    run: CanvasAgentRun | null,
+    errorMessage: string,
+  ) => void | Promise<void>;
+};
 
 const proposalChangeSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("add"), element: z.unknown() }),
@@ -398,12 +413,16 @@ async function callProvider(args: {
   });
 }
 
+function errorMessage(error: unknown) {
+  return error instanceof TtsError || error instanceof Error
+    ? error.message
+    : "Canvas Agent gagal memproses pesan";
+}
+
 async function failRun(runId: number, error: unknown) {
   const message =
-    error instanceof TtsError || error instanceof Error
-      ? error.message
-      : "Canvas Agent gagal memproses pesan";
-  await db
+    typeof error === "string" ? error : errorMessage(error);
+  const [run] = await db
     .update(canvasAgentRuns)
     .set({
       status: "failed",
@@ -411,10 +430,100 @@ async function failRun(runId: number, error: unknown) {
       completedAt: new Date(),
       updatedAt: new Date(),
     })
-    .where(eq(canvasAgentRuns.id, runId));
+    .where(eq(canvasAgentRuns.id, runId))
+    .returning();
+  console.log(`[canvas-agent] run ${runId} failed: ${message}`);
+  return run ?? null;
 }
 
-export async function runCanvasAgentRun(runId: number): Promise<void> {
+function deltaChunks(content: string) {
+  const chunks: string[] = [];
+  for (let index = 0; index < content.length; index += 96) {
+    chunks.push(content.slice(index, index + 96));
+  }
+  return chunks;
+}
+
+async function emitChunkedDeltaFallback(
+  content: string,
+  callbacks: CanvasAgentRunCallbacks,
+) {
+  for (const chunk of deltaChunks(content)) {
+    if (callbacks.signal?.aborted) return;
+    await callbacks.onAssistantDelta?.(chunk);
+  }
+}
+
+export async function createCanvasAgentUserMessageRun(args: {
+  workflow: Pick<CanvasAgentWorkflow, "id" | "title">;
+  content: string;
+  frameRefs: CanvasAgentFrameRef[];
+  metadata?: Record<string, unknown>;
+  enqueue?: boolean;
+}) {
+  const content = args.content.trim();
+  const [message] = await db
+    .insert(canvasAgentMessages)
+    .values({
+      workflowId: args.workflow.id,
+      role: "user",
+      content,
+      frameRefs: args.frameRefs,
+      metadata: args.metadata ?? {},
+    })
+    .returning();
+
+  const titlePatch =
+    args.workflow.title === "Untitled workflow"
+      ? { title: content.slice(0, 120) || args.workflow.title }
+      : {};
+
+  await db
+    .update(canvasAgentWorkflows)
+    .set({ ...titlePatch, updatedAt: new Date() })
+    .where(eq(canvasAgentWorkflows.id, args.workflow.id));
+
+  const [settings] = await db
+    .select({
+      enabled: aiToolSettings.canvasAgentEnabled,
+      provider: aiToolSettings.canvasAgentProvider,
+      model: aiToolSettings.canvasAgentModel,
+    })
+    .from(aiToolSettings)
+    .where(eq(aiToolSettings.id, 1))
+    .limit(1);
+
+  let run: CanvasAgentRun | null = null;
+  if (settings?.enabled) {
+    const [createdRun] = await db
+      .insert(canvasAgentRuns)
+      .values({
+        workflowId: args.workflow.id,
+        userMessageId: message.id,
+        status: "pending",
+        provider: settings.provider,
+        model: settings.model,
+        inputSnapshot: {
+          frameRefs: args.frameRefs,
+          source: args.metadata?.source ?? "canvas-agent-panel",
+          clientMessageId: args.metadata?.clientMessageId,
+        },
+      })
+      .returning();
+    run = createdRun;
+    console.log(`[canvas-agent] run ${createdRun.id} queued`);
+    if (args.enqueue !== false) {
+      enqueueCanvasAgentRun(createdRun.id);
+    }
+  }
+
+  return { message, run };
+}
+
+export async function runCanvasAgentRun(
+  runId: number,
+  callbacks: CanvasAgentRunCallbacks = {},
+): Promise<void> {
   try {
     const [run] = await db
       .select()
@@ -423,7 +532,7 @@ export async function runCanvasAgentRun(runId: number): Promise<void> {
       .limit(1);
     if (!run || (run.status !== "pending" && run.status !== "failed")) return;
 
-    await db
+    const [runningRun] = await db
       .update(canvasAgentRuns)
       .set({
         status: "running",
@@ -431,7 +540,10 @@ export async function runCanvasAgentRun(runId: number): Promise<void> {
         startedAt: new Date(),
         updatedAt: new Date(),
       })
-      .where(eq(canvasAgentRuns.id, run.id));
+      .where(eq(canvasAgentRuns.id, run.id))
+      .returning();
+    console.log(`[canvas-agent] run ${run.id} running`);
+    await callbacks.onRunStarted?.(runningRun ?? run);
 
     const [workflow] = await db
       .select()
@@ -470,6 +582,7 @@ export async function runCanvasAgentRun(runId: number): Promise<void> {
     });
     const output = parseAgentOutput(raw);
     const frameRefs = (userMessage.frameRefs ?? []) as CanvasAgentFrameRef[];
+    await emitChunkedDeltaFallback(output.content, callbacks);
 
     const [assistantMessage] = await db
       .insert(canvasAgentMessages)
@@ -486,18 +599,25 @@ export async function runCanvasAgentRun(runId: number): Promise<void> {
         },
       })
       .returning();
+    await callbacks.onAssistantMessage?.(assistantMessage);
 
+    let proposal: CanvasAgentProposal | null = null;
     if (output.proposal) {
-      await db.insert(canvasAgentProposals).values({
-        workflowId: workflow.id,
-        createdFromMessageId: assistantMessage.id,
-        summary: output.proposal.summary,
-        frameIds: output.proposal.frameIds,
-        changes: output.proposal.changes as CanvasAgentChange[],
-      });
+      const [createdProposal] = await db
+        .insert(canvasAgentProposals)
+        .values({
+          workflowId: workflow.id,
+          createdFromMessageId: assistantMessage.id,
+          summary: output.proposal.summary,
+          frameIds: output.proposal.frameIds,
+          changes: output.proposal.changes as CanvasAgentChange[],
+        })
+        .returning();
+      proposal = createdProposal ?? null;
+      if (proposal) await callbacks.onProposalCreated?.(proposal);
     }
 
-    await Promise.all([
+    const [[completedRun]] = await Promise.all([
       db
         .update(canvasAgentRuns)
         .set({
@@ -506,14 +626,18 @@ export async function runCanvasAgentRun(runId: number): Promise<void> {
           completedAt: new Date(),
           updatedAt: new Date(),
         })
-        .where(eq(canvasAgentRuns.id, run.id)),
+        .where(eq(canvasAgentRuns.id, run.id))
+        .returning(),
       db
         .update(canvasAgentWorkflows)
         .set({ updatedAt: new Date() })
         .where(eq(canvasAgentWorkflows.id, workflow.id)),
     ]);
+    console.log(`[canvas-agent] run ${run.id} succeeded`);
+    await callbacks.onRunCompleted?.(completedRun ?? run);
   } catch (error) {
-    await failRun(runId, error);
+    const run = await failRun(runId, error);
+    await callbacks.onRunFailed?.(run, errorMessage(error));
   }
 }
 

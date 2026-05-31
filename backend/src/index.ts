@@ -5,6 +5,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 
 import { auth } from "./auth/index.js";
+import { canvasAgentStreamRoute } from "./routes/canvas-agent-stream.js";
 import { registerPasswordResetRoutes } from "./routes/password-reset.js";
 import { uploadRoute } from "./routes/upload.js";
 import { createTRPCContext } from "./trpc/init.js";
@@ -51,6 +52,7 @@ registerPasswordResetRoutes(app);
 // Uses a regex route param (Hono doesn't support ** wildcards).
 app.all("/api/auth/:path{.+}", (c) => auth.handler(c.req.raw));
 
+app.route("/api/canvas-agent", canvasAgentStreamRoute);
 app.route("/api/upload", uploadRoute);
 
 app.use(

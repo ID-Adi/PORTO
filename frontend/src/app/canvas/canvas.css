@@ -432,6 +432,24 @@
   border: 1px dashed var(--color-surface-highest);
 }
 
+.canvas-porto-wrapper .canvas-agent-load-more {
+  display: inline-flex;
+  align-self: center;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid var(--color-surface-highest);
+  background: transparent;
+  padding: 0.35rem 0.6rem;
+  font-family: var(--font-family-monospace);
+  font-size: 10px;
+  color: var(--color-on-surface-muted);
+  text-transform: uppercase;
+}
+
+.canvas-porto-wrapper .canvas-agent-load-more:disabled {
+  opacity: 0.55;
+}
+
 .canvas-porto-wrapper .canvas-agent-message {
   display: flex;
   flex-direction: column;
@@ -567,6 +585,7 @@
 }
 
 .canvas-porto-wrapper .canvas-agent-composer-input {
+  position: relative;
   min-width: 0;
   border: 1px solid var(--color-surface-highest);
   background: var(--color-surface-low);
@@ -576,6 +595,17 @@
 
 .canvas-porto-wrapper .canvas-agent-composer-input:focus-within {
   border-color: var(--color-on-surface);
+}
+
+.canvas-porto-wrapper .canvas-agent-composer-input > span {
+  position: absolute;
+  right: 0.7rem;
+  bottom: 0.45rem;
+  font-family: var(--font-family-monospace);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  color: var(--color-on-surface-muted);
+  text-transform: uppercase;
 }
 
 .canvas-porto-wrapper .canvas-agent-composer textarea {

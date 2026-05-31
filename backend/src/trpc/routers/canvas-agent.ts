@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, lt } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "../../db/index.js";
@@ -227,6 +227,66 @@ export const canvasAgentRouter = router({
       return { workflow, messages, proposals, runs };
     }),
 
+  getWorkflowSummary: authenticatedProcedure
+    .input(z.object({ id: z.number().int().positive() }))
+    .query(async ({ ctx, input }) => {
+      return requireWorkflow(input.id, ctx.session.user.id);
+    }),
+
+  getWorkflowMessages: authenticatedProcedure
+    .input(
+      z.object({
+        id: z.number().int().positive(),
+        cursor: z.number().int().positive().optional(),
+        limit: z.number().int().min(1).max(100).optional().default(40),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const workflow = await requireWorkflow(input.id, ctx.session.user.id);
+      const rows = await db
+        .select()
+        .from(canvasAgentMessages)
+        .where(
+          input.cursor
+            ? and(
+                eq(canvasAgentMessages.workflowId, workflow.id),
+                lt(canvasAgentMessages.id, input.cursor),
+              )
+            : eq(canvasAgentMessages.workflowId, workflow.id),
+        )
+        .orderBy(desc(canvasAgentMessages.id))
+        .limit(input.limit + 1);
+      const hasMore = rows.length > input.limit;
+      const items = rows.slice(0, input.limit).reverse();
+      return {
+        items,
+        nextCursor: hasMore ? items[0]?.id ?? null : null,
+      };
+    }),
+
+  getWorkflowRuns: authenticatedProcedure
+    .input(z.object({ id: z.number().int().positive() }))
+    .query(async ({ ctx, input }) => {
+      const workflow = await requireWorkflow(input.id, ctx.session.user.id);
+      return db
+        .select()
+        .from(canvasAgentRuns)
+        .where(eq(canvasAgentRuns.workflowId, workflow.id))
+        .orderBy(desc(canvasAgentRuns.createdAt))
+        .limit(20);
+    }),
+
+  getWorkflowProposals: authenticatedProcedure
+    .input(z.object({ id: z.number().int().positive() }))
+    .query(async ({ ctx, input }) => {
+      const workflow = await requireWorkflow(input.id, ctx.session.user.id);
+      return db
+        .select()
+        .from(canvasAgentProposals)
+        .where(eq(canvasAgentProposals.workflowId, workflow.id))
+        .orderBy(desc(canvasAgentProposals.createdAt));
+    }),
+
   createWorkflow: authenticatedProcedure
     .input(
       z
@@ -350,75 +410,6 @@ export const canvasAgentRouter = router({
         .where(eq(canvasAgentWorkflows.id, input.workflowId));
 
       return row;
-    }),
-
-  sendMessage: authenticatedProcedure
-    .input(
-      z.object({
-        workflowId: z.number().int().positive(),
-        content: z.string().min(1).max(MESSAGE_CONTENT_MAX),
-        frameRefs: z.array(frameRefSchema).max(MAX_FRAME_REFS).default([]),
-        metadata: metadataSchema.optional(),
-      }),
-    )
-    .mutation(async ({ ctx, input }) => {
-      const workflow = await requireWorkflow(
-        input.workflowId,
-        ctx.session.user.id,
-      );
-      const content = input.content.trim();
-      const [message] = await db
-        .insert(canvasAgentMessages)
-        .values({
-          workflowId: workflow.id,
-          role: "user",
-          content,
-          frameRefs: input.frameRefs,
-          metadata: input.metadata ?? {},
-        })
-        .returning();
-
-      const titlePatch =
-        workflow.title === "Untitled workflow"
-          ? { title: content.slice(0, WORKFLOW_TITLE_MAX) || workflow.title }
-          : {};
-
-      await db
-        .update(canvasAgentWorkflows)
-        .set({ ...titlePatch, updatedAt: new Date() })
-        .where(eq(canvasAgentWorkflows.id, workflow.id));
-
-      const [settings] = await db
-        .select({
-          enabled: aiToolSettings.canvasAgentEnabled,
-          provider: aiToolSettings.canvasAgentProvider,
-          model: aiToolSettings.canvasAgentModel,
-        })
-        .from(aiToolSettings)
-        .where(eq(aiToolSettings.id, 1))
-        .limit(1);
-
-      let run: typeof canvasAgentRuns.$inferSelect | null = null;
-      if (settings?.enabled) {
-        const [createdRun] = await db
-          .insert(canvasAgentRuns)
-          .values({
-            workflowId: workflow.id,
-            userMessageId: message.id,
-            status: "pending",
-            provider: settings.provider,
-            model: settings.model,
-            inputSnapshot: {
-              frameRefs: input.frameRefs,
-              source: input.metadata?.source ?? "canvas-agent-panel",
-            },
-          })
-          .returning();
-        run = createdRun;
-        enqueueCanvasAgentRun(createdRun.id);
-      }
-
-      return { message, run };
     }),
 
   retryRun: authenticatedProcedure
