@@ -37,6 +37,13 @@ export function SiteHeader() {
   ] as const;
   const canvasHref = process.env.NEXT_PUBLIC_EXCALIDRAW_URL ?? "/canvas";
   const isCanvasActive = pathname.startsWith("/canvas");
+  const isExternalCanvas = /^https?:\/\//.test(canvasHref);
+  const canvasLinkClassName = cn(
+    "inline-flex h-8 items-center gap-2 px-2 font-mono text-[12px] font-medium transition-[background-color,color]",
+    isCanvasActive
+      ? "bg-muted/60 text-foreground"
+      : "text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+  );
 
   const railItems = navItems.filter((item) => item.href !== "/");
 
@@ -91,20 +98,30 @@ export function SiteHeader() {
               })}
             </div>
 
-            <a
-              href={canvasHref}
-              aria-current={isCanvasActive ? "page" : undefined}
-              aria-label="Canvas"
-              className={cn(
-                "inline-flex h-8 items-center gap-2 px-2 font-mono text-[12px] font-medium transition-[background-color,color]",
-                isCanvasActive
-                  ? "bg-muted/60 text-foreground"
-                  : "text-muted-foreground hover:bg-muted/40 hover:text-foreground"
-              )}
-            >
-              <Frame className="size-3.5" aria-hidden />
-              <span className="hidden md:inline">Canvas</span>
-            </a>
+            {isExternalCanvas ? (
+              <a
+                href={canvasHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-current={isCanvasActive ? "page" : undefined}
+                aria-label="Canvas"
+                className={canvasLinkClassName}
+              >
+                <Frame className="size-3.5" aria-hidden />
+                <span className="hidden md:inline">Canvas</span>
+              </a>
+            ) : (
+              <Link
+                href={canvasHref}
+                prefetch
+                aria-current={isCanvasActive ? "page" : undefined}
+                aria-label="Canvas"
+                className={canvasLinkClassName}
+              >
+                <Frame className="size-3.5" aria-hidden />
+                <span className="hidden md:inline">Canvas</span>
+              </Link>
+            )}
 
             <div className="ml-auto flex items-center">
               <Tooltip>
