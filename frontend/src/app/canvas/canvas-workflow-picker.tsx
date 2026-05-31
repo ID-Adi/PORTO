@@ -69,7 +69,8 @@ export function CanvasWorkflowPicker({
     setPendingId("new");
     try {
       const row = await createWorkflow.mutateAsync({ title: "Untitled workflow" });
-      await utils.canvasAgent.listWorkflows.invalidate();
+      // Non-blocking — jangan tunggu refetch daftar sebelum pindah workflow.
+      void utils.canvasAgent.listWorkflows.invalidate();
       await switchWorkflow(row.id);
       onOpenChange(false);
     } catch (error) {

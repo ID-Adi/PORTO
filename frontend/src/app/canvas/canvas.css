@@ -521,6 +521,41 @@
   text-transform: uppercase;
 }
 
+.canvas-porto-wrapper .canvas-agent-run-errors {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.canvas-porto-wrapper .canvas-agent-run-error {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border: 1px solid var(--color-surface-highest);
+  padding: 0.75rem;
+}
+
+.canvas-porto-wrapper .canvas-agent-run-error p {
+  margin: 0.2rem 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--color-on-surface-muted);
+}
+
+.canvas-porto-wrapper .canvas-agent-run-error button {
+  flex: none;
+  gap: 0.35rem;
+  min-height: 2rem;
+  padding: 0 0.65rem;
+  font-family: var(--font-family-monospace);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .canvas-porto-wrapper .canvas-agent-composer {
   display: grid;
   flex: none;

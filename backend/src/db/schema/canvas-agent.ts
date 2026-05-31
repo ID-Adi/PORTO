@@ -34,6 +34,12 @@ export type CanvasAgentChange =
   | { type: "update"; elementId: string; patch: Record<string, unknown> }
   | { type: "delete"; elementId: string };
 
+export type CanvasAgentRunStatus =
+  | "pending"
+  | "running"
+  | "succeeded"
+  | "failed";
+
 export const canvasAgentWorkflows = pgTable("canvas_agent_workflows", {
   id: serial("id").primaryKey(),
   userId: text("user_id")
@@ -95,6 +101,28 @@ export const canvasAgentProposals = pgTable("canvas_agent_proposals", {
     .default([]),
   errorMessage: text("error_message"),
   appliedAt: timestamp("applied_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const canvasAgentRuns = pgTable("canvas_agent_runs", {
+  id: serial("id").primaryKey(),
+  workflowId: integer("workflow_id")
+    .notNull()
+    .references(() => canvasAgentWorkflows.id, { onDelete: "cascade" }),
+  userMessageId: integer("user_message_id")
+    .notNull()
+    .references(() => canvasAgentMessages.id, { onDelete: "cascade" }),
+  status: text("status").notNull().default("pending"),
+  provider: text("provider").notNull(),
+  model: text("model").notNull(),
+  inputSnapshot: jsonb("input_snapshot")
+    .$type<CanvasAgentMetadata>()
+    .notNull()
+    .default({}),
+  errorMessage: text("error_message"),
+  startedAt: timestamp("started_at"),
+  completedAt: timestamp("completed_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

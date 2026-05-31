@@ -13,7 +13,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -58,6 +58,7 @@ type WorkflowRow = RouterOutputs["canvasAgent"]["listWorkflows"][number];
 type WorkflowDetail = RouterOutputs["canvasAgent"]["getWorkflow"];
 type MessageRow = WorkflowDetail["messages"][number];
 type ProposalRow = WorkflowDetail["proposals"][number];
+type RunRow = WorkflowDetail["runs"][number];
 type ProposalStatus =
   | "pending_approval"
   | "approved"
@@ -172,31 +173,6 @@ function sortWorkflowRows(rows: WorkflowRow[]) {
     if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1;
     return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
   });
-}
-
-function buildAssistantDraft(content: string, frameRefs: FrameRef[]) {
-  const frameNames = frameRefs.map((frame) => frame.name || frame.mention);
-  const target = frameNames.length > 0 ? frameNames.join(", ") : "canvas";
-  const mentionHint =
-    frameRefs.length > 0
-      ? `Saya membaca konteks ${target}.`
-      : "Belum ada frame yang terhubung. Gunakan @nama_frame atau pilih frame di canvas.";
-
-  return {
-    content: [
-      mentionHint,
-      "Saya buat proposal awal tanpa mengubah canvas langsung.",
-      `Brief user: ${content}`,
-    ].join("\n\n"),
-    proposal: {
-      summary:
-        frameRefs.length > 0
-          ? `Proposal bantuan untuk ${target}`
-          : "Proposal awal agent canvas",
-      frameIds: frameRefs.map((frame) => frame.id),
-      changes: [] as ProposalChange[],
-    },
-  };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -349,10 +325,6 @@ export function CanvasAgentPanel({
   const [historyOpen, setHistoryOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<WorkflowRow | null>(null);
 
-  const configQuery = trpc.canvasAgent.getConfig.useQuery(undefined, {
-    enabled: enabled && isAuthed,
-    staleTime: 60_000,
-  });
   const workflowsQuery = trpc.canvasAgent.listWorkflows.useQuery(undefined, {
     enabled: enabled && isAuthed,
   });
@@ -368,9 +340,8 @@ export function CanvasAgentPanel({
   const createWorkflowMutation = trpc.canvasAgent.createWorkflow.useMutation();
   const updateWorkflowMutation = trpc.canvasAgent.updateWorkflow.useMutation();
   const deleteWorkflowMutation = trpc.canvasAgent.deleteWorkflow.useMutation();
-  const addMessageMutation = trpc.canvasAgent.addMessage.useMutation();
-  const saveAssistantMutation =
-    trpc.canvasAgent.saveAssistantMessage.useMutation();
+  const sendMessageMutation = trpc.canvasAgent.sendMessage.useMutation();
+  const retryRunMutation = trpc.canvasAgent.retryRun.useMutation();
   const updateProposalMutation =
     trpc.canvasAgent.updateProposalStatus.useMutation();
 
@@ -379,9 +350,14 @@ export function CanvasAgentPanel({
     createWorkflowMutation.isPending ||
     updateWorkflowMutation.isPending ||
     deleteWorkflowMutation.isPending ||
-    addMessageMutation.isPending ||
-    saveAssistantMutation.isPending ||
+    retryRunMutation.isPending ||
     updateProposalMutation.isPending;
+  const isSending = sendMessageMutation.isPending;
+  const runs = workflowQuery.data?.runs ?? [];
+  const activeRuns = runs.filter(
+    (run) => run.status === "pending" || run.status === "running",
+  );
+  const failedRuns = runs.filter((run) => run.status === "failed").slice(0, 3);
 
   const activeWorkflowRow = useMemo(() => {
     if (activeWorkflowId === null) return null;
@@ -404,6 +380,15 @@ export function CanvasAgentPanel({
     },
     [utils],
   );
+
+  useEffect(() => {
+    if (!activeWorkflowId || activeRuns.length === 0) return;
+    const timer = window.setInterval(() => {
+      void workflowQuery.refetch();
+      void utils.canvasAgent.listWorkflows.invalidate();
+    }, 1800);
+    return () => window.clearInterval(timer);
+  }, [activeRuns.length, activeWorkflowId, workflowQuery, utils]);
 
   // "+ Workflow baru" eksplisit → buat lalu pindah (canvas jadi blank).
   const createWorkflow = useCallback(
@@ -480,14 +465,35 @@ export function CanvasAgentPanel({
 
   async function handleSend() {
     const content = input.trim();
-    if (!content || busy) return;
+    if (!content || isSending) return;
+    const optimisticId = -Date.now();
     try {
       // Pastikan ada workflow aktif TANPA mengosongkan kanvas (adopsi scene
       // saat ini bila workflow baru dibuat).
       const workflowId = activeWorkflow?.id ?? (await ensureWorkflow());
-      const currentTitle = activeWorkflow?.title ?? "Untitled workflow";
       const frameRefs = collectFrameRefs(apiRef.current, content);
-      await addMessageMutation.mutateAsync({
+      setInput("");
+      const optimisticMessage: MessageRow = {
+        id: optimisticId,
+        workflowId,
+        role: "user",
+        content,
+        frameRefs,
+        metadata: {
+          source: "canvas-agent-panel",
+          optimistic: true,
+        },
+        createdAt: new Date().toISOString(),
+      };
+      utils.canvasAgent.getWorkflow.setData({ id: workflowId }, (current) => {
+        if (!current) return current;
+        return {
+          ...current,
+          messages: [...current.messages, optimisticMessage],
+        };
+      });
+
+      const result = await sendMessageMutation.mutateAsync({
         workflowId,
         content,
         frameRefs,
@@ -495,33 +501,51 @@ export function CanvasAgentPanel({
           source: "canvas-agent-panel",
         },
       });
-
-      if (currentTitle === "Untitled workflow") {
-        await updateWorkflowMutation.mutateAsync({
-          id: workflowId,
-          title: content.slice(0, 72),
-        });
+      utils.canvasAgent.getWorkflow.setData({ id: workflowId }, (current) => {
+        if (!current) return current;
+        return {
+          ...current,
+          messages: current.messages.map((message) =>
+            message.id === optimisticId ? result.message : message,
+          ),
+          runs: result.run
+            ? [
+                result.run,
+                ...current.runs.filter((run) => run.id !== result.run?.id),
+              ]
+            : current.runs,
+        };
+      });
+      if (!result.run) {
+        toast.info("Pesan tersimpan. Canvas Agent belum enabled di AI Settings.");
       }
-
-      if (frameRefs.length > 0) {
-        const draft = buildAssistantDraft(content, frameRefs);
-        await saveAssistantMutation.mutateAsync({
-          workflowId,
-          content: draft.content,
-          frameRefs,
-          metadata: {
-            source: "local-draft",
-            provider: configQuery.data?.provider ?? null,
-            model: configQuery.data?.model ?? null,
-          },
-          proposal: draft.proposal,
-        });
-      }
-
-      setInput("");
       invalidateWorkflow(workflowId);
     } catch (error) {
+      setInput(content);
+      if (activeWorkflowId !== null) {
+        utils.canvasAgent.getWorkflow.setData(
+          { id: activeWorkflowId },
+          (current) => {
+            if (!current) return current;
+            return {
+              ...current,
+              messages: current.messages.filter(
+                (message) => message.id !== optimisticId,
+              ),
+            };
+          },
+        );
+      }
       toast.error(error instanceof Error ? error.message : "Gagal mengirim chat");
+    }
+  }
+
+  async function handleRetryRun(run: RunRow) {
+    try {
+      await retryRunMutation.mutateAsync({ id: run.id });
+      invalidateWorkflow(run.workflowId);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Gagal retry agent");
     }
   }
 
@@ -797,6 +821,43 @@ export function CanvasAgentPanel({
           <MessageBubble key={message.id} message={message} />
         ))}
 
+        {activeRuns.length > 0 ? (
+          <div className="canvas-agent-loading">
+            <Loader2 aria-hidden className="size-3.5 animate-spin" />
+            Agent thinking...
+          </div>
+        ) : null}
+
+        {failedRuns.length > 0 ? (
+          <div className="canvas-agent-run-errors">
+            {failedRuns.map((run) => (
+              <div key={run.id} className="canvas-agent-run-error">
+                <div>
+                  <span className="canvas-agent-section-kicker">agent failed</span>
+                  <p>{run.errorMessage ?? "Agent gagal memproses pesan."}</p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={retryRunMutation.isPending}
+                  onClick={() => {
+                    void handleRetryRun(run);
+                  }}
+                >
+                  <Loader2
+                    aria-hidden
+                    className={cn(
+                      retryRunMutation.isPending && "animate-spin",
+                    )}
+                  />
+                  Retry
+                </Button>
+              </div>
+            ))}
+          </div>
+        ) : null}
+
         {workflowQuery.data?.proposals.length ? (
           <div className="canvas-agent-proposals">
             {workflowQuery.data.proposals.map((proposal) => (
@@ -840,7 +901,7 @@ export function CanvasAgentPanel({
         >
           <Textarea
             value={input}
-            disabled={busy}
+            disabled={isSending}
             onChange={(event) => setInput(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
@@ -857,9 +918,9 @@ export function CanvasAgentPanel({
           size="icon-lg"
           aria-label="Kirim chat"
           title="Kirim chat"
-          disabled={!input.trim() || busy}
+          disabled={!input.trim() || isSending}
         >
-          {busy ? (
+          {isSending ? (
             <Loader2 aria-hidden className="animate-spin" />
           ) : (
             <Send aria-hidden />

@@ -294,7 +294,7 @@ function TtsSpeakerRail({
   }
 
   return (
-    <aside className="flex w-full flex-col border border-(--line) bg-(--background) lg:w-56">
+    <aside className="flex w-full flex-col border border-(--line) bg-(--background)">
       <header className="flex shrink-0 items-center justify-between gap-2 border-b border-(--line) px-3 py-2.5">
         <span className="font-mono text-[10px] tracking-[0.2em] text-(--muted-foreground) uppercase">
           Speakers
@@ -399,7 +399,7 @@ function TtsHistoryPanel({
   isLoading: boolean;
 }) {
   return (
-    <aside className="flex w-full flex-col border border-(--line) bg-(--background) lg:max-h-[60vh] lg:w-60">
+    <aside className="flex h-full w-full flex-col border border-(--line) bg-(--background) lg:max-h-[70vh]">
       <header className="flex shrink-0 items-center justify-between gap-2 border-b border-(--line) px-3 py-2.5">
         <span className="font-mono text-[10px] tracking-[0.2em] text-(--muted-foreground) uppercase">
           History
@@ -409,7 +409,7 @@ function TtsHistoryPanel({
         </span>
       </header>
 
-      <div className="min-h-36 overflow-y-auto p-2">
+      <div className="min-h-36 flex-1 overflow-y-auto p-2">
         {isLoading ? (
           <div className="grid min-h-28 place-items-center font-mono text-[10px] tracking-[0.18em] text-(--muted-foreground) uppercase">
             Loading
@@ -427,11 +427,11 @@ function TtsHistoryPanel({
               return (
                 <div key={entry.id} className="border border-(--line) p-2">
                   <div className="mb-2 flex items-center justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="truncate text-xs font-medium">
+                    <div className="min-w-0 max-w-full flex-1">
+                      <div className="max-w-full truncate overflow-hidden text-xs font-medium whitespace-nowrap">
                         {entry.prompt || "Untitled audio"}
                       </div>
-                      <div className="mt-1 font-mono text-[9px] tracking-[0.12em] text-(--muted-foreground) uppercase">
+                      <div className="mt-1 max-w-full truncate overflow-hidden font-mono text-[9px] tracking-[0.12em] whitespace-nowrap text-(--muted-foreground) uppercase">
                         {inputMeta.model ?? "tts"} /{" "}
                         {outputMeta.durationSeconds
                           ? `${outputMeta.durationSeconds}s`
@@ -843,45 +843,47 @@ export function TtsCard() {
       </div>
 
       <div className="screen-line-top px-4 py-4">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
-          <TtsSpeakerRail
-            speakers={session.speakers}
-            voices={voiceOptions}
-            disabled={isGenerating}
-            singleVoice={isSingleVoice}
-            onChange={setSpeakerList}
-            onPreview={onPreview}
-            previewingVoice={previewingVoice}
-          />
-
-          <div className="flex min-h-56 items-start justify-center lg:flex-1">
-            <div className="relative w-full max-w-xl border border-dashed border-(--line) bg-(--muted)/20 p-4">
-              {isGenerating ? (
-                <div className="aspect-video">
-                  <GeneratingAnimation
-                    label="Synthesizing Audio"
-                    startedAt={session.startedAt}
-                  />
-                </div>
-              ) : previewUrl ? (
-                <div className="grid min-h-48 content-center gap-4">
-                  <div className="grid place-items-center gap-3 font-mono text-[10px] tracking-[0.2em] text-(--muted-foreground) uppercase">
-                    <Mic2 className="size-8" aria-hidden />
-                    Audio preview
-                    {displayTokens?.total != null ? (
-                      <span className="text-(--foreground)">
-                        {displayTokens.total.toLocaleString()} tokens
-                      </span>
-                    ) : null}
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,24rem)] lg:items-stretch">
+          <div className="grid min-w-0 gap-4">
+            <div className="flex min-h-56 items-start">
+              <div className="relative w-full border border-dashed border-(--line) bg-(--muted)/20 p-4">
+                {isGenerating ? (
+                  <div className="aspect-video">
+                    <GeneratingAnimation
+                      label="Synthesizing Audio"
+                      startedAt={session.startedAt}
+                    />
                   </div>
-                  <audio controls src={previewUrl} className="w-full" />
-                </div>
-              ) : (
-                <div className="grid min-h-48 place-items-center font-mono text-[10px] tracking-[0.2em] text-(--muted-foreground) uppercase">
-                  Output preview · audio
-                </div>
-              )}
+                ) : previewUrl ? (
+                  <div className="grid min-h-48 content-center gap-4">
+                    <div className="grid place-items-center gap-3 font-mono text-[10px] tracking-[0.2em] text-(--muted-foreground) uppercase">
+                      <Mic2 className="size-8" aria-hidden />
+                      Audio preview
+                      {displayTokens?.total != null ? (
+                        <span className="text-(--foreground)">
+                          {displayTokens.total.toLocaleString()} tokens
+                        </span>
+                      ) : null}
+                    </div>
+                    <audio controls src={previewUrl} className="w-full" />
+                  </div>
+                ) : (
+                  <div className="grid min-h-48 place-items-center font-mono text-[10px] tracking-[0.2em] text-(--muted-foreground) uppercase">
+                    Output preview · audio
+                  </div>
+                )}
+              </div>
             </div>
+
+            <TtsSpeakerRail
+              speakers={session.speakers}
+              voices={voiceOptions}
+              disabled={isGenerating}
+              singleVoice={isSingleVoice}
+              onChange={setSpeakerList}
+              onPreview={onPreview}
+              previewingVoice={previewingVoice}
+            />
           </div>
 
           <TtsHistoryPanel
