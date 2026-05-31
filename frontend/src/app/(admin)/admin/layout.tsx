@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 
 import { authClient } from "@/lib/auth-client";
@@ -11,6 +11,12 @@ const adminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL;
 export default function AdminLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
   const { data: session, isPending } = authClient.useSession();
+
+  useEffect(() => {
+    if (!isPending && !session?.user) {
+      router.replace("/login?redirect=/admin");
+    }
+  }, [isPending, router, session?.user]);
 
   if (isPending) {
     return (
@@ -23,9 +29,6 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   }
 
   if (!session?.user) {
-    if (typeof window !== "undefined") {
-      router.replace("/login?redirect=/admin");
-    }
     return null;
   }
 

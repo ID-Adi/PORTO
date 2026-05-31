@@ -11,6 +11,11 @@ import {
   canvasAgentWorkflows,
 } from "../../db/schema/index.js";
 import { enqueueCanvasAgentRun } from "../../lib/canvas-agent-runner.js";
+import {
+  getCachedScene,
+  invalidateScene,
+  setCachedScene,
+} from "../../lib/scene-cache.js";
 import { authenticatedProcedure, router } from "../init.js";
 
 const WORKFLOW_TITLE_MAX = 120;
@@ -49,6 +54,7 @@ const frameRefSchema = z.object({
   name: z.string().max(160).nullable(),
   mention: z.string().min(1).max(180),
   elementIds: z.array(z.string().min(1).max(120)).max(500).default([]),
+  customData: z.record(z.string(), z.unknown()).optional(),
   bounds: z
     .object({
       x: z.number(),
@@ -185,8 +191,9 @@ export const canvasAgentRouter = router({
   getWorkflowScene: authenticatedProcedure
     .input(z.object({ id: z.number().int().positive() }))
     .query(async ({ ctx, input }) => {
-      const [row] = await db
-        .select({ sceneData: canvasAgentWorkflows.sceneData })
+      // 1) Ownership check ringan (tanpa membaca jsonb besar).
+      const [owned] = await db
+        .select({ id: canvasAgentWorkflows.id })
         .from(canvasAgentWorkflows)
         .where(
           and(
@@ -195,10 +202,27 @@ export const canvasAgentRouter = router({
           ),
         )
         .limit(1);
-      if (!row) {
+      if (!owned) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Workflow not found" });
       }
-      return { sceneData: row.sceneData ?? null };
+
+      // 2) Cache-first: lewati baca scene besar bila sudah ter-cache.
+      const cached = await getCachedScene(input.id);
+      if (cached !== null) {
+        return { sceneData: cached };
+      }
+
+      // 3) Cache miss: baca dari DB lalu hangatkan cache.
+      const [row] = await db
+        .select({ sceneData: canvasAgentWorkflows.sceneData })
+        .from(canvasAgentWorkflows)
+        .where(eq(canvasAgentWorkflows.id, input.id))
+        .limit(1);
+      const sceneData = row?.sceneData ?? null;
+      if (sceneData !== null) {
+        await setCachedScene(input.id, sceneData);
+      }
+      return { sceneData };
     }),
 
   getWorkflow: authenticatedProcedure
@@ -369,6 +393,11 @@ export const canvasAgentRouter = router({
           id: canvasAgentWorkflows.id,
           updatedAt: canvasAgentWorkflows.updatedAt,
         });
+      // Write-through agar load berikutnya warm.
+      await setCachedScene(
+        input.id,
+        input.sceneData as Record<string, unknown>,
+      );
       return row;
     }),
 
@@ -379,6 +408,7 @@ export const canvasAgentRouter = router({
       await db
         .delete(canvasAgentWorkflows)
         .where(eq(canvasAgentWorkflows.id, input.id));
+      await invalidateScene(input.id);
       return { ok: true };
     }),
 

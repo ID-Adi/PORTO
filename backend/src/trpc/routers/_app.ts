@@ -7,6 +7,7 @@ import { canvasRouter } from "./canvas.js";
 import { contactRouter } from "./contact.js";
 import { experiencesRouter } from "./experiences.js";
 import { mediaRouter } from "./media.js";
+import { mcpRouter } from "./mcp.js";
 import { profileOverviewRouter } from "./profile-overview.js";
 import { projectsRouter } from "./projects.js";
 import { siteSettingsRouter } from "./site-settings.js";
@@ -23,6 +24,7 @@ export const appRouter = router({
   contact: contactRouter,
   siteSettings: siteSettingsRouter,
   media: mediaRouter,
+  mcp: mcpRouter,
   profileOverview: profileOverviewRouter,
   socials: socialsRouter,
   bookmarks: bookmarksRouter,

@@ -6,6 +6,7 @@ import { cors } from "hono/cors";
 
 import { auth } from "./auth/index.js";
 import { canvasAgentStreamRoute } from "./routes/canvas-agent-stream.js";
+import { mcpRoute } from "./routes/mcp.js";
 import { registerPasswordResetRoutes } from "./routes/password-reset.js";
 import { uploadRoute } from "./routes/upload.js";
 import { createTRPCContext } from "./trpc/init.js";
@@ -53,6 +54,7 @@ registerPasswordResetRoutes(app);
 app.all("/api/auth/:path{.+}", (c) => auth.handler(c.req.raw));
 
 app.route("/api/canvas-agent", canvasAgentStreamRoute);
+app.route("/api/mcp", mcpRoute);
 app.route("/api/upload", uploadRoute);
 
 app.use(

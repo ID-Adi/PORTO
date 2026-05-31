@@ -19,3 +19,4 @@ export * from "./ai-tool-settings.js";
 export * from "./password-reset.js";
 export * from "./canvas-documents.js";
 export * from "./canvas-agent.js";
+export * from "./mcp-actions.js";

@@ -239,6 +239,7 @@ const generateImageInput = z.object({
   aspectRatio: z.enum(IMAGE_ASPECT_RATIOS),
   references: z.array(framePayload).max(MAX_REFERENCES).optional().default([]),
 });
+export type GenerateImageInput = z.infer<typeof generateImageInput>;
 
 const generateVideoInput = z.object({
   prompt: z.string().max(2000).optional().default(""),
@@ -309,6 +310,139 @@ type GeminiTtsResponse = {
     message?: string;
   };
 };
+
+export async function generateImageForUser(args: {
+  userId: string;
+  userEmail?: string | null;
+  input: GenerateImageInput;
+}) {
+  const requestId = randomUUID();
+
+  // Validasi ukuran tiap referensi (cap 10MB per gambar)
+  for (const ref of args.input.references) {
+    if (decodedByteLength(ref.base64) > MAX_FRAME_BYTES) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Referensi melebihi 10MB per gambar",
+      });
+    }
+  }
+
+  // Tulis referensi ke disk -> bangun {url, mimeType} untuk N8N.
+  const referenceImages: ToolReferenceImage[] = [];
+  if (args.input.references.length > 0) {
+    await fs.mkdir(TOOLS_REFS_DIR, { recursive: true });
+    for (let i = 0; i < args.input.references.length; i++) {
+      const ref = args.input.references[i];
+      const ext = extensionFromMime(ref.mimeType);
+      const refFilename = `${requestId}-${i}.${ext}`;
+      const refPath = ensureContained(
+        path.join(TOOLS_REFS_DIR, refFilename),
+        TOOLS_REFS_DIR,
+      );
+      await fs.writeFile(refPath, Buffer.from(ref.base64, "base64"));
+      referenceImages.push({
+        url: publicUrl(`/uploads/tools/refs/${refFilename}`)!,
+        mimeType: ref.mimeType,
+      });
+    }
+  }
+
+  // Parse `@N` di prompt ke mapping. Hanya N yang valid (1..references.length)
+  // yang masuk; sisanya silently di-skip agar user bebas mengetik tag.
+  const referenceMapping: ToolReferenceMapping = {};
+  const tagRegex = /@([1-6])/g;
+  const promptTags = new Set<string>();
+  for (const match of args.input.prompt.matchAll(tagRegex)) {
+    promptTags.add(match[0]);
+  }
+  for (const token of promptTags) {
+    const num = Number(token.slice(1));
+    const idx = num - 1;
+    if (idx >= 0 && idx < args.input.references.length) {
+      referenceMapping[token] = idx;
+    }
+  }
+
+  let response: N8nResponse;
+  try {
+    response = await callN8n({
+      source: "porto-web",
+      prompt: args.input.prompt,
+      aspectRatio: args.input.aspectRatio,
+      requestId,
+      userEmail: args.userEmail,
+      references: referenceImages,
+      referenceMapping,
+    });
+  } catch (err) {
+    // Catat row error supaya history tetap mencerminkan kejadian.
+    await db.insert(toolGeneration).values({
+      userId: args.userId,
+      kind: "image",
+      prompt: args.input.prompt,
+      aspectRatio: args.input.aspectRatio,
+      requestId,
+      status: "error",
+      errorMessage: err instanceof Error ? err.message : "Unknown error",
+      referenceImages,
+      referenceMapping,
+    });
+    throw err;
+  }
+
+  const mimeType = response.mimeType!;
+  if (!ALLOWED_MIME.has(mimeType)) {
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: `MIME tidak didukung: ${mimeType}`,
+    });
+  }
+
+  const buffer = Buffer.from(response.imageBase64!, "base64");
+  if (buffer.byteLength === 0 || buffer.byteLength > MAX_BYTES) {
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Ukuran image tidak valid",
+    });
+  }
+
+  const ext = extensionFromMime(mimeType);
+  const filename = `${requestId}.${ext}`;
+  const targetPath = ensureContained(path.join(TOOLS_UPLOAD_DIR, filename));
+
+  await fs.mkdir(TOOLS_UPLOAD_DIR, { recursive: true });
+  await fs.writeFile(targetPath, buffer);
+
+  const fileUrl = `/uploads/tools/${filename}`;
+
+  const [row] = await db
+    .insert(toolGeneration)
+    .values({
+      userId: args.userId,
+      kind: "image",
+      prompt: args.input.prompt,
+      aspectRatio: args.input.aspectRatio,
+      fileUrl,
+      mimeType,
+      fileSize: buffer.byteLength,
+      requestId,
+      status: "success",
+      referenceImages,
+      referenceMapping,
+    })
+    .returning();
+
+  return {
+    id: row.id,
+    url: publicUrl(fileUrl),
+    mimeType,
+    requestId,
+    createdAt: row.createdAt,
+    references: referenceImages,
+    referenceMapping,
+  };
+}
 
 function fallbackTtsSettings(): Pick<
   AiToolSettingsRow,
@@ -1004,134 +1138,11 @@ export const toolsRouter = router({
   generateImage: authenticatedProcedure
     .input(generateImageInput)
     .mutation(async ({ ctx, input }) => {
-      const userId = ctx.session.user.id;
-      const requestId = randomUUID();
-
-      // Validasi ukuran tiap referensi (cap 10MB per gambar)
-      for (const ref of input.references) {
-        if (decodedByteLength(ref.base64) > MAX_FRAME_BYTES) {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: "Referensi melebihi 10MB per gambar",
-          });
-        }
-      }
-
-      // Tulis referensi ke disk -> bangun {url, mimeType} untuk N8N.
-      const referenceImages: ToolReferenceImage[] = [];
-      if (input.references.length > 0) {
-        await fs.mkdir(TOOLS_REFS_DIR, { recursive: true });
-        for (let i = 0; i < input.references.length; i++) {
-          const ref = input.references[i];
-          const ext = extensionFromMime(ref.mimeType);
-          const refFilename = `${requestId}-${i}.${ext}`;
-          const refPath = ensureContained(
-            path.join(TOOLS_REFS_DIR, refFilename),
-            TOOLS_REFS_DIR,
-          );
-          await fs.writeFile(refPath, Buffer.from(ref.base64, "base64"));
-          referenceImages.push({
-            url: publicUrl(`/uploads/tools/refs/${refFilename}`)!,
-            mimeType: ref.mimeType,
-          });
-        }
-      }
-
-      // Parse `@N` di prompt ke mapping. Hanya N yang valid (1..references.length)
-      // yang masuk; sisanya silently di-skip agar user bebas mengetik tag.
-      const referenceMapping: ToolReferenceMapping = {};
-      const tagRegex = /@([1-6])/g;
-      const promptTags = new Set<string>();
-      for (const match of input.prompt.matchAll(tagRegex)) {
-        promptTags.add(match[0]);
-      }
-      for (const token of promptTags) {
-        const num = Number(token.slice(1));
-        const idx = num - 1;
-        if (idx >= 0 && idx < input.references.length) {
-          referenceMapping[token] = idx;
-        }
-      }
-
-      let response: N8nResponse;
-      try {
-        response = await callN8n({
-          source: "porto-web",
-          prompt: input.prompt,
-          aspectRatio: input.aspectRatio,
-          requestId,
-          userEmail: ctx.session.user.email ?? null,
-          references: referenceImages,
-          referenceMapping,
-        });
-      } catch (err) {
-        // Catat row error supaya history tetap mencerminkan kejadian.
-        await db.insert(toolGeneration).values({
-          userId,
-          kind: "image",
-          prompt: input.prompt,
-          aspectRatio: input.aspectRatio,
-          requestId,
-          status: "error",
-          errorMessage:
-            err instanceof Error ? err.message : "Unknown error",
-          referenceImages,
-          referenceMapping,
-        });
-        throw err;
-      }
-
-      const mimeType = response.mimeType!;
-      if (!ALLOWED_MIME.has(mimeType)) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: `MIME tidak didukung: ${mimeType}`,
-        });
-      }
-
-      const buffer = Buffer.from(response.imageBase64!, "base64");
-      if (buffer.byteLength === 0 || buffer.byteLength > MAX_BYTES) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Ukuran image tidak valid",
-        });
-      }
-
-      const ext = extensionFromMime(mimeType);
-      const filename = `${requestId}.${ext}`;
-      const targetPath = ensureContained(path.join(TOOLS_UPLOAD_DIR, filename));
-
-      await fs.mkdir(TOOLS_UPLOAD_DIR, { recursive: true });
-      await fs.writeFile(targetPath, buffer);
-
-      const fileUrl = `/uploads/tools/${filename}`;
-
-      const [row] = await db
-        .insert(toolGeneration)
-        .values({
-          userId,
-          kind: "image",
-          prompt: input.prompt,
-          aspectRatio: input.aspectRatio,
-          fileUrl,
-          mimeType,
-          fileSize: buffer.byteLength,
-          requestId,
-          status: "success",
-          referenceImages,
-          referenceMapping,
-        })
-        .returning();
-
-      return {
-        id: row.id,
-        url: publicUrl(fileUrl),
-        mimeType,
-        requestId,
-        createdAt: row.createdAt,
-        references: referenceImages,
-        referenceMapping,
-      };
+      return generateImageForUser({
+        userId: ctx.session.user.id,
+        userEmail: ctx.session.user.email ?? null,
+        input,
+      });
     }),
 
   generateVideo: authenticatedProcedure

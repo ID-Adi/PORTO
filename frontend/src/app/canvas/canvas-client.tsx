@@ -248,8 +248,11 @@ export function CanvasClient({ headerCollapsed, onToggleHeader }: CanvasClientPr
       setActiveWorkflowId(nextId);
       void utils.canvasAgent.listWorkflows.invalidate();
 
+      // Hanya simpan scene lama bila memang ada perubahan (dirty). Autosave
+      // cloud sudah menyimpan tiap edit, jadi mayoritas switch tak perlu save —
+      // ini yang membuat perpindahan terasa cepat.
       const savePrev =
-        prev !== null && prev !== nextId && apiRef.current
+        prev !== null && prev !== nextId && apiRef.current && dirtyRef.current
           ? saveCurrentSceneTo(prev).catch(() => {
               // best-effort — jangan blok perpindahan kalau gagal simpan.
             })

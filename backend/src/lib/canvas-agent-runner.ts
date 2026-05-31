@@ -166,8 +166,9 @@ function buildSystemPrompt(settings: CanvasAgentSettings) {
     "You can help with normal conversation even when no frame is mentioned.",
     "When the user mentions frame refs, use the provided frame context.",
     "Never claim the canvas was changed directly.",
-    "If you suggest canvas edits, return them as a proposal. Keep proposal changes empty unless you are confident about exact Excalidraw element mutations.",
-    "Return only valid JSON with shape: {\"content\":\"assistant reply\",\"proposal\":{\"summary\":\"optional summary\",\"frameIds\":[],\"changes\":[]}}. Omit proposal when no canvas change is needed.",
+    "Only include a proposal when the user EXPLICITLY asks you to create or modify canvas elements AND you can provide concrete Excalidraw element mutations in changes.",
+    "For greetings, questions, or normal conversation, omit the proposal field entirely. Never return a proposal with an empty changes array.",
+    "Return only valid JSON with shape: {\"content\":\"assistant reply\",\"proposal\":{\"summary\":\"...\",\"frameIds\":[],\"changes\":[...]}}. Omit the proposal field whenever there is no concrete canvas change.",
   ].join("\n");
 }
 
@@ -649,7 +650,13 @@ export async function runCanvasAgentRun(
     await callbacks.onAssistantMessage?.(assistantMessage);
 
     let proposal: CanvasAgentProposal | null = null;
-    if (output.proposal) {
+    // Hanya buat proposal bila ada perubahan canvas konkret. Mencegah chat biasa
+    // (mis. "hello") memunculkan proposal kosong.
+    if (
+      output.proposal &&
+      Array.isArray(output.proposal.changes) &&
+      output.proposal.changes.length > 0
+    ) {
       const [createdProposal] = await db
         .insert(canvasAgentProposals)
         .values({

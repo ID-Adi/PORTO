@@ -21,6 +21,7 @@ export type CanvasAgentFrameRef = {
     width: number;
     height: number;
   };
+  customData?: Record<string, unknown>;
 };
 
 export type CanvasAgentMetadata = Record<string, unknown>;

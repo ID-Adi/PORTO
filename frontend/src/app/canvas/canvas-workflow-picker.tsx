@@ -1,7 +1,6 @@
 "use client";
 
 import { Check, Loader2, Plus } from "lucide-react";
-import { useState } from "react";
 import { toast } from "sonner";
 
 import {
@@ -38,7 +37,6 @@ export function CanvasWorkflowPicker({
   isAuthed,
 }: CanvasWorkflowPickerProps) {
   const { activeWorkflowId, switchWorkflow } = useCanvasWorkflow();
-  const [pendingId, setPendingId] = useState<number | "new" | null>(null);
   const workflowAccess = useCanvasAgentWorkflows({
     enabled: open && isAuthed,
     activeWorkflowId,
@@ -46,44 +44,32 @@ export function CanvasWorkflowPicker({
   });
   const workflows = workflowAccess.workflows;
 
-  async function handleSelect(id: number) {
-    if (pendingId !== null) return;
-    setPendingId(id);
-    try {
-      await switchWorkflow(id);
+  function handleSelect(id: number) {
+    if (id === activeWorkflowId) {
       onOpenChange(false);
-    } catch (error) {
+      return;
+    }
+    // Tutup modal seketika; pindah workflow jalan di background agar user
+    // tidak tertahan menunggu save+load scene.
+    onOpenChange(false);
+    void switchWorkflow(id).catch((error) => {
       toast.error(
         error instanceof Error ? error.message : "Gagal memuat workflow"
       );
-    } finally {
-      setPendingId(null);
-    }
+    });
   }
 
-  async function handleCreate() {
-    if (pendingId !== null) return;
-    setPendingId("new");
-    try {
-      await workflowAccess.createWorkflow("Untitled workflow");
-      onOpenChange(false);
-    } catch (error) {
+  function handleCreate() {
+    onOpenChange(false);
+    void workflowAccess.createWorkflow("Untitled workflow").catch((error) => {
       toast.error(
         error instanceof Error ? error.message : "Gagal membuat workflow"
       );
-    } finally {
-      setPendingId(null);
-    }
+    });
   }
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        if (!next && pendingId !== null) return;
-        onOpenChange(next);
-      }}
-    >
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg rounded-none border border-line bg-background">
         <DialogHeader>
           <DialogTitle className="font-mono text-sm tracking-[0.12em] uppercase">
@@ -105,15 +91,10 @@ export function CanvasWorkflowPicker({
             <>
               <button
                 type="button"
-                disabled={pendingId !== null}
                 onClick={handleCreate}
-                className="flex items-center justify-center gap-2 border border-dashed border-line py-3 font-mono text-[11px] tracking-[0.16em] text-muted-foreground uppercase transition-colors hover:border-foreground hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
+                className="flex items-center justify-center gap-2 border border-dashed border-line py-3 font-mono text-[11px] tracking-[0.16em] text-muted-foreground uppercase transition-colors hover:border-foreground hover:text-foreground"
               >
-                {pendingId === "new" ? (
-                  <Loader2 className="size-3.5 animate-spin" aria-hidden />
-                ) : (
-                  <Plus className="size-3.5" aria-hidden />
-                )}
+                <Plus className="size-3.5" aria-hidden />
                 Workflow baru (kanvas kosong)
               </button>
 
@@ -125,15 +106,13 @@ export function CanvasWorkflowPicker({
                 <div className="grid gap-2">
                   {workflows.map((wf) => {
                     const isActive = wf.id === activeWorkflowId;
-                    const isPending = pendingId === wf.id;
                     return (
                       <button
                         key={wf.id}
                         type="button"
-                        disabled={pendingId !== null}
                         onClick={() => handleSelect(wf.id)}
                         className={cn(
-                          "flex items-center justify-between gap-3 border border-line p-3 text-left transition-colors hover:border-foreground disabled:cursor-not-allowed disabled:opacity-60",
+                          "flex items-center justify-between gap-3 border border-line p-3 text-left transition-colors hover:border-foreground",
                           isActive && "bg-muted/40"
                         )}
                       >
@@ -146,12 +125,7 @@ export function CanvasWorkflowPicker({
                             {wf.isPinned ? " · pinned" : ""}
                           </div>
                         </div>
-                        {isPending ? (
-                          <Loader2
-                            className="size-4 shrink-0 animate-spin text-muted-foreground"
-                            aria-hidden
-                          />
-                        ) : isActive ? (
+                        {isActive ? (
                           <Check
                             className="size-4 shrink-0 text-foreground"
                             aria-hidden

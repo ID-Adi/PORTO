@@ -35,6 +35,13 @@ function isFrame(
   return element.type === "frame";
 }
 
+function readCustomData(value: unknown): Record<string, unknown> | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+  return value as Record<string, unknown>;
+}
+
 export function collectFrameRefs(
   api: ExcalidrawImperativeAPI | null,
   content: string,
@@ -59,6 +66,7 @@ export function collectFrameRefs(
         width: frame.width,
         height: frame.height,
       },
+      customData: readCustomData(frame.customData),
     };
   });
 

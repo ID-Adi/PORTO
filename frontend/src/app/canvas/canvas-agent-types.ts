@@ -28,6 +28,7 @@ export type FrameRef = {
     width: number;
     height: number;
   };
+  customData?: Record<string, unknown>;
 };
 
 export type ProposalChange =
