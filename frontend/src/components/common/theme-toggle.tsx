@@ -22,8 +22,8 @@ export function ThemeToggle() {
   return (
     <Button
       variant="ghost"
-      size="icon-sm"
-      className="border-none hover:bg-transparent"
+      size="icon"
+      className="h-8 w-8 rounded-none border border-line p-0 text-muted-foreground hover:bg-transparent hover:text-foreground"
       onClick={handleClick}
       aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
       data-state={theme}
