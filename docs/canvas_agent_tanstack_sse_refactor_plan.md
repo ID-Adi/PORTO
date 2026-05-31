@@ -60,10 +60,11 @@ Bagian ini adalah checkpoint utama untuk agent berikutnya. Update bagian ini set
 - Arah kerja sudah dikunci: implementasi **SSE streaming di repo Next.js/Hono saat ini dulu**, lalu migrasi TanStack Start setelah chat streaming, cache, dan cleanup stabil.
 - Fase 1-5 sudah diimplementasikan di current Next.js/Hono structure: panel dipecah, query cache native TanStack Query dipakai, SSE route backend ditambahkan, dan polling run aktif dihapus dari panel.
 - Streaming provider masih memakai chunked final-response fallback dari runner karena provider call existing belum token-level streaming. Data final tetap masuk `canvas_agent_messages`, `canvas_agent_runs`, dan `canvas_agent_proposals`.
+- **Fase 6 (migration planning) selesai sebagai dokumen**: `docs/canvas_tanstack_start_migration.md` berisi rencana eksekusi-siap migrasi `/canvas` ke TanStack Start (scaffold `frontend-start/`, root + QueryClient context, route `ssr:false`, auth bootstrap lintas-origin, mapping file, SSE/server functions). Backend Hono dipertahankan apa adanya selama transisi.
 
 ### Next Recommended Phase
 
-Lanjutkan ke **Fase 6 - TanStack Start migration planning** hanya setelah manual test `/canvas` selesai di environment auth/backend aktif.
+Eksekusi koding migrasi (scaffold `frontend-start/` dst.) mengikuti `docs/canvas_tanstack_start_migration.md`, **hanya setelah gate manual test `/canvas` selesai** di environment auth/backend aktif. Gate ini sengaja ditunda saat planning, jadi belum boleh mulai scaffold sebelum hijau.
 
 ### Active Constraints
 
@@ -93,6 +94,7 @@ Lanjutkan ke **Fase 6 - TanStack Start migration planning** hanya setelah manual
 - Changed: `backend/src/lib/canvas-agent-runner.ts`
 - Changed: `backend/src/trpc/routers/canvas-agent.ts`
 - Changed: `docs/canvas_agent_tanstack_sse_refactor_plan.md`
+- Added: `docs/canvas_tanstack_start_migration.md` (Fase 6 migration plan)
 
 ### Verification Commands
 
@@ -143,7 +145,8 @@ Checklist ini adalah urutan wajib. Jangan melompat ke TanStack Start sebelum fas
 - [x] Tambahkan frontend stream hook.
 - [x] Ganti polling dengan cache update berbasis SSE event.
 - [x] Hapus old/fallback paths yang sudah tidak dipakai.
-- [ ] Rencanakan TanStack Start route migration setelah current app stabil.
+- [x] Rencanakan TanStack Start route migration setelah current app stabil. (Lihat `docs/canvas_tanstack_start_migration.md`.)
+- [ ] Eksekusi migrasi TanStack Start setelah gate manual test `/canvas` terpenuhi.
 
 ## Progress Log
 
@@ -153,6 +156,7 @@ Append satu baris setiap selesai fase bermakna. Gunakan tanggal absolut.
 | --- | --- | --- | --- | --- | --- | --- |
 | 2026-05-31 | Codex | Documentation runbook setup | `docs/canvas_agent_tanstack_sse_refactor_plan.md`, `/canvas` frontend files, canvas agent backend files | `docs/canvas_agent_tanstack_sse_refactor_plan.md` | Markdown readback + `git diff -- docs/canvas_agent_tanstack_sse_refactor_plan.md` | Start Fase 1: split panel into hooks/components without behavior changes. |
 | 2026-05-31 | Codex | Fase 1-5 SSE-first implementation | `frontend/src/app/canvas/*`, `backend/src/trpc/routers/canvas-agent.ts`, `backend/src/lib/canvas-agent-runner.ts`, `backend/src/index.ts` | Split `canvas-agent-panel.tsx` into hooks/components, added native TanStack Query keys/cache/API wrappers, added Hono SSE stream route, shared runner callbacks, removed panel polling and tRPC `sendMessage` path | `pnpm --dir frontend lint`, `pnpm --dir frontend build`, `pnpm --dir backend exec tsc --noEmit` | Manual `/canvas` SSE test, then Fase 6 TanStack Start migration planning. |
+| 2026-05-31 | Claude | Fase 6 TanStack Start migration planning | `frontend/src/app/canvas/{page,canvas-shell,canvas-client}.tsx`, `frontend/src/context/trpc-provider.tsx`, `frontend/src/lib/query-client.ts`, `backend/src/index.ts`, `frontend/package.json`; TanStack Start docs (Context7) | Added `docs/canvas_tanstack_start_migration.md` (execution-ready migration plan: branch strategy, `frontend-start/` scaffold, root + QueryClient context, `/canvas` `ssr:false`, cross-origin cookie auth bootstrap, file mapping, SSE/server-function boundary, risks/rollback); updated runbook + rundown + progress log | Markdown readback; `git diff -- docs/` reads as additive (no `frontend/`/`backend/` code touched) | Eksekusi scaffold `frontend-start/` setelah gate manual test `/canvas` hijau. |
 
 ## Strict Cleanup Rules
 
