@@ -97,6 +97,7 @@ function readTokens(value: unknown): TtsTokens | undefined {
 const STORAGE_KEY = "porto.tools.session.tts";
 const SESSION_TTL_MS = 1000 * 60 * 30;
 const MAX_SPEAKERS = 2;
+const HISTORY_TITLE_MAX_CHARS = 64;
 
 const PROVIDER_LABEL: Record<TtsProviderId, string> = {
   gemini: "Gemini",
@@ -250,6 +251,12 @@ function formatDate(value: unknown) {
     hour: "2-digit",
     minute: "2-digit",
   }).format(date);
+}
+
+function formatHistoryTitle(prompt: string) {
+  const title = prompt.trim() || "Untitled audio";
+  if (title.length <= HISTORY_TITLE_MAX_CHARS) return title;
+  return `${title.slice(0, HISTORY_TITLE_MAX_CHARS - 3).trimEnd()}...`;
 }
 
 function TtsSpeakerRail({
@@ -424,14 +431,18 @@ function TtsHistoryPanel({
               const inputMeta = readInputMeta(entry.inputMeta);
               const outputMeta = readOutputMeta(entry.outputMeta);
               const speakers = inputMeta.speakers ?? [];
+              const fullTitle = entry.prompt.trim() || "Untitled audio";
               return (
-                <div key={entry.id} className="border border-(--line) p-2">
+                <div key={entry.id} className="overflow-hidden border border-(--line) p-2">
                   <div className="mb-2 flex items-center justify-between gap-2">
-                    <div className="min-w-0 max-w-full flex-1">
-                      <div className="max-w-full truncate overflow-hidden text-xs font-medium whitespace-nowrap">
-                        {entry.prompt || "Untitled audio"}
+                    <div className="min-w-0 flex-1 basis-0 overflow-hidden">
+                      <div
+                        title={fullTitle}
+                        className="block w-full overflow-hidden text-xs font-medium text-ellipsis whitespace-nowrap"
+                      >
+                        {formatHistoryTitle(entry.prompt)}
                       </div>
-                      <div className="mt-1 max-w-full truncate overflow-hidden font-mono text-[9px] tracking-[0.12em] whitespace-nowrap text-(--muted-foreground) uppercase">
+                      <div className="mt-1 block w-full overflow-hidden font-mono text-[9px] tracking-[0.12em] text-ellipsis whitespace-nowrap text-(--muted-foreground) uppercase">
                         {inputMeta.model ?? "tts"} /{" "}
                         {outputMeta.durationSeconds
                           ? `${outputMeta.durationSeconds}s`
