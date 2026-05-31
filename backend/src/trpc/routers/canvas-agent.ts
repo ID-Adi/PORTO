@@ -191,9 +191,34 @@ export const canvasAgentRouter = router({
   getWorkflowScene: authenticatedProcedure
     .input(z.object({ id: z.number().int().positive() }))
     .query(async ({ ctx, input }) => {
-      // 1) Ownership check ringan (tanpa membaca jsonb besar).
-      const [owned] = await db
-        .select({ id: canvasAgentWorkflows.id })
+      // 1) Cache-first: cek Redis dulu sebelum query DB.
+      const cached = await getCachedScene(input.id);
+      if (cached !== null) {
+        // Validasi ownership ringan (tanpa baca jsonb) — cache key tidak
+        // menyimpan userId, jadi tetap perlu pengecekan.
+        const [owned] = await db
+          .select({ id: canvasAgentWorkflows.id })
+          .from(canvasAgentWorkflows)
+          .where(
+            and(
+              eq(canvasAgentWorkflows.id, input.id),
+              eq(canvasAgentWorkflows.userId, ctx.session.user.id),
+            ),
+          )
+          .limit(1);
+        if (!owned) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Workflow not found" });
+        }
+        return { sceneData: cached };
+      }
+
+      // 2) Cache miss: gabung ownership + sceneData dalam 1 query
+      //    (sebelumnya 2 query terpisah — hemat 1 round-trip DB).
+      const [row] = await db
+        .select({
+          id: canvasAgentWorkflows.id,
+          sceneData: canvasAgentWorkflows.sceneData,
+        })
         .from(canvasAgentWorkflows)
         .where(
           and(
@@ -202,23 +227,10 @@ export const canvasAgentRouter = router({
           ),
         )
         .limit(1);
-      if (!owned) {
+      if (!row) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Workflow not found" });
       }
-
-      // 2) Cache-first: lewati baca scene besar bila sudah ter-cache.
-      const cached = await getCachedScene(input.id);
-      if (cached !== null) {
-        return { sceneData: cached };
-      }
-
-      // 3) Cache miss: baca dari DB lalu hangatkan cache.
-      const [row] = await db
-        .select({ sceneData: canvasAgentWorkflows.sceneData })
-        .from(canvasAgentWorkflows)
-        .where(eq(canvasAgentWorkflows.id, input.id))
-        .limit(1);
-      const sceneData = row?.sceneData ?? null;
+      const sceneData = row.sceneData ?? null;
       if (sceneData !== null) {
         await setCachedScene(input.id, sceneData);
       }

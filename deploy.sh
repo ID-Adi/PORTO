@@ -31,9 +31,11 @@ cd "$(dirname "$0")"
 # Konfigurasi
 # ──────────────────────────────────────────────────────────────────────────
 PG_SERVICE="postgres"            # nama service postgres di docker-compose.yml
+REDIS_SERVICE="redis"            # nama service redis di docker-compose.yml
 BACKEND_SERVICE="backend"        # nama service backend
 FRONTEND_SERVICE="frontend"      # nama service frontend
 PG_CONTAINER="porto-postgres"    # container_name postgres
+REDIS_CONTAINER="porto-redis"    # container_name redis
 BACKEND_CONTAINER="porto-backend"
 FRONTEND_CONTAINER="porto-frontend"
 BACKUP_DIR="./backups"
@@ -238,11 +240,25 @@ if [ "$DO_BACKEND" -eq 1 ]; then
     sleep "$HEALTH_INTERVAL"
   done
 
+  step "Memastikan Redis hidup..."
+  $DC up -d "$REDIS_SERVICE"
+  for i in $(seq 1 "$HEALTH_RETRIES"); do
+    if docker exec "$REDIS_CONTAINER" redis-cli ping >/dev/null 2>&1; then
+      ok "Redis siap."
+      break
+    fi
+    if [ "$i" -eq "$HEALTH_RETRIES" ]; then
+      warn "Redis tidak siap setelah $((HEALTH_RETRIES * HEALTH_INTERVAL))s — lanjut tanpa cache (app tetap jalan)."
+      break
+    fi
+    sleep "$HEALTH_INTERVAL"
+  done
+
   # Tampilkan migrasi yang akan dijalankan (informasional) sebelum start backend.
   step "Cek migrasi pending..."
   report_pending_migrations
 else
-  warn "Backend di-skip (--skip-backend) — Postgres dan migrasi tidak disentuh."
+  warn "Backend di-skip (--skip-backend) — Postgres, Redis, dan migrasi tidak disentuh."
 fi
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -296,6 +312,9 @@ if [ "$DO_FRONTEND" -eq 1 ]; then
   step "Log frontend terbaru:"
   $DC logs --tail=30 "$FRONTEND_SERVICE" || true
 fi
+echo
+step "Log Redis terbaru:"
+$DC logs --tail=10 "$REDIS_SERVICE" 2>/dev/null || true
 echo
 step "Status container:"
 $DC ps

@@ -29,6 +29,20 @@ services:
       timeout: 5s
       retries: 10
 
+  redis:
+    image: redis:7-alpine
+    container_name: porto-redis
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   backend:
     build:
       context: ./backend
@@ -39,6 +53,8 @@ services:
       - "127.0.0.1:4002:4002"
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     networks:
       - default
@@ -52,6 +68,7 @@ services:
       # DNS collision with n8n-pawa-postgres which is aliased as "postgres" on
       # the n8n-pawa-net network that this backend also joins.
       DATABASE_URL: ${BACKEND_DATABASE_URL:?BACKEND_DATABASE_URL required (set in root .env, e.g. postgresql://porto:PASS@porto-postgres:5432/porto_db)}
+      REDIS_URL: redis://porto-redis:6379
       NODE_ENV: production
     volumes:
       # File dinamis (admin uploads + tools generations) — persisten lintas
@@ -89,4 +106,5 @@ services:
 
 volumes:
   postgres_data:
+  redis_data:
   porto_uploads:

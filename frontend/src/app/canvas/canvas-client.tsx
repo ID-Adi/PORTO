@@ -234,7 +234,7 @@ export function CanvasClient({ headerCollapsed, onToggleHeader }: CanvasClientPr
     saveCurrentSceneToRef.current = saveCurrentSceneTo;
   }, [saveCurrentSceneTo]);
 
-  // Pindah workflow (2-arah): auto-save scene aktif → set aktif → muat scene baru.
+  // Pindah workflow: save lama fire-and-forget → set aktif → muat scene baru.
   const switchWorkflow = useCallback(
     async (nextId: number | null) => {
       const prev = activeWorkflowIdRef.current;
@@ -243,26 +243,29 @@ export function CanvasClient({ headerCollapsed, onToggleHeader }: CanvasClientPr
       cloudReadyRef.current = false;
       if (cloudSaveTimer.current) window.clearTimeout(cloudSaveTimer.current);
 
-      // UI berpindah instan; simpan scene lama & muat scene baru paralel
-      // karena keduanya menyasar workflow berbeda (independen).
+      // UI berpindah instan.
       setActiveWorkflowId(nextId);
-      void utils.canvasAgent.listWorkflows.invalidate();
 
-      // Hanya simpan scene lama bila memang ada perubahan (dirty). Autosave
-      // cloud sudah menyimpan tiap edit, jadi mayoritas switch tak perlu save —
-      // ini yang membuat perpindahan terasa cepat.
-      const savePrev =
-        prev !== null && prev !== nextId && apiRef.current && dirtyRef.current
-          ? saveCurrentSceneTo(prev).catch(() => {
-              // best-effort — jangan blok perpindahan kalau gagal simpan.
-            })
-          : Promise.resolve();
-      const loadNext =
-        nextId !== null
-          ? loadWorkflowScene(nextId)
-          : Promise.resolve(applyWorkflowScene(null));
+      // Fire-and-forget: simpan scene lama di background tanpa memblokir
+      // perpindahan. User tak perlu menunggu save selesai untuk melihat scene
+      // baru. Invalidate list hanya setelah save berhasil (deduplikasi).
+      if (prev !== null && prev !== nextId && apiRef.current && dirtyRef.current) {
+        void saveCurrentSceneTo(prev)
+          .then(() => {
+            dirtyRef.current = false;
+            void utils.canvasAgent.listWorkflows.invalidate();
+          })
+          .catch(() => {
+            // best-effort — scene lama akan dicoba lagi oleh autosave berikutnya.
+          });
+      }
 
-      await Promise.all([savePrev, loadNext]);
+      // Hanya await load scene tujuan — satu-satunya operasi blocking.
+      if (nextId !== null) {
+        await loadWorkflowScene(nextId);
+      } else {
+        applyWorkflowScene(null);
+      }
     },
     [
       saveCurrentSceneTo,

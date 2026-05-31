@@ -10,6 +10,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { trpc } from "@/lib/trpc";
 
 import { useCanvasAgentWorkflows } from "./canvas-agent-hooks";
 import { useCanvasWorkflow } from "./canvas-workflow-context";
@@ -37,12 +38,18 @@ export function CanvasWorkflowPicker({
   isAuthed,
 }: CanvasWorkflowPickerProps) {
   const { activeWorkflowId, switchWorkflow } = useCanvasWorkflow();
+  const utils = trpc.useUtils();
   const workflowAccess = useCanvasAgentWorkflows({
     enabled: open && isAuthed,
     activeWorkflowId,
     switchWorkflow,
   });
   const workflows = workflowAccess.workflows;
+
+  // Prefetch scene saat user hover workflow — data sudah siap saat diklik.
+  function handlePrefetch(id: number) {
+    void utils.canvasAgent.getWorkflowScene.prefetch({ id });
+  }
 
   function handleSelect(id: number) {
     if (id === activeWorkflowId) {
@@ -111,6 +118,7 @@ export function CanvasWorkflowPicker({
                         key={wf.id}
                         type="button"
                         onClick={() => handleSelect(wf.id)}
+                        onPointerEnter={() => handlePrefetch(wf.id)}
                         className={cn(
                           "flex items-center justify-between gap-3 border border-line p-3 text-left transition-colors hover:border-foreground",
                           isActive && "bg-muted/40"
