@@ -12,8 +12,9 @@ import rehypeAutolinkHeadings from "rehype-autolink-headings";
 import rehypeHighlight from "rehype-highlight";
 
 import { SiteShell } from "@/layout/site-shell";
-import { trpc } from "@/lib/trpc";
 import { CopyButton } from "@/components/copy-button";
+import { BlogPostSkeleton } from "@/components/skeletons/blog-post-skeleton";
+import { usePublicBlogPost } from "@/features/public-data/client";
 import { TOCMinimap, type TOCItemType } from "@/components/toc-minimap";
 
 function extractTOC(markdown: string): TOCItemType[] {
@@ -49,7 +50,7 @@ const rehypePlugins = [
 
 export default function BlogPostPage() {
   const { slug } = useParams<{ slug: string }>();
-  const { data: post, isLoading } = trpc.blog.bySlug.useQuery({ slug });
+  const { data: post, isLoading } = usePublicBlogPost(slug);
 
   const content = post?.content ?? "";
   const toc = useMemo(() => (content ? extractTOC(content) : []), [content]);
@@ -58,11 +59,7 @@ export default function BlogPostPage() {
     return (
       <SiteShell>
         <div className="page-frame border-x border-(--line)">
-          <div className="flex items-center justify-center py-24">
-            <span className="font-mono text-xs text-(--muted-foreground)">
-              Loading…
-            </span>
-          </div>
+          <BlogPostSkeleton />
         </div>
       </SiteShell>
     );
@@ -133,11 +130,16 @@ export default function BlogPostPage() {
             {/* Main content */}
             <div className="min-w-0 flex-1 px-4 py-8 sm:px-5">
               {post.content ? (
-                <div className="prose prose-sm prose-zinc max-w-none dark:prose-invert prose-headings:font-heading prose-headings:tracking-tight prose-h2:mt-8 prose-h2:text-lg prose-h3:mt-6 prose-h3:text-base prose-p:leading-relaxed prose-pre:rounded-none prose-pre:border prose-pre:border-(--line) prose-pre:bg-(--surface) prose-code:text-xs prose-li:leading-relaxed">
+                <div className="prose prose-sm prose-zinc max-w-none dark:prose-invert prose-headings:font-heading prose-headings:tracking-tight prose-h2:mt-8 prose-h2:text-lg prose-h3:mt-6 prose-h3:text-base prose-p:leading-relaxed prose-pre:rounded-none prose-pre:border prose-pre:border-(--line) prose-pre:bg-(--surface) prose-code:text-xs prose-li:leading-relaxed prose-table:my-0">
                   <ReactMarkdown
                     remarkPlugins={remarkPlugins}
                     rehypePlugins={rehypePlugins}
                     components={{
+                      table: ({ children, ...props }) => (
+                        <div className="my-6 overflow-x-auto">
+                          <table {...props}>{children}</table>
+                        </div>
+                      ),
                       pre: ({ children, ...props }) => (
                         <div className="group/code relative">
                           <pre {...props}>{children}</pre>

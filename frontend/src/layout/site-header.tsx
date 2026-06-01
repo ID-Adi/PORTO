@@ -16,16 +16,13 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useHasMounted } from "@/hooks/use-has-mounted";
-import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
+import { usePublicSiteSettings } from "@/features/public-data/client";
 
 export function SiteHeader() {
   const pathname = usePathname();
   const hasMounted = useHasMounted();
-  const settings = trpc.siteSettings.get.useQuery(undefined, {
-    enabled: hasMounted,
-    staleTime: 60_000,
-  });
+  const settings = usePublicSiteSettings();
   const logoUrl = hasMounted ? (settings.data?.logoUrl ?? null) : null;
 
   const isActive = (href: string) =>

@@ -2,6 +2,8 @@
 
 import { trpc } from "@/lib/trpc";
 import { WorkExperience, type ExperienceItemType } from "@/components/common/work-experience";
+import { ExperienceListSkeleton } from "@/components/skeletons/experience-list-skeleton";
+import type { PublicExperienceCompany } from "@/features/public-data/types";
 
 import { FrameSection } from "./profile-sheet";
 
@@ -15,13 +17,7 @@ type Position = {
   technologies: string[];
 };
 
-type Company = {
-  id: number;
-  name: string;
-  website: string | null;
-  isCurrent: boolean;
-  positions: Position[];
-};
+type Company = PublicExperienceCompany;
 
 function transform(companies: Company[]): ExperienceItemType[] {
   return companies.map((c) => ({
@@ -49,17 +45,24 @@ function parsePeriod(period: string | null): { start: string; end?: string } {
   return { start, end: end?.toLowerCase().includes("present") ? undefined : end };
 }
 
-export function ExperienceSection() {
-  const { data, isLoading } = trpc.experiences.list.useQuery();
-  const companies = (data ?? []) as Company[];
+export function ExperienceSection({
+  companies: injectedCompanies,
+  isLoading: injectedLoading = false,
+}: {
+  companies?: Company[];
+  isLoading?: boolean;
+}) {
+  const query = trpc.experiences.list.useQuery(undefined, {
+    enabled: injectedCompanies === undefined,
+  });
+  const isLoading = injectedCompanies === undefined ? query.isLoading : injectedLoading;
+  const companies = (injectedCompanies ?? query.data ?? []) as Company[];
   const items = transform(companies);
 
   return (
     <FrameSection id="experience" title="Experience" actionHref="/experience" actionLabel="See All">
       {isLoading ? (
-        <div className="px-4 py-8 text-center text-sm text-(--muted-foreground) sm:px-5">
-          Memuat…
-        </div>
+        <ExperienceListSkeleton count={2} />
       ) : items.length === 0 ? (
         <div className="px-4 py-8 text-center text-sm text-(--muted-foreground) sm:px-5">
           Belum ada pengalaman.

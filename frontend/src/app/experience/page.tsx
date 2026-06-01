@@ -5,8 +5,9 @@ import { ChevronDown } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { SiteShell } from "@/layout/site-shell";
-import { trpc } from "@/lib/trpc";
 import { ThumbImage } from "@/components/common/thumb-image";
+import { ExperienceListSkeleton } from "@/components/skeletons/experience-list-skeleton";
+import { usePublicExperience } from "@/features/public-data/client";
 import {
   Collapsible,
   CollapsibleContent,
@@ -91,7 +92,7 @@ function PositionBlock({ position, company }: { position: Position; company: Com
 }
 
 export default function ExperiencePage() {
-  const { data, isLoading } = trpc.experiences.list.useQuery();
+  const { data, isLoading } = usePublicExperience();
   const companies = (data ?? []) as Company[];
   const totalPositions = companies.reduce((acc, c) => acc + c.positions.length, 0);
 
@@ -108,9 +109,7 @@ export default function ExperiencePage() {
             </h1>
           </header>
           {isLoading ? (
-            <div className="flex items-center justify-center py-24">
-              <span className="font-mono text-xs text-(--muted-foreground)">Loading…</span>
-            </div>
+            <ExperienceListSkeleton />
           ) : companies.length === 0 ? (
             <div className="flex items-center justify-center py-24">
               <span className="text-sm text-(--muted-foreground)">Belum ada pengalaman.</span>

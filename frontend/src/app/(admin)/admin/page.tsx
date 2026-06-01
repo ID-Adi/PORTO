@@ -5,6 +5,7 @@ import { ArrowRight } from "lucide-react";
 
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { PageHeader } from "@/features/admin/components/page-header";
 
 export default function AdminDashboardPage() {
@@ -18,26 +19,31 @@ export default function AdminDashboardPage() {
     {
       label: "Projects",
       value: projects.data?.length ?? "—",
+      loading: projects.isLoading,
       href: "/admin/projects",
     },
     {
       label: "Skills",
       value: skills.data?.length ?? "—",
+      loading: skills.isLoading,
       href: "/admin/skills",
     },
     {
       label: "Blog posts",
       value: blog.data?.length ?? "—",
+      loading: blog.isLoading,
       href: "/admin/blog",
     },
     {
       label: "Experience",
       value: experience.data?.length ?? "—",
+      loading: experience.isLoading,
       href: "/admin/experience",
     },
     {
       label: "Contact messages",
       value: contact.data?.length ?? "—",
+      loading: contact.isLoading,
       sub:
         typeof contact.data !== "undefined"
           ? `${contact.data.filter((m) => !m.read).length} unread`
@@ -64,7 +70,11 @@ export default function AdminDashboardPage() {
               </CardHeader>
               <CardContent>
                 <div className="text-3xl font-semibold tracking-tight text-(--foreground)">
-                  {tile.value}
+                  {tile.loading ? (
+                    <Skeleton className="h-9 w-12" />
+                  ) : (
+                    tile.value
+                  )}
                 </div>
                 {tile.sub ? (
                   <div className="mt-1 text-xs text-(--muted-foreground)">

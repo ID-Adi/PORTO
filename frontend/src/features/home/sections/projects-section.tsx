@@ -5,6 +5,8 @@ import { ChevronDown, Link2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { trpc } from "@/lib/trpc";
+import { ProjectsListSkeleton } from "@/components/skeletons/projects-list-skeleton";
+import type { PublicProject } from "@/features/public-data/types";
 import {
   Collapsible,
   CollapsibleContent,
@@ -15,16 +17,7 @@ import { FrameSection } from "./profile-sheet";
 
 const INITIAL_COUNT = 4;
 
-type Project = {
-  id: number;
-  title: string;
-  description: string | null;
-  period: string | null;
-  url: string | null;
-  repoUrl: string | null;
-  highlights: string[];
-  tags: string[];
-};
+type Project = PublicProject;
 
 function ProjectIcon() {
   return (
@@ -114,9 +107,18 @@ function ProjectRow({ item }: { item: Project }) {
   );
 }
 
-export function ProjectsSection() {
-  const { data, isLoading } = trpc.projects.list.useQuery();
-  const projects = data ?? [];
+export function ProjectsSection({
+  projects: injectedProjects,
+  isLoading: injectedLoading = false,
+}: {
+  projects?: Project[];
+  isLoading?: boolean;
+}) {
+  const query = trpc.projects.list.useQuery(undefined, {
+    enabled: injectedProjects === undefined,
+  });
+  const isLoading = injectedProjects === undefined ? query.isLoading : injectedLoading;
+  const projects = injectedProjects ?? query.data ?? [];
   const [showAll, setShowAll] = useState(false);
   const visible = showAll ? projects : projects.slice(0, INITIAL_COUNT);
 
@@ -129,9 +131,7 @@ export function ProjectsSection() {
       actionHref="/projects"
     >
       {isLoading ? (
-        <div className="px-4 py-8 text-center text-sm text-(--muted-foreground) sm:px-5">
-          Memuat…
-        </div>
+        <ProjectsListSkeleton count={INITIAL_COUNT} withDivider />
       ) : projects.length === 0 ? (
         <div className="px-4 py-8 text-center text-sm text-(--muted-foreground) sm:px-5">
           Belum ada project.

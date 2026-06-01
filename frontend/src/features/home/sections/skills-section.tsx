@@ -2,16 +2,12 @@
 
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
+import { HomeSkillsGridSkeleton } from "@/components/skeletons/home-skills-grid-skeleton";
+import type { PublicSkill } from "@/features/public-data/types";
 
 import { FrameSection } from "./profile-sheet";
 
-type Skill = {
-  id: number;
-  name: string;
-  category: string;
-  level: number;
-  description: string | null;
-};
+type Skill = PublicSkill;
 
 const CATEGORY_LABELS: Record<string, string> = {
   frontend: "Frontend",
@@ -39,9 +35,18 @@ function ProficiencyDots({ level }: { level: number }) {
   );
 }
 
-export function SkillsSection() {
-  const { data, isLoading } = trpc.skills.list.useQuery();
-  const skills = (data ?? []) as Skill[];
+export function SkillsSection({
+  skills: injectedSkills,
+  isLoading: injectedLoading = false,
+}: {
+  skills?: Skill[];
+  isLoading?: boolean;
+}) {
+  const query = trpc.skills.list.useQuery(undefined, {
+    enabled: injectedSkills === undefined,
+  });
+  const isLoading = injectedSkills === undefined ? query.isLoading : injectedLoading;
+  const skills = (injectedSkills ?? query.data ?? []) as Skill[];
   const topSkills = skills.slice(0, 6);
 
   return (
@@ -53,9 +58,7 @@ export function SkillsSection() {
       actionHref="/skills"
     >
       {isLoading ? (
-        <div className="px-4 py-8 text-center text-sm text-(--muted-foreground) sm:px-5">
-          Memuat…
-        </div>
+        <HomeSkillsGridSkeleton />
       ) : skills.length === 0 ? (
         <div className="px-4 py-8 text-center text-sm text-(--muted-foreground) sm:px-5">
           Belum ada skill.

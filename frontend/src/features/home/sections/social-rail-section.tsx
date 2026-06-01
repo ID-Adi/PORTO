@@ -2,20 +2,13 @@
 
 import { ArrowUpRight, ImageIcon } from "lucide-react";
 
-import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
+import type { PublicSocial } from "@/features/public-data/types";
 
 import { RailSection, socialBrands } from "./profile-sheet";
 import { SocialLogoTile } from "../components/social-logo-tile";
 
-type Social = {
-  id: number;
-  label: string;
-  href: string;
-  detail: string | null;
-  iconUrl: string | null;
-  sortOrder: number;
-};
+type Social = PublicSocial;
 
 const MAX = 6;
 
@@ -63,9 +56,8 @@ function EmptySocialCard() {
   );
 }
 
-export function SocialRailDbSection() {
-  const { data } = trpc.socials.list.useQuery();
-  const socials = ((data ?? []) as Social[]).slice(0, MAX);
+export function SocialRailDbSection({ socials: data = [] }: { socials?: Social[] }) {
+  const socials = data.slice(0, MAX);
   const emptyCount = Math.max(0, MAX - socials.length);
 
   return (

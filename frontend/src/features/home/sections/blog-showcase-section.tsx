@@ -3,6 +3,8 @@
 import Link from "next/link";
 
 import { trpc } from "@/lib/trpc";
+import { Skeleton } from "@/components/ui/skeleton";
+import type { PublicBlogPost } from "@/features/public-data/types";
 
 import { FrameSection } from "./profile-sheet";
 
@@ -10,10 +12,20 @@ function getTimestamp(p: { publishedAt: Date | string | null; createdAt: Date | 
   return new Date(p.publishedAt ?? p.createdAt).getTime();
 }
 
-export function BlogShowcaseSection() {
-  const { data, isLoading } = trpc.blog.list.useQuery();
+export function BlogShowcaseSection({
+  posts: injectedPosts,
+  isLoading: injectedLoading = false,
+}: {
+  posts?: PublicBlogPost[];
+  isLoading?: boolean;
+}) {
+  const query = trpc.blog.list.useQuery(undefined, {
+    enabled: injectedPosts === undefined,
+  });
+  const isLoading = injectedPosts === undefined ? query.isLoading : injectedLoading;
+  const data = injectedPosts ?? query.data ?? [];
 
-  const published = (data ?? []).filter((p) => p.published);
+  const published = data.filter((p) => p.published);
   const topTwo = [...published]
     .sort((a, b) => getTimestamp(b) - getTimestamp(a))
     .slice(0, 2);
@@ -71,11 +83,11 @@ function BlogGridSkeleton() {
           }`}
           aria-hidden
         >
-          <div className="h-3 w-24 rounded-sm bg-(--line)" />
-          <div className="mt-2 h-4 w-3/4 rounded-sm bg-(--line)" />
-          <div className="mt-4 h-3 w-full rounded-sm bg-(--line)" />
-          <div className="mt-2 h-3 w-5/6 rounded-sm bg-(--line)" />
-          <div className="mt-4 h-3 w-20 rounded-sm bg-(--line)" />
+          <Skeleton className="h-3 w-24" />
+          <Skeleton className="mt-2 h-4 w-3/4" />
+          <Skeleton className="mt-4 h-3 w-full" />
+          <Skeleton className="mt-2 h-3 w-5/6" />
+          <Skeleton className="mt-4 h-3 w-20" />
         </div>
       ))}
     </div>

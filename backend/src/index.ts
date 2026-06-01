@@ -8,6 +8,7 @@ import { auth } from "./auth/index.js";
 import { canvasAgentStreamRoute } from "./routes/canvas-agent-stream.js";
 import { mcpRoute } from "./routes/mcp.js";
 import { registerPasswordResetRoutes } from "./routes/password-reset.js";
+import { publicDataRoute } from "./routes/public-data.js";
 import { uploadRoute } from "./routes/upload.js";
 import { createTRPCContext } from "./trpc/init.js";
 import { appRouter } from "./trpc/routers/_app.js";
@@ -62,6 +63,7 @@ app.all("/api/auth/:path{.+}", (c) => auth.handler(c.req.raw));
 
 app.route("/api/canvas-agent", canvasAgentStreamRoute);
 app.route("/api/mcp", mcpRoute);
+app.route("/api/public", publicDataRoute);
 app.route("/api/upload", uploadRoute);
 
 app.use(

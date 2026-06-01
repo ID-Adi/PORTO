@@ -1,5 +1,4 @@
-import type { ReactNode } from "react";
-
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -9,34 +8,20 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-import { DataTableSkeleton } from "./data-table-skeleton";
+import type { Column } from "./data-table";
 
-export type Column<T> = {
-  key: string;
-  header: string;
-  render: (row: T) => ReactNode;
-  className?: string;
-};
-
-export function DataTable<T extends { id: number | string }>({
+/**
+ * Skeleton tabel admin. Memakai header asli (string) + placeholder per sel
+ * sehingga semua halaman list admin mendapat skeleton lewat satu titik wiring
+ * di data-table.tsx (cabang `rows` belum tersedia).
+ */
+export function DataTableSkeleton<T>({
   columns,
-  rows,
-  empty,
+  rows = 6,
 }: {
   columns: Column<T>[];
-  rows: T[] | undefined;
-  empty?: string;
+  rows?: number;
 }) {
-  if (!rows) {
-    return <DataTableSkeleton columns={columns} />;
-  }
-  if (rows.length === 0) {
-    return (
-      <div className="rounded-md border border-(--border) bg-(--card) p-6 text-center text-sm text-(--muted-foreground)">
-        {empty ?? "No records yet."}
-      </div>
-    );
-  }
   return (
     <div className="overflow-hidden rounded-md border border-(--border) bg-(--card)">
       <Table>
@@ -50,11 +35,11 @@ export function DataTable<T extends { id: number | string }>({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {rows.map((row) => (
-            <TableRow key={row.id}>
+          {Array.from({ length: rows }).map((_, r) => (
+            <TableRow key={r}>
               {columns.map((c) => (
                 <TableCell key={c.key} className={c.className}>
-                  {c.render(row)}
+                  <Skeleton className="h-4 w-full max-w-[160px]" />
                 </TableCell>
               ))}
             </TableRow>

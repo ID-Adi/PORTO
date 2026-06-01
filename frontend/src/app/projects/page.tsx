@@ -6,8 +6,9 @@ import { ChevronDown, Link2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { SiteShell } from "@/layout/site-shell";
-import { trpc } from "@/lib/trpc";
 import { ThumbImage } from "@/components/common/thumb-image";
+import { ProjectsListSkeleton } from "@/components/skeletons/projects-list-skeleton";
+import { usePublicProjects } from "@/features/public-data/client";
 import {
   Collapsible,
   CollapsibleContent,
@@ -104,7 +105,7 @@ function ProjectRow({ item }: { item: Project }) {
 
 export default function ProjectsPage() {
   const [showAll, setShowAll] = useState(false);
-  const { data, isLoading } = trpc.projects.list.useQuery();
+  const { data, isLoading } = usePublicProjects();
   const projects = data ?? [];
   const visible = showAll ? projects : projects.slice(0, INITIAL_COUNT);
 
@@ -122,9 +123,7 @@ export default function ProjectsPage() {
           </header>
 
           {isLoading ? (
-            <div className="flex items-center justify-center py-24">
-              <span className="font-mono text-xs text-(--muted-foreground)">Loading…</span>
-            </div>
+            <ProjectsListSkeleton />
           ) : projects.length === 0 ? (
             <div className="flex items-center justify-center py-24">
               <span className="text-sm text-(--muted-foreground)">Belum ada project.</span>

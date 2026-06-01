@@ -15,7 +15,8 @@ import { useHotkeys } from "react-hotkeys-hook";
 import type { ProfilePageContent } from "@/types/content";
 import { navItems } from "@/features/home/data/nav-items";
 import { useTheme } from "@/context/theme-provider";
-import { trpc } from "@/lib/trpc";
+import { usePublicCommand } from "@/features/public-data/client";
+import type { PublicCommandData } from "@/features/public-data/types";
 import {
   CommandDialog,
   CommandEmpty,
@@ -27,6 +28,11 @@ import {
 } from "@/components/ui/command";
 
 const OPEN_COMMAND_EVENT = "porto:open-command-menu";
+const EMPTY_COMMAND_DATA: PublicCommandData = {
+  skills: [],
+  blog: [],
+  socials: [],
+};
 
 type CommandMenuProps = {
   content: ProfilePageContent;
@@ -88,10 +94,15 @@ export function CommandMenu({ content }: CommandMenuProps) {
     []
   );
 
-  const { data: skillsData } = trpc.skills.list.useQuery();
+  const publicCommand = usePublicCommand(open);
+  const commandData = publicCommand.data ?? EMPTY_COMMAND_DATA;
+  const skillsData = commandData.skills;
+  const blogPosts = commandData.blog;
+  const socialsData = commandData.socials;
+
   const componentItems = useMemo<MenuItem[]>(
     () =>
-      (skillsData ?? []).map((item) => ({
+      skillsData.map((item) => ({
         label: item.name,
         href: "#skills",
         keywords: [item.category, item.description ?? ""],
@@ -99,11 +110,9 @@ export function CommandMenu({ content }: CommandMenuProps) {
     [skillsData],
   );
 
-  const { data: blogPosts } = trpc.blog.list.useQuery();
-
   const writingItems = useMemo<MenuItem[]>(
     () =>
-      (blogPosts ?? [])
+      blogPosts
         .filter((post) => post.published)
         .map((post) => ({
           label: post.title,
@@ -113,10 +122,9 @@ export function CommandMenu({ content }: CommandMenuProps) {
     [blogPosts]
   );
 
-  const { data: socialsData } = trpc.socials.list.useQuery();
   const socialItems = useMemo<MenuItem[]>(
     () =>
-      (socialsData ?? []).map((item) => ({
+      socialsData.map((item) => ({
         label: item.label,
         href: item.href,
         external: true,
