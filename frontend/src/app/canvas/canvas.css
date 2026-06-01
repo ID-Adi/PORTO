@@ -481,9 +481,96 @@
   line-height: 1.55;
 }
 
+/* Render markdown output agent: rapikan paragraf, list, code, heading, tabel. */
+.canvas-porto-wrapper .canvas-agent-markdown {
+  font-size: 12px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.canvas-porto-wrapper .canvas-agent-markdown > :first-child {
+  margin-top: 0;
+}
+
+.canvas-porto-wrapper .canvas-agent-markdown > :last-child {
+  margin-bottom: 0;
+}
+
+.canvas-porto-wrapper .canvas-agent-markdown p {
+  margin: 0 0 0.5rem;
+}
+
+.canvas-porto-wrapper .canvas-agent-markdown ul,
+.canvas-porto-wrapper .canvas-agent-markdown ol {
+  margin: 0 0 0.5rem;
+  padding-left: 1.2rem;
+}
+
+.canvas-porto-wrapper .canvas-agent-markdown li {
+  margin: 0.15rem 0;
+}
+
+.canvas-porto-wrapper .canvas-agent-markdown h1,
+.canvas-porto-wrapper .canvas-agent-markdown h2,
+.canvas-porto-wrapper .canvas-agent-markdown h3,
+.canvas-porto-wrapper .canvas-agent-markdown h4 {
+  margin: 0.6rem 0 0.35rem;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.canvas-porto-wrapper .canvas-agent-markdown a {
+  text-decoration: underline;
+}
+
+.canvas-porto-wrapper .canvas-agent-markdown code {
+  font-family: var(--font-family-monospace);
+  font-size: 11px;
+  background: var(--color-surface-highest);
+  padding: 0.05rem 0.3rem;
+  border-radius: 2px;
+}
+
+.canvas-porto-wrapper .canvas-agent-markdown pre {
+  margin: 0 0 0.5rem;
+  padding: 0.55rem 0.7rem;
+  background: var(--color-surface-highest);
+  overflow-x: auto;
+  border-radius: 2px;
+}
+
+.canvas-porto-wrapper .canvas-agent-markdown pre code {
+  background: transparent;
+  padding: 0;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.canvas-porto-wrapper .canvas-agent-markdown blockquote {
+  margin: 0 0 0.5rem;
+  padding-left: 0.7rem;
+  border-left: 2px solid var(--color-surface-highest);
+  color: var(--color-on-surface-muted);
+}
+
+.canvas-porto-wrapper .canvas-agent-markdown table {
+  border-collapse: collapse;
+  margin: 0 0 0.5rem;
+  font-size: 11px;
+}
+
+.canvas-porto-wrapper .canvas-agent-markdown th,
+.canvas-porto-wrapper .canvas-agent-markdown td {
+  border: 1px solid var(--color-surface-highest);
+  padding: 0.25rem 0.45rem;
+  text-align: left;
+}
+
 /* Panel agent berada di dalam DOM Excalidraw yang memakai user-select: none.
    Override agar teks percakapan/proposal/error bisa diseleksi & disalin. */
 .canvas-porto-wrapper .canvas-agent-message p,
+.canvas-porto-wrapper .canvas-agent-markdown,
 .canvas-porto-wrapper .canvas-agent-message-kicker,
 .canvas-porto-wrapper .canvas-agent-proposal h4,
 .canvas-porto-wrapper .canvas-agent-proposal p,

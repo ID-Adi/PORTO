@@ -220,28 +220,44 @@ export async function listProviderModels(
     return listLocalChatModels(args.baseUrl);
   }
 
-  // vertex
+  // vertex — pakai probe yang melempar; di sini error ditelan agar UI tetap
+  // punya daftar fallback. Untuk uji koneksi, gunakan probeVertexModels langsung.
   try {
-    const token = await vertexAccessToken(args.saJson, args.scopes);
-    const url = vertexPublisherModelsUrl(args.location);
-    const res = await fetch(url, {
-      headers: { Authorization: `Bearer ${token}` },
-      signal: AbortSignal.timeout(20_000),
-    });
-    if (res.ok) {
-      const json = (await res.json()) as {
-        publisherModels?: Array<{ name?: string; versionId?: string }>;
-      };
-      const models = (json.publisherModels ?? [])
-        .map((m) => (m.name ?? "").replace(/^publishers\/google\/models\//, ""))
-        .filter((id) => id && /tts/i.test(id))
-        .map((id) => ({ id, name: id }));
-      if (models.length > 0) return models;
-    }
+    const models = await probeVertexModels(args);
+    if (models.length > 0) return models;
   } catch {
     // jatuh ke fallback
   }
   return VERTEX_TTS_FALLBACK_MODELS.map((id) => ({ id, name: id }));
+}
+
+// Mint token + query publisher models Vertex. MELEMPAR pada kegagalan (token
+// gagal di-mint, HTTP non-2xx). Tidak pernah jatuh ke fallback — dipakai untuk
+// uji koneksi yang jujur. Daftar kosong (200 tanpa model TTS) bukan kegagalan.
+async function probeVertexModels(
+  args: { provider: "vertex" } & VertexCreds,
+): Promise<ProviderModel[]> {
+  const token = await vertexAccessToken(args.saJson, args.scopes);
+  const url = vertexPublisherModelsUrl(args.location);
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(20_000),
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    const detail = body.trim() ? `: ${body.trim().slice(0, 200)}` : "";
+    throw new TtsError(
+      `Vertex list models HTTP ${res.status}${detail}`,
+      isRetryableTtsStatus(res.status),
+    );
+  }
+  const json = (await res.json()) as {
+    publisherModels?: Array<{ name?: string; versionId?: string }>;
+  };
+  return (json.publisherModels ?? [])
+    .map((m) => (m.name ?? "").replace(/^publishers\/google\/models\//, ""))
+    .filter((id) => id && /tts/i.test(id))
+    .map((id) => ({ id, name: id }));
 }
 
 export function normalizeVertexAllowedHttpDomains(
@@ -255,6 +271,12 @@ export function normalizeVertexAllowedHttpDomains(
 export type TestProviderArgs = ListModelsArgs;
 
 export async function testProvider(args: TestProviderArgs): Promise<void> {
-  // Reuse list endpoint sebagai uji koneksi/kredensial.
+  // Vertex: probe langsung tanpa fallback agar kredensial salah benar-benar
+  // tertangkap (listProviderModels menelan error vertex demi fallback UI).
+  if (args.provider === "vertex") {
+    await probeVertexModels(args);
+    return;
+  }
+  // Provider lain sudah melempar pada HTTP non-2xx di listProviderModels.
   await listProviderModels(args);
 }

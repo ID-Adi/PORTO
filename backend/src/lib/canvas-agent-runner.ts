@@ -23,6 +23,13 @@ import {
 
 const GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta";
 const AGENT_TIMEOUT_MS = 90_000;
+
+// Gabungkan signal request (abort dari client saat "Stop") dengan timeout agen,
+// agar memutus koneksi client benar-benar membatalkan panggilan LLM di server.
+function agentAbortSignal(signal?: AbortSignal): AbortSignal {
+  const timeout = AbortSignal.timeout(AGENT_TIMEOUT_MS);
+  return signal ? AbortSignal.any([signal, timeout]) : timeout;
+}
 const MAX_HISTORY_MESSAGES = 24;
 const MAX_SCENE_ELEMENTS = 120;
 
@@ -264,6 +271,7 @@ async function callGemini(args: {
   model: string;
   systemPrompt: string;
   prompt: string;
+  signal?: AbortSignal;
 }) {
   const model = normalizeModel("gemini", args.model);
   const res = await fetch(`${GEMINI_BASE_URL}/models/${model}:generateContent`, {
@@ -281,7 +289,7 @@ async function callGemini(args: {
         responseMimeType: "application/json",
       },
     }),
-    signal: AbortSignal.timeout(AGENT_TIMEOUT_MS),
+    signal: agentAbortSignal(args.signal),
   });
   const json = (await res.json()) as GeminiResponse;
   if (!res.ok) {
@@ -298,6 +306,7 @@ async function callVertex(args: {
   model: string;
   systemPrompt: string;
   prompt: string;
+  signal?: AbortSignal;
 }) {
   let headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -336,7 +345,7 @@ async function callVertex(args: {
       method: "POST",
       headers,
       body,
-      signal: AbortSignal.timeout(AGENT_TIMEOUT_MS),
+      signal: agentAbortSignal(args.signal),
     });
 
   let res = await request(args.location);
@@ -375,6 +384,7 @@ async function callOpenRouter(args: {
   model: string;
   systemPrompt: string;
   prompt: string;
+  signal?: AbortSignal;
 }) {
   const res = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
     method: "POST",
@@ -391,7 +401,7 @@ async function callOpenRouter(args: {
       ],
       response_format: { type: "json_object" },
     }),
-    signal: AbortSignal.timeout(AGENT_TIMEOUT_MS),
+    signal: agentAbortSignal(args.signal),
   });
   const json = (await res.json()) as OpenRouterResponse;
   if (!res.ok) {
@@ -407,6 +417,7 @@ async function callLocal(args: {
   model: string;
   systemPrompt: string;
   prompt: string;
+  signal?: AbortSignal;
 }) {
   const res = await fetch(`${normalizeBaseUrl(args.baseUrl)}/chat/completions`, {
     method: "POST",
@@ -421,7 +432,7 @@ async function callLocal(args: {
       ],
       response_format: { type: "json_object" },
     }),
-    signal: AbortSignal.timeout(AGENT_TIMEOUT_MS),
+    signal: agentAbortSignal(args.signal),
   });
   const json = (await res.json()) as OpenRouterResponse;
   if (!res.ok) {
@@ -449,6 +460,7 @@ async function callProvider(args: {
   settings: CanvasAgentSettings;
   systemPrompt: string;
   prompt: string;
+  signal?: AbortSignal;
 }) {
   const provider = args.settings.canvasAgentProvider as CanvasAgentProvider;
   const model = args.settings.canvasAgentModel;
@@ -462,6 +474,7 @@ async function callProvider(args: {
       model,
       systemPrompt: args.systemPrompt,
       prompt: args.prompt,
+      signal: args.signal,
     });
   }
 
@@ -474,6 +487,7 @@ async function callProvider(args: {
       model,
       systemPrompt: args.systemPrompt,
       prompt: args.prompt,
+      signal: args.signal,
     });
   }
 
@@ -486,6 +500,7 @@ async function callProvider(args: {
       model,
       systemPrompt: args.systemPrompt,
       prompt: args.prompt,
+      signal: args.signal,
     });
   }
 
@@ -503,6 +518,7 @@ async function callProvider(args: {
     model,
     systemPrompt: args.systemPrompt,
     prompt: args.prompt,
+    signal: args.signal,
   });
 }
 
@@ -718,6 +734,7 @@ export async function runCanvasAgentRun(
       settings,
       systemPrompt: buildSystemPrompt(settings),
       prompt,
+      signal: callbacks.signal,
     });
     const output = parseAgentOutput(raw);
     const frameRefs = (userMessage.frameRefs ?? []) as CanvasAgentFrameRef[];
@@ -781,9 +798,29 @@ export async function runCanvasAgentRun(
     console.log(`[canvas-agent] run ${run.id} succeeded`);
     await callbacks.onRunCompleted?.(completedRun ?? run);
   } catch (error) {
+    // Client menekan "Stop" → koneksi di-abort. Tandai cancelled (bukan failed)
+    // agar tidak muncul sebagai error, dan polling run berhenti.
+    if (callbacks.signal?.aborted) {
+      await cancelRun(runId);
+      return;
+    }
     const run = await failRun(runId, error);
     await callbacks.onRunFailed?.(run, friendlyAgentError(error));
   }
+}
+
+async function cancelRun(runId: number) {
+  const [run] = await db
+    .update(canvasAgentRuns)
+    .set({
+      status: "cancelled",
+      completedAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(eq(canvasAgentRuns.id, runId))
+    .returning();
+  console.log(`[canvas-agent] run ${runId} cancelled`);
+  return run ?? null;
 }
 
 export function enqueueCanvasAgentRun(runId: number) {

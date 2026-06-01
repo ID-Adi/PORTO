@@ -1,14 +1,19 @@
 "use client";
 
 import { Bot, Loader2 } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 import { cn } from "@/lib/utils";
 import { formatTimestamp } from "./canvas-agent-utils";
 
 import type { CanvasAgentMessage, FrameRef } from "./canvas-agent-types";
 
+const remarkPlugins = [remarkGfm];
+
 function MessageBubble({ message }: { message: CanvasAgentMessage }) {
   const frameRefs = (message.frameRefs ?? []) as FrameRef[];
+  const isAssistant = message.role === "assistant";
   return (
     <div
       className={cn(
@@ -20,7 +25,15 @@ function MessageBubble({ message }: { message: CanvasAgentMessage }) {
         <span>{message.role}</span>
         <span>{formatTimestamp(message.createdAt)}</span>
       </div>
-      <p>{message.content}</p>
+      {isAssistant ? (
+        <div className="canvas-agent-markdown">
+          <ReactMarkdown remarkPlugins={remarkPlugins}>
+            {message.content}
+          </ReactMarkdown>
+        </div>
+      ) : (
+        <p>{message.content}</p>
+      )}
       {frameRefs.length > 0 ? (
         <div className="canvas-agent-frame-chips">
           {frameRefs.map((frame) => (

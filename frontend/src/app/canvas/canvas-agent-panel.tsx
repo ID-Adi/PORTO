@@ -94,7 +94,24 @@ export function CanvasAgentPanel({
   // Auto-scroll ke bawah saat pesan/ delta streaming bertambah, tetapi hormati
   // user yang sengaja scroll ke atas membaca riwayat.
   const scrollRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const autoScrollRef = useRef(true);
+
+  // Excalidraw memasang handler copy/cut (React) di wrapper-nya; panel agent ada
+  // di dalam DOM itu, sehingga menyalin teks chat malah memicu clipboard scene
+  // Excalidraw ({"type":"excalidraw/clipboard",...}). Hentikan propagasi event
+  // copy/cut yang berasal dari dalam panel agar copy teks native tetap jalan.
+  useEffect(() => {
+    const el = panelRef.current;
+    if (!el) return;
+    const stop = (event: Event) => event.stopPropagation();
+    el.addEventListener("copy", stop);
+    el.addEventListener("cut", stop);
+    return () => {
+      el.removeEventListener("copy", stop);
+      el.removeEventListener("cut", stop);
+    };
+  }, []);
   const handleScroll = useCallback(() => {
     const el = scrollRef.current;
     if (!el) return;
@@ -201,7 +218,7 @@ export function CanvasAgentPanel({
 
   return (
     <>
-      <div className="canvas-agent-panel">
+      <div className="canvas-agent-panel" ref={panelRef}>
         <header className="canvas-agent-header">
           <div>
             <span className="canvas-agent-section-kicker">active workflow</span>

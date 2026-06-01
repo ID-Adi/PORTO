@@ -185,6 +185,21 @@ export function useCanvasAgentChat(args: {
     }
   }, [workflowId, stopStream]);
 
+  // Stop versi UI: selain abort stream, tandai run aktif jadi "cancelled" di
+  // cache secara optimistis supaya spinner "Agent thinking..." langsung hilang
+  // tanpa menunggu polling. Backend juga membatalkan run yang sama via abort.
+  const stopStreamAndCancel = useCallback(() => {
+    stream.stop();
+    if (workflowId === null) return;
+    queryClient.setQueryData<RunRow[]>(
+      canvasAgentKeys.runs(workflowId),
+      (rows) =>
+        rows?.map((run) =>
+          isRunActive(run) ? { ...run, status: "cancelled" } : run,
+        ),
+    );
+  }, [stream, queryClient, workflowId]);
+
   const workflowQuery = useQuery({
     queryKey: workflowId ? canvasAgentKeys.workflow(workflowId) : ["disabled"],
     queryFn: () => canvasAgentApi.getWorkflowSummary(workflowId ?? 0),
@@ -421,7 +436,7 @@ export function useCanvasAgentChat(args: {
     updateProposalStatus,
     applyProposal,
     streamState: stream.streamState,
-    stopStream: stream.stop,
+    stopStream: stopStreamAndCancel,
     isSending: stream.isStreaming,
     isBusy: retryingRunIds.size > 0 || updateProposalMutation.isPending,
   };
