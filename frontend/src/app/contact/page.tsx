@@ -6,6 +6,8 @@ import { toast } from "sonner";
 
 import { SiteShell } from "@/layout/site-shell";
 import { trpc } from "@/lib/trpc";
+import { ContactSocialsSkeleton } from "@/components/skeletons/contact-socials-skeleton";
+import { usePublicContact } from "@/features/public-data/client";
 
 const SUBJECT_LABELS: Record<string, string> = {
   project: "Project Inquiry",
@@ -21,8 +23,8 @@ export default function ContactPage() {
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
 
-  const socialsQuery = trpc.socials.list.useQuery();
-  const socials = socialsQuery.data ?? [];
+  const socialsQuery = usePublicContact();
+  const socials = socialsQuery.data?.socials ?? [];
 
   const submit = trpc.contact.submit.useMutation({
     onSuccess: () => {
@@ -152,20 +154,24 @@ export default function ContactPage() {
               <h2 className="font-mono text-[11px] font-medium uppercase tracking-wider text-(--muted-foreground)">
                 Connect
               </h2>
-              <div className="mt-4 space-y-3">
-                {socials.map((social) => (
-                  <a
-                    key={social.id}
-                    href={social.href}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center justify-between border-b border-(--line) pb-3 text-sm text-(--muted-foreground) transition-colors hover:text-(--foreground)"
-                  >
-                    <span>{social.label}</span>
-                    <span className="font-mono text-[11px]">{social.detail ?? ""}</span>
-                  </a>
-                ))}
-              </div>
+              {socialsQuery.isLoading ? (
+                <ContactSocialsSkeleton />
+              ) : (
+                <div className="mt-4 space-y-3">
+                  {socials.map((social) => (
+                    <a
+                      key={social.id}
+                      href={social.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-between border-b border-(--line) pb-3 text-sm text-(--muted-foreground) transition-colors hover:text-(--foreground)"
+                    >
+                      <span>{social.label}</span>
+                      <span className="font-mono text-[11px]">{social.detail ?? ""}</span>
+                    </a>
+                  ))}
+                </div>
+              )}
 
               <div className="mt-8">
                 <h2 className="font-mono text-[11px] font-medium uppercase tracking-wider text-(--muted-foreground)">

@@ -9,12 +9,14 @@ import { PronounceButton } from "@/components/common/pronounce-button";
 import { TextFlip } from "@/components/text-flip";
 import { useHasMounted } from "@/hooks/use-has-mounted";
 import { trpc } from "@/lib/trpc";
+import type { PublicSiteSettings } from "@/features/public-data/types";
 
 type ProfileIntroProps = Pick<
   ProfilePageContent,
   "flipSentences" | "name" | "pronunciationText" | "title"
 > & {
   avatarUrl: string | null;
+  settings?: PublicSiteSettings | null;
 };
 
 const AVATAR_BASE_CLASS =
@@ -96,16 +98,19 @@ export function ProfileIntro({
   flipSentences,
   name,
   pronunciationText,
+  settings,
   title,
 }: ProfileIntroProps) {
   const hasMounted = useHasMounted();
-  const settings = trpc.siteSettings.get.useQuery(undefined, {
-    enabled: hasMounted,
+  const shouldFetchSettings = settings === undefined;
+  const settingsQuery = trpc.siteSettings.get.useQuery(undefined, {
+    enabled: hasMounted && shouldFetchSettings,
     staleTime: 60_000,
   });
-  const displayName = hasMounted ? (settings.data?.profileName ?? name) : name;
+  const resolvedSettings = settings ?? settingsQuery.data ?? null;
+  const displayName = hasMounted ? (resolvedSettings?.profileName ?? name) : name;
   const displayTitle = hasMounted
-    ? (settings.data?.profileTitle ?? title)
+    ? (resolvedSettings?.profileTitle ?? title)
     : title;
 
   return (

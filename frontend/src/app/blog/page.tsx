@@ -5,8 +5,9 @@ import Link from "next/link";
 import { Calendar } from "lucide-react";
 
 import { SiteShell } from "@/layout/site-shell";
-import { trpc } from "@/lib/trpc";
 import { ThumbImage } from "@/components/common/thumb-image";
+import { BlogListSkeleton } from "@/components/skeletons/blog-list-skeleton";
+import { usePublicBlogPosts } from "@/features/public-data/client";
 import { normalizeImageUrl } from "@/lib/image-url";
 import {
   MediaExpandModal,
@@ -14,7 +15,7 @@ import {
 } from "@/features/tools/components/media-expand-modal";
 
 export default function BlogPage() {
-  const { data: posts, isLoading } = trpc.blog.list.useQuery();
+  const { data: posts, isLoading } = usePublicBlogPosts();
   const [preview, setPreview] = useState<MediaExpandTarget | null>(null);
 
   const published = posts?.filter((p) => p.published) ?? [];
@@ -34,11 +35,7 @@ export default function BlogPage() {
           </header>
 
           {isLoading ? (
-            <div className="flex items-center justify-center py-24">
-              <span className="font-mono text-xs text-(--muted-foreground)">
-                Loading…
-              </span>
-            </div>
+            <BlogListSkeleton />
           ) : published.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-24 text-center">
               <p className="text-sm text-(--muted-foreground)">

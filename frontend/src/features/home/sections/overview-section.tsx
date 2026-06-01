@@ -1,9 +1,9 @@
 "use client";
 
-import { trpc } from "@/lib/trpc";
 import {
   PanelContent,
 } from "@/layout/panel";
+import type { PublicOverviewRow } from "@/features/public-data/types";
 
 import {
   OverviewCell,
@@ -11,16 +11,7 @@ import {
   RailSection,
 } from "./profile-sheet";
 
-type Row = {
-  id: number;
-  position: string;
-  icon: string;
-  value: string;
-  kind: string;
-  copyable: boolean;
-  note: string | null;
-  sortOrder: number;
-};
+type Row = PublicOverviewRow;
 
 function groupCompact(rows: Row[]): { left: Row; right?: Row }[] {
   const out: { left: Row; right?: Row }[] = [];
@@ -40,10 +31,7 @@ function groupCompact(rows: Row[]): { left: Row; right?: Row }[] {
   return out;
 }
 
-export function OverviewDbSection() {
-  const { data } = trpc.profileOverview.list.useQuery();
-  const rows = (data ?? []) as Row[];
-
+export function OverviewDbSection({ rows = [] }: { rows?: Row[] }) {
   const leadRows = rows.filter((r) => r.position === "lead");
   const compactPairs = groupCompact(rows.filter((r) => r.position !== "lead"));
 

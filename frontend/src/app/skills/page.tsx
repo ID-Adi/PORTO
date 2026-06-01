@@ -5,8 +5,9 @@ import { ChevronDown } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { SiteShell } from "@/layout/site-shell";
-import { trpc } from "@/lib/trpc";
 import { ThumbImage } from "@/components/common/thumb-image";
+import { SkillsRouteSkeleton } from "@/components/skeletons/skills-route-skeleton";
+import { usePublicSkills } from "@/features/public-data/client";
 import {
   Collapsible,
   CollapsibleContent,
@@ -133,7 +134,7 @@ function CategorySection({ group }: { group: CategoryGroup }) {
 }
 
 export default function SkillsPage() {
-  const { data, isLoading } = trpc.skills.list.useQuery();
+  const { data, isLoading } = usePublicSkills();
   const skills = data ?? [];
   const groups = groupByCategory(skills);
   const totalSkills = skills.length;
@@ -151,9 +152,7 @@ export default function SkillsPage() {
             </h1>
           </header>
           {isLoading ? (
-            <div className="flex items-center justify-center py-24">
-              <span className="font-mono text-xs text-(--muted-foreground)">Loading…</span>
-            </div>
+            <SkillsRouteSkeleton />
           ) : groups.length === 0 ? (
             <div className="flex items-center justify-center py-24">
               <span className="text-sm text-(--muted-foreground)">Belum ada skill.</span>

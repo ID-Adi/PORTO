@@ -35,6 +35,7 @@ import { Icons } from "@/layout/icons";
 import type { ProfilePageContent, ReadingItem, TimelineItem } from "@/types/content";
 import { trpc } from "@/lib/trpc";
 import { CopyButton } from "@/components/common/copy-button";
+import { usePublicHome } from "@/features/public-data/client";
 
 import { ContributionGraph } from "../components/contribution-graph";
 import { LiveClock } from "../components/live-clock";
@@ -396,21 +397,27 @@ function timelineToReading(item: TimelineItem): ReadingItem {
 
 function BookmarksSection({
   items,
+  bookmarks,
+  isLoading = false,
 }: {
   items: TimelineItem[];
+  bookmarks?: ReadingItem[];
+  isLoading?: boolean;
 }) {
   const fallback = items.map(timelineToReading);
   const { data } = trpc.bookmarks.list.useQuery(undefined, {
+    enabled: bookmarks === undefined,
     placeholderData: fallback,
     staleTime: 5 * 60 * 1000,
   });
-  const reading = data && data.length > 0 ? data : fallback;
+  const remoteReading = bookmarks ?? data;
+  const reading = remoteReading && remoteReading.length > 0 ? remoteReading : fallback;
 
   return (
     <FrameSection
       id="reading"
       title="Currently Reading"
-      count={reading.length}
+      count={isLoading ? undefined : reading.length}
       actionLabel="Read More"
     >
       <div>
@@ -518,8 +525,10 @@ function formatOverviewValue(icon: string, value: string) {
 }
 
 export function ProfileSheet({ content }: ProfileSheetProps) {
-  const settings = trpc.siteSettings.get.useQuery();
-  const avatarUrl = settings.data?.avatarUrl ?? null;
+  const homeQuery = usePublicHome();
+  const homeData = homeQuery.data;
+  const settings = homeData?.settings ?? null;
+  const avatarUrl = settings?.avatarUrl ?? null;
 
   return (
     <div className="*:[[id]]:scroll-mt-24">
@@ -529,13 +538,14 @@ export function ProfileSheet({ content }: ProfileSheetProps) {
         flipSentences={content.flipSentences}
         name={content.name}
         pronunciationText={content.pronunciationText}
+        settings={settings}
         title={content.title}
       />
 
       <SectionSeparator />
-      <OverviewDbSection />
+      <OverviewDbSection rows={homeData?.overview ?? []} />
       <MiniSeparator />
-      <SocialRailDbSection />
+      <SocialRailDbSection socials={homeData?.socials ?? []} />
       <SectionSeparator />
 
       <AboutSection content={content} />
@@ -544,15 +554,31 @@ export function ProfileSheet({ content }: ProfileSheetProps) {
       <SectionSeparator />
       <StackSection content={content} />
       <SectionSeparator />
-      <DbSkillsSection />
+      <DbSkillsSection
+        isLoading={homeQuery.isLoading}
+        skills={homeData?.skills ?? []}
+      />
       <SectionSeparator />
-      <BlogShowcaseSection />
+      <BlogShowcaseSection
+        isLoading={homeQuery.isLoading}
+        posts={homeData?.blog ?? []}
+      />
       <SectionSeparator />
-      <DbExperienceSection />
+      <DbExperienceSection
+        companies={homeData?.experience ?? []}
+        isLoading={homeQuery.isLoading}
+      />
       <SectionSeparator />
-      <DbProjectsSection />
+      <DbProjectsSection
+        isLoading={homeQuery.isLoading}
+        projects={homeData?.projects ?? []}
+      />
       <SectionSeparator />
-      <BookmarksSection items={content.bookmarks} />
+      <BookmarksSection
+        bookmarks={homeData?.bookmarks ?? []}
+        isLoading={homeQuery.isLoading}
+        items={content.bookmarks}
+      />
       <SectionSeparator />
     </div>
   );
