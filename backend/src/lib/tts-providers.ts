@@ -147,7 +147,33 @@ function vertexPublisherModelsUrl(location: string): string {
 export type ListModelsArgs =
   | { provider: "gemini"; apiKey: string }
   | { provider: "openrouter"; apiKey: string }
+  | { provider: "local"; baseUrl: string }
   | ({ provider: "vertex" } & VertexCreds);
+
+// Strip trailing slash agar penggabungan `${baseUrl}/models` konsisten.
+export function normalizeBaseUrl(baseUrl: string): string {
+  return baseUrl.trim().replace(/\/+$/, "");
+}
+
+// Deteksi model chat dari endpoint OpenAI-compatible lokal (Ollama via Tailscale).
+// Tidak ter-filter ke TTS — mengembalikan seluruh model yang diekspos server.
+export async function listLocalChatModels(
+  baseUrl: string,
+): Promise<ProviderModel[]> {
+  const url = `${normalizeBaseUrl(baseUrl)}/models`;
+  const res = await fetch(url, {
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!res.ok) {
+    throw new TtsError(`Local LLM list models HTTP ${res.status}`, false);
+  }
+  const json = (await res.json()) as {
+    data?: Array<{ id?: string; name?: string }>;
+  };
+  return (json.data ?? [])
+    .filter((m) => m.id)
+    .map((m) => ({ id: m.id!, name: m.name ?? m.id! }));
+}
 
 export async function listProviderModels(
   args: ListModelsArgs,
@@ -188,6 +214,10 @@ export async function listProviderModels(
     return (json.data ?? [])
       .filter((m) => m.id)
       .map((m) => ({ id: m.id!, name: m.name ?? m.id! }));
+  }
+
+  if (args.provider === "local") {
+    return listLocalChatModels(args.baseUrl);
   }
 
   // vertex

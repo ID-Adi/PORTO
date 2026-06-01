@@ -19,16 +19,19 @@ import { Field } from "@/features/admin/components/form-field";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 
-type ProviderKey = "gemini" | "vertex" | "openrouter";
+type ProviderKey = "gemini" | "vertex" | "openrouter" | "local";
 
 type ProviderStatus = {
-  hasApiKey: boolean;
+  hasApiKey?: boolean;
   last4?: string | null;
   projectId?: string | null;
   location?: string | null;
   httpRequestEnabled?: boolean | null;
   scopes?: string | null;
   allowedHttpDomains?: string | null;
+  // Provider local (OpenAI-compatible via Tailscale).
+  configured?: boolean | null;
+  baseUrl?: string | null;
 };
 
 type ApiKeyFieldProps = {
@@ -56,11 +59,13 @@ export function ApiKeyField({ provider, label, hint, status }: ApiKeyFieldProps)
   const [allowedHttpDomains, setAllowedHttpDomains] = useState(
     status.allowedHttpDomains ?? "All",
   );
+  const [baseUrl, setBaseUrl] = useState(status.baseUrl ?? "");
   const [testResult, setTestResult] = useState<
     { ok: boolean; message?: string } | null
   >(null);
 
   const isVertex = provider === "vertex";
+  const isLocal = provider === "local";
 
   // Seed project/location dari status saat modal DIBUKA (status bisa baru tiba
   // setelah mount; seeding di handler menghindari clobber saat user mengetik).
@@ -73,6 +78,9 @@ export function ApiKeyField({ provider, label, hint, status }: ApiKeyFieldProps)
         status.scopes ?? "https://www.googleapis.com/auth/cloud-platform",
       );
       setAllowedHttpDomains(status.allowedHttpDomains ?? "All");
+    }
+    if (isLocal) {
+      setBaseUrl(status.baseUrl ?? "");
     }
     setOpen(true);
   }
@@ -108,6 +116,7 @@ export function ApiKeyField({ provider, label, hint, status }: ApiKeyFieldProps)
 
   function buildCreds():
     | { provider: "gemini" | "openrouter"; apiKey: string }
+    | { provider: "local"; baseUrl: string }
     | {
         provider: "vertex";
         serviceAccount?: string;
@@ -118,6 +127,10 @@ export function ApiKeyField({ provider, label, hint, status }: ApiKeyFieldProps)
         allowedHttpDomains: string;
       }
     | null {
+    if (isLocal) {
+      if (!baseUrl.trim()) return null;
+      return { provider: "local", baseUrl: baseUrl.trim() };
+    }
     if (isVertex) {
       if (!projectId.trim()) return null;
       // SA boleh kosong bila sudah tersimpan (hanya update project/location).
@@ -140,7 +153,9 @@ export function ApiKeyField({ provider, label, hint, status }: ApiKeyFieldProps)
   function onTest() {
     setTestResult(null);
     // Test pakai value yang diketik bila ada; backend fallback ke tersimpan.
-    if (isVertex) {
+    if (isLocal) {
+      test.mutate({ provider: "local", baseUrl: baseUrl.trim() || undefined });
+    } else if (isVertex) {
       test.mutate({
         provider: "vertex",
         serviceAccount: serviceAccount.trim() || undefined,
@@ -162,22 +177,34 @@ export function ApiKeyField({ provider, label, hint, status }: ApiKeyFieldProps)
     const creds = buildCreds();
     if (!creds) {
       toast.error(
-        isVertex
-          ? status.hasApiKey
-            ? "Project ID wajib diisi"
-            : "Service Account JSON & Project ID wajib diisi"
-          : "API key wajib diisi",
+        isLocal
+          ? "Base URL wajib diisi"
+          : isVertex
+            ? status.hasApiKey
+              ? "Project ID wajib diisi"
+              : "Service Account JSON & Project ID wajib diisi"
+            : "API key wajib diisi",
       );
       return;
     }
     save.mutate(creds);
   }
 
-  const configured = status.hasApiKey;
+  const configured = isLocal ? Boolean(status.configured) : status.hasApiKey;
+  const localHost = (() => {
+    if (!status.baseUrl) return "endpoint";
+    try {
+      return new URL(status.baseUrl).host;
+    } catch {
+      return status.baseUrl;
+    }
+  })();
   const buttonText = configured
-    ? isVertex
-      ? `Configured · ${status.projectId ?? "project"}`
-      : `Configured · ····${status.last4 ?? "****"}`
+    ? isLocal
+      ? `Configured · ${localHost}`
+      : isVertex
+        ? `Configured · ${status.projectId ?? "project"}`
+        : `Configured · ····${status.last4 ?? "****"}`
     : "Set credentials";
 
   return (
@@ -211,7 +238,22 @@ export function ApiKeyField({ provider, label, hint, status }: ApiKeyFieldProps)
           </DialogHeader>
 
           <div className="grid min-w-0 gap-3 p-4">
-            {isVertex ? (
+            {isLocal ? (
+              <div className="space-y-1.5">
+                <Label htmlFor={`local-baseurl-${provider}`}>Base URL</Label>
+                <Input
+                  id={`local-baseurl-${provider}`}
+                  value={baseUrl}
+                  onChange={(e) => setBaseUrl(e.target.value)}
+                  placeholder="http://100.x.y.z:11434/v1"
+                  className="rounded-none border-(--line) font-mono text-[11px]"
+                />
+                <p className="text-xs text-(--muted-foreground)">
+                  Endpoint OpenAI-compatible (Ollama via Tailscale). Sertakan
+                  suffix <code>/v1</code>. Tanpa API key.
+                </p>
+              </div>
+            ) : isVertex ? (
               <>
                 <div className="flex min-w-0 flex-col gap-1.5">
                   <div className="flex items-center justify-between">

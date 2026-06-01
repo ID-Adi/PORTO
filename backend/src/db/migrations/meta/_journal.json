@@ -162,6 +162,13 @@
       "when": 1780281568731,
       "tag": "0022_smooth_wilson_fisk",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1780299143557,
+      "tag": "0023_nostalgic_lifeguard",
+      "breakpoints": true
     }
   ]
 }

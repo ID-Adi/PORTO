@@ -707,7 +707,8 @@ async function withTtsRetry<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 // Kredensial provider yang sudah didekripsi (bentuk = ListModelsArgs).
-type ProviderCreds = ListModelsArgs;
+// Provider "local" hanya dipakai canvas agent, bukan jalur TTS ini.
+type ProviderCreds = Exclude<ListModelsArgs, { provider: "local" }>;
 type AiToolSettingsLike = Awaited<ReturnType<typeof readTtsSettings>>;
 
 // Ambil + dekripsi kredensial provider dari settings; lempar bila belum diatur.

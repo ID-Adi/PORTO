@@ -45,8 +45,11 @@ export const canvasAgentApi = {
     errorMessage?: string | null;
   }) => canvasAgentTrpc.canvasAgent.updateProposalStatus.mutate(input),
   getConfig: () => canvasAgentTrpc.canvasAgent.getConfig.query(),
-  updateConfig: (input: { provider: "gemini" | "vertex" | "openrouter"; model: string }) =>
-    canvasAgentTrpc.canvasAgent.updateConfig.mutate(input),
+  updateConfig: (input: {
+    provider: "gemini" | "vertex" | "openrouter" | "local";
+    model: string;
+  }) => canvasAgentTrpc.canvasAgent.updateConfig.mutate(input),
+  listLocalModels: () => canvasAgentTrpc.canvasAgent.listLocalModels.query(),
 };
 
 export async function streamCanvasAgentMessage(input: {

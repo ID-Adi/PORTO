@@ -32,6 +32,7 @@ import type {
 } from "./canvas-agent-types";
 
 const canvasAgentConfigKey = ["canvasAgent", "config"] as const;
+const canvasAgentLocalModelsKey = ["canvasAgent", "localModels"] as const;
 const STALE_RUN_TIMEOUT_MS = 5 * 60_000;
 
 function runTime(value: string | Date | null | undefined) {
@@ -456,5 +457,23 @@ export function useCanvasAgentConfig() {
     isLoading: configQuery.isLoading,
     updateConfig: updateConfigMutation.mutate,
     isUpdating: updateConfigMutation.isPending,
+  };
+}
+
+// Deteksi live model dari endpoint lokal. Disabled by default; di-refetch saat
+// dropdown model dibuka agar selalu fresh tanpa polling.
+export function useLocalModels() {
+  const query = useQuery({
+    queryKey: canvasAgentLocalModelsKey,
+    queryFn: canvasAgentApi.listLocalModels,
+    enabled: false,
+    staleTime: 0,
+    gcTime: 0,
+  });
+
+  return {
+    localModels: query.data?.models ?? [],
+    localModelsLoading: query.isFetching,
+    refetchLocalModels: query.refetch,
   };
 }

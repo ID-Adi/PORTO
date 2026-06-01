@@ -11,6 +11,7 @@ import {
   canvasAgentWorkflows,
 } from "../../db/schema/index.js";
 import { enqueueCanvasAgentRun } from "../../lib/canvas-agent-runner.js";
+import { listLocalChatModels } from "../../lib/tts-providers.js";
 import {
   getCachedScene,
   invalidateScene,
@@ -194,6 +195,7 @@ export const canvasAgentRouter = router({
         ttsApiKeyEncrypted: aiToolSettings.ttsApiKeyEncrypted,
         openrouterApiKeyEncrypted: aiToolSettings.openrouterApiKeyEncrypted,
         vertexServiceAccountEncrypted: aiToolSettings.vertexServiceAccountEncrypted,
+        localBaseUrl: aiToolSettings.localBaseUrl,
         updatedAt: aiToolSettings.updatedAt,
       })
       .from(aiToolSettings)
@@ -208,25 +210,52 @@ export const canvasAgentRouter = router({
         geminiActive: false,
         openrouterActive: false,
         vertexActive: false,
+        localActive: false,
         updatedAt: null,
       };
     }
 
     return {
       enabled: settings.enabled,
-      provider: settings.provider as "gemini" | "vertex" | "openrouter",
+      provider: settings.provider as "gemini" | "vertex" | "openrouter" | "local",
       model: settings.model,
       geminiActive: Boolean(settings.ttsApiKeyEncrypted),
       openrouterActive: Boolean(settings.openrouterApiKeyEncrypted),
       vertexActive: Boolean(settings.vertexServiceAccountEncrypted),
+      localActive: Boolean(settings.localBaseUrl),
       updatedAt: settings.updatedAt,
     };
+  }),
+
+  // Deteksi live model dari endpoint lokal (dipanggil saat dropdown dibuka).
+  listLocalModels: authenticatedProcedure.query(async () => {
+    const [settings] = await db
+      .select({ localBaseUrl: aiToolSettings.localBaseUrl })
+      .from(aiToolSettings)
+      .where(eq(aiToolSettings.id, 1))
+      .limit(1);
+
+    const baseUrl = settings?.localBaseUrl?.trim();
+    if (!baseUrl) {
+      return { models: [] as { id: string; name: string }[], configured: false };
+    }
+
+    try {
+      const models = await listLocalChatModels(baseUrl);
+      return { models, configured: true };
+    } catch (err) {
+      return {
+        models: [] as { id: string; name: string }[],
+        configured: true,
+        error: err instanceof Error ? err.message : "Gagal mendeteksi model lokal",
+      };
+    }
   }),
 
   updateConfig: authenticatedProcedure
     .input(
       z.object({
-        provider: z.enum(["gemini", "vertex", "openrouter"]),
+        provider: z.enum(["gemini", "vertex", "openrouter", "local"]),
         model: z.string().min(1).max(160),
       })
     )
@@ -243,11 +272,16 @@ export const canvasAgentRouter = router({
 
       return {
         enabled: row.canvasAgentEnabled,
-        provider: row.canvasAgentProvider as "gemini" | "vertex" | "openrouter",
+        provider: row.canvasAgentProvider as
+          | "gemini"
+          | "vertex"
+          | "openrouter"
+          | "local",
         model: row.canvasAgentModel,
         geminiActive: Boolean(row.ttsApiKeyEncrypted),
         openrouterActive: Boolean(row.openrouterApiKeyEncrypted),
         vertexActive: Boolean(row.vertexServiceAccountEncrypted),
+        localActive: Boolean(row.localBaseUrl),
         updatedAt: row.updatedAt,
       };
     }),

@@ -24,6 +24,7 @@ import {
   useCanvasAgentChat,
   useCanvasAgentWorkflows,
   useCanvasAgentConfig,
+  useLocalModels,
 } from "./canvas-agent-hooks";
 import { CanvasAgentMessageList } from "./canvas-agent-message-list";
 import { CanvasAgentProposalList } from "./canvas-agent-proposal-list";
@@ -60,8 +61,12 @@ export function CanvasAgentPanel({
   const [input, setInput] = useState("");
   const [historyOpen, setHistoryOpen] = useState(false);
   const { config, updateConfig } = useCanvasAgentConfig();
+  const { localModels, localModelsLoading, refetchLocalModels } =
+    useLocalModels();
   const [isCustomOpen, setIsCustomOpen] = useState(false);
-  const [customProvider, setCustomProvider] = useState<"gemini" | "vertex" | "openrouter">("gemini");
+  const [customProvider, setCustomProvider] = useState<
+    "gemini" | "vertex" | "openrouter" | "local"
+  >("gemini");
   const [customModelId, setCustomModelId] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<WorkflowRow | null>(null);
   // Failed run yang disembunyikan user (sesi saja — run tetap ada di DB).
@@ -300,6 +305,11 @@ export function CanvasAgentPanel({
           activeProvider={config?.provider}
           activeModel={config?.model}
           config={config}
+          localModels={localModels}
+          localModelsLoading={localModelsLoading}
+          onModelMenuOpenChange={(open) => {
+            if (open && config?.localActive) refetchLocalModels();
+          }}
           onSelectModel={(provider, model) => updateConfig({ provider, model })}
           onOpenCustomModal={() => {
             if (config) {
@@ -308,14 +318,17 @@ export function CanvasAgentPanel({
               const providerActive =
                 (config.provider === "gemini" && config.geminiActive) ||
                 (config.provider === "vertex" && config.vertexActive) ||
-                (config.provider === "openrouter" && config.openrouterActive);
+                (config.provider === "openrouter" && config.openrouterActive) ||
+                (config.provider === "local" && config.localActive);
               const fallbackProvider = config.geminiActive
                 ? "gemini"
                 : config.vertexActive
                   ? "vertex"
                   : config.openrouterActive
                     ? "openrouter"
-                    : "gemini";
+                    : config.localActive
+                      ? "local"
+                      : "gemini";
               setCustomProvider(providerActive ? config.provider : fallbackProvider);
               setCustomModelId(providerActive ? config.model : "");
             }
@@ -343,6 +356,7 @@ export function CanvasAgentPanel({
                 {config?.geminiActive && <option value="gemini">Gemini</option>}
                 {config?.vertexActive && <option value="vertex">Vertex AI</option>}
                 {config?.openrouterActive && <option value="openrouter">OpenRouter</option>}
+                {config?.localActive && <option value="local">Local LLM</option>}
               </select>
             </div>
             <div className="grid gap-1">

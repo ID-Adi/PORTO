@@ -222,6 +222,12 @@ export function AiSettingsForm() {
               hint="Bearer key dari openrouter.ai."
               status={query.data.openrouter}
             />
+            <ApiKeyField
+              provider="local"
+              label="Local LLM (Tailscale)"
+              hint="OpenAI-compatible base URL, mis. http://host:11434/v1."
+              status={query.data.local}
+            />
           </>
         ) : null}
       </div>

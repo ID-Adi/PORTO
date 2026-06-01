@@ -14,6 +14,7 @@ import {
 } from "../db/schema/index.js";
 import { decryptSecret } from "./encrypted-secret.js";
 import {
+  normalizeBaseUrl,
   OPENROUTER_BASE_URL,
   TtsError,
   vertexAccessToken,
@@ -25,7 +26,7 @@ const AGENT_TIMEOUT_MS = 90_000;
 const MAX_HISTORY_MESSAGES = 24;
 const MAX_SCENE_ELEMENTS = 120;
 
-type CanvasAgentProvider = "gemini" | "vertex" | "openrouter";
+type CanvasAgentProvider = "gemini" | "vertex" | "openrouter" | "local";
 
 type CanvasAgentMessage = typeof canvasAgentMessages.$inferSelect;
 type CanvasAgentWorkflow = typeof canvasAgentWorkflows.$inferSelect;
@@ -94,11 +95,16 @@ type OpenRouterResponse = {
 };
 
 function isProvider(value: string): value is CanvasAgentProvider {
-  return value === "gemini" || value === "vertex" || value === "openrouter";
+  return (
+    value === "gemini" ||
+    value === "vertex" ||
+    value === "openrouter" ||
+    value === "local"
+  );
 }
 
 function normalizeModel(provider: CanvasAgentProvider, model: string) {
-  if (provider === "openrouter") return model.trim();
+  if (provider === "openrouter" || provider === "local") return model.trim();
   return model.trim().replace(/^(publishers\/google\/models\/|models\/)/, "");
 }
 
@@ -394,6 +400,36 @@ async function callOpenRouter(args: {
   return openRouterText(json);
 }
 
+// Endpoint OpenAI-compatible lokal (Ollama via Tailscale) — format request &
+// respons identik OpenRouter, hanya tanpa header Authorization.
+async function callLocal(args: {
+  baseUrl: string;
+  model: string;
+  systemPrompt: string;
+  prompt: string;
+}) {
+  const res = await fetch(`${normalizeBaseUrl(args.baseUrl)}/chat/completions`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: args.model,
+      messages: [
+        { role: "system", content: args.systemPrompt },
+        { role: "user", content: args.prompt },
+      ],
+      response_format: { type: "json_object" },
+    }),
+    signal: AbortSignal.timeout(AGENT_TIMEOUT_MS),
+  });
+  const json = (await res.json()) as OpenRouterResponse;
+  if (!res.ok) {
+    throw new Error(json.error?.message ?? `Local LLM HTTP ${res.status}`);
+  }
+  return openRouterText(json);
+}
+
 async function settingsOrThrow() {
   const [settings] = await db
     .select()
@@ -435,6 +471,18 @@ async function callProvider(args: {
     }
     return callOpenRouter({
       apiKey: decryptSecret(args.settings.openrouterApiKeyEncrypted),
+      model,
+      systemPrompt: args.systemPrompt,
+      prompt: args.prompt,
+    });
+  }
+
+  if (provider === "local") {
+    if (!args.settings.localBaseUrl) {
+      throw new Error("Base URL Local LLM belum dikonfigurasi");
+    }
+    return callLocal({
+      baseUrl: args.settings.localBaseUrl,
       model,
       systemPrompt: args.systemPrompt,
       prompt: args.prompt,

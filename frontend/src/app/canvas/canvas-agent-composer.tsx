@@ -57,6 +57,9 @@ export function CanvasAgentComposer({
   activeProvider,
   activeModel,
   config,
+  localModels = [],
+  localModelsLoading = false,
+  onModelMenuOpenChange,
   onSelectModel,
   onOpenCustomModal,
 }: {
@@ -69,7 +72,13 @@ export function CanvasAgentComposer({
   activeProvider?: string;
   activeModel?: string;
   config: any;
-  onSelectModel: (provider: "gemini" | "vertex" | "openrouter", model: string) => void;
+  localModels?: { id: string; name?: string }[];
+  localModelsLoading?: boolean;
+  onModelMenuOpenChange?: (open: boolean) => void;
+  onSelectModel: (
+    provider: "gemini" | "vertex" | "openrouter" | "local",
+    model: string,
+  ) => void;
   onOpenCustomModal: () => void;
 }) {
   const statusText =
@@ -164,7 +173,7 @@ export function CanvasAgentComposer({
           </Button>
         )}
 
-        <DropdownMenu>
+        <DropdownMenu onOpenChange={onModelMenuOpenChange}>
           <DropdownMenuTrigger asChild>
             <Button
               type="button"
@@ -230,6 +239,44 @@ export function CanvasAgentComposer({
                       {isActiveModel("openrouter", m) && <span className="text-[10px]">✓</span>}
                     </DropdownMenuItem>
                   ))}
+                </DropdownMenuGroup>
+              </>
+            )}
+            {config?.localActive && (
+              <>
+                <DropdownMenuSeparator className="h-px bg-line my-1" />
+                <DropdownMenuGroup>
+                  <DropdownMenuLabel className="px-2 py-1 text-[9px] text-muted-foreground tracking-widest">
+                    LOCAL (TAILSCALE)
+                  </DropdownMenuLabel>
+                  {localModelsLoading ? (
+                    <DropdownMenuItem
+                      disabled
+                      className="px-2 py-1 text-muted-foreground rounded-none"
+                    >
+                      Mendeteksi model…
+                    </DropdownMenuItem>
+                  ) : localModels.length === 0 ? (
+                    <DropdownMenuItem
+                      disabled
+                      className="px-2 py-1 text-muted-foreground rounded-none"
+                    >
+                      Tidak ada model / server offline
+                    </DropdownMenuItem>
+                  ) : (
+                    localModels.map((m) => (
+                      <DropdownMenuItem
+                        key={m.id}
+                        onClick={() => onSelectModel("local", m.id)}
+                        className="flex items-center justify-between px-2 py-1 cursor-pointer hover:bg-muted focus:bg-muted outline-none rounded-none"
+                      >
+                        <span>{m.name ?? m.id}</span>
+                        {activeProvider === "local" && activeModel === m.id && (
+                          <span className="text-[10px]">✓</span>
+                        )}
+                      </DropdownMenuItem>
+                    ))
+                  )}
                 </DropdownMenuGroup>
               </>
             )}

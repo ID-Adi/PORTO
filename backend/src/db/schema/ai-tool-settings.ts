@@ -50,6 +50,9 @@ export const aiToolSettings = pgTable("ai_tool_settings", {
   // Provider OpenRouter — key string.
   openrouterApiKeyEncrypted: text("openrouter_api_key_encrypted"),
   openrouterApiKeyLast4: text("openrouter_api_key_last4"),
+  // Provider Local LLM (OpenAI-compatible, via Tailscale) — base URL plaintext,
+  // tanpa API key (keamanan ditangani jaringan Tailscale).
+  localBaseUrl: text("local_base_url"),
   // Provider Vertex AI (Google Cloud) — service account JSON + project + location.
   vertexServiceAccountEncrypted: text("vertex_service_account_encrypted"),
   vertexProjectId: text("vertex_project_id"),

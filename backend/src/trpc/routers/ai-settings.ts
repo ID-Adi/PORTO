@@ -39,6 +39,7 @@ const ttsConfigInput = z.object({
 const providerCredsInput = z.discriminatedUnion("provider", [
   z.object({ provider: z.literal("gemini"), apiKey: z.string().min(8).max(400) }),
   z.object({ provider: z.literal("openrouter"), apiKey: z.string().min(8).max(400) }),
+  z.object({ provider: z.literal("local"), baseUrl: z.url().max(500) }),
   z.object({
     provider: z.literal("vertex"),
     // Opsional: bila kosong & SA sudah tersimpan, hanya update project/location.
@@ -60,6 +61,7 @@ const providerCredsInput = z.discriminatedUnion("provider", [
 const testProviderInput = z.discriminatedUnion("provider", [
   z.object({ provider: z.literal("gemini"), apiKey: z.string().max(400).optional() }),
   z.object({ provider: z.literal("openrouter"), apiKey: z.string().max(400).optional() }),
+  z.object({ provider: z.literal("local"), baseUrl: z.string().max(500).optional() }),
   z.object({
     provider: z.literal("vertex"),
     serviceAccount: z.string().max(20000).optional(),
@@ -91,6 +93,10 @@ function publicConfig(row: AiToolSettingsRow) {
     openrouter: {
       hasApiKey: Boolean(row.openrouterApiKeyEncrypted),
       last4: row.openrouterApiKeyLast4,
+    },
+    local: {
+      configured: Boolean(row.localBaseUrl),
+      baseUrl: row.localBaseUrl,
     },
     vertex: {
       hasApiKey: Boolean(row.vertexServiceAccountEncrypted && row.vertexProjectId),
@@ -154,6 +160,11 @@ function buildTestCreds(
         : "");
     if (!apiKey) throw new Error("OpenRouter API key belum diisi");
     return { provider: "openrouter", apiKey };
+  }
+  if (input.provider === "local") {
+    const baseUrl = input.baseUrl?.trim() || row.localBaseUrl || "";
+    if (!baseUrl) throw new Error("Base URL Local LLM belum diisi");
+    return { provider: "local", baseUrl };
   }
   // vertex
   const saJson =
@@ -229,6 +240,9 @@ export const aiSettingsRouter = router({
           openrouterApiKeyEncrypted: encryptSecret(key),
           openrouterApiKeyLast4: key.slice(-4),
         };
+      } else if (input.provider === "local") {
+        // Base URL disimpan plaintext (host privat Tailscale, bukan secret).
+        patch = { localBaseUrl: input.baseUrl.trim() };
       } else {
         const sa = input.serviceAccount?.trim();
         if (!sa && !existing.vertexServiceAccountEncrypted) {
