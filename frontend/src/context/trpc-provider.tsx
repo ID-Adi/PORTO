@@ -17,7 +17,7 @@ export function TRPCProvider({ children }: { children: ReactNode }) {
         httpBatchLink({
           url: `${BACKEND_URL}/api/trpc`,
           fetch: (input, init) =>
-            fetch(input, { ...init, credentials: "include" }),
+            fetch(input, { ...init, credentials: "include", cache: "no-store" }),
         }),
       ],
     }),

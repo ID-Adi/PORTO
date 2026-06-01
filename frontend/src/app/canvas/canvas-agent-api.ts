@@ -10,7 +10,7 @@ const canvasAgentTrpc = createTRPCClient<AppRouter>({
     httpBatchLink({
       url: `${BACKEND_URL}/api/trpc`,
       fetch: (input, init) =>
-        fetch(input, { ...init, credentials: "include" }),
+        fetch(input, { ...init, credentials: "include", cache: "no-store" }),
     }),
   ],
 });
@@ -70,6 +70,7 @@ export async function streamCanvasAgentMessage(input: {
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
+      cache: "no-store",
       body: JSON.stringify({
         content: input.content,
         frameRefs: input.frameRefs,

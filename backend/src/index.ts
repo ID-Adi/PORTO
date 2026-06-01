@@ -31,7 +31,14 @@ app.use(
   cors({
     origin: (origin) => (isAllowedOrigin(origin) ? origin : null),
     credentials: true,
-    allowHeaders: ["Content-Type", "Authorization"],
+    allowHeaders: [
+      "Content-Type",
+      "Authorization",
+      "trpc-accept",
+      "x-trpc-source",
+      "Cache-Control",
+      "Pragma",
+    ],
     allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   }),
 );
