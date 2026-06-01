@@ -381,6 +381,43 @@ export const canvasAgentRouter = router({
       return requireWorkflow(input.id, ctx.session.user.id);
     }),
 
+  getAgentThreadSnapshot: authenticatedProcedure
+    .input(z.object({ id: z.number().int().positive() }))
+    .query(async ({ ctx, input }) => {
+      const workflow = await requireWorkflow(input.id, ctx.session.user.id);
+      await expireStaleWorkflowRuns(workflow.id);
+      const [messages, runs, proposals] = await Promise.all([
+        db
+          .select()
+          .from(canvasAgentMessages)
+          .where(eq(canvasAgentMessages.workflowId, workflow.id))
+          .orderBy(desc(canvasAgentMessages.id))
+          .limit(41),
+        db
+          .select()
+          .from(canvasAgentRuns)
+          .where(eq(canvasAgentRuns.workflowId, workflow.id))
+          .orderBy(desc(canvasAgentRuns.createdAt))
+          .limit(20),
+        db
+          .select()
+          .from(canvasAgentProposals)
+          .where(eq(canvasAgentProposals.workflowId, workflow.id))
+          .orderBy(desc(canvasAgentProposals.createdAt)),
+      ]);
+      const hasMoreMessages = messages.length > 40;
+      const messageItems = messages.slice(0, 40).reverse();
+      return {
+        workflow,
+        messages: {
+          items: messageItems,
+          nextCursor: hasMoreMessages ? messageItems[0]?.id ?? null : null,
+        },
+        runs,
+        proposals,
+      };
+    }),
+
   getWorkflowMessages: authenticatedProcedure
     .input(
       z.object({

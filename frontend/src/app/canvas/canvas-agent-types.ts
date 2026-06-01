@@ -6,6 +6,9 @@ type RouterOutputs = inferRouterOutputs<AppRouter>;
 export type WorkflowRow = RouterOutputs["canvasAgent"]["listWorkflows"][number];
 export type WorkflowDetail = RouterOutputs["canvasAgent"]["getWorkflow"];
 export type WorkflowSummary = RouterOutputs["canvasAgent"]["getWorkflowSummary"];
+export type WorkflowScene = RouterOutputs["canvasAgent"]["getWorkflowScene"];
+export type AgentThreadSnapshot =
+  RouterOutputs["canvasAgent"]["getAgentThreadSnapshot"];
 export type ServerMessageRow = WorkflowDetail["messages"][number];
 export type ProposalRow = WorkflowDetail["proposals"][number];
 export type RunRow = WorkflowDetail["runs"][number];

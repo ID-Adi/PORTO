@@ -19,6 +19,10 @@ export const canvasAgentApi = {
   listWorkflows: () => canvasAgentTrpc.canvasAgent.listWorkflows.query(),
   getWorkflowSummary: (id: number) =>
     canvasAgentTrpc.canvasAgent.getWorkflowSummary.query({ id }),
+  getWorkflowScene: (id: number) =>
+    canvasAgentTrpc.canvasAgent.getWorkflowScene.query({ id }),
+  getAgentThreadSnapshot: (id: number) =>
+    canvasAgentTrpc.canvasAgent.getAgentThreadSnapshot.query({ id }),
   getWorkflowMessages: (input: {
     id: number;
     cursor?: number;

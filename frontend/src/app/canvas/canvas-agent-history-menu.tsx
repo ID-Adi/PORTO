@@ -21,27 +21,27 @@ import type { WorkflowRow } from "./canvas-agent-types";
 export function CanvasAgentHistoryMenu({
   open,
   onOpenChange,
-  workflows,
-  activeWorkflowId,
-  activeWorkflowTitle,
+  workspaces,
+  activeWorkspaceId,
+  activeWorkspaceTitle,
   busy,
-  onSwitchWorkflow,
-  onPrefetchWorkflow,
-  onRenameWorkflow,
+  onSwitchWorkspace,
+  onPrefetchWorkspace,
+  onRenameWorkspace,
   onTogglePin,
-  onDeleteWorkflow,
+  onDeleteWorkspace,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  workflows: WorkflowRow[];
-  activeWorkflowId: number | null;
-  activeWorkflowTitle: string;
+  workspaces: WorkflowRow[];
+  activeWorkspaceId: number | null;
+  activeWorkspaceTitle: string;
   busy: boolean;
-  onSwitchWorkflow: (id: number) => void;
-  onPrefetchWorkflow: (id: number) => void;
-  onRenameWorkflow: (workflow: WorkflowRow, nextTitle: string) => void;
-  onTogglePin: (workflow: WorkflowRow) => void;
-  onDeleteWorkflow: (workflow: WorkflowRow) => void;
+  onSwitchWorkspace: (id: number) => void;
+  onPrefetchWorkspace: (id: number) => void;
+  onRenameWorkspace: (workspace: WorkflowRow, nextTitle: string) => void;
+  onTogglePin: (workspace: WorkflowRow) => void;
+  onDeleteWorkspace: (workspace: WorkflowRow) => void;
 }) {
   return (
     <DropdownMenu modal={false} open={open} onOpenChange={onOpenChange}>
@@ -50,8 +50,8 @@ export function CanvasAgentHistoryMenu({
           type="button"
           variant="outline"
           size="icon"
-          aria-label="Workflow history"
-          title="Workflow history"
+          aria-label="Workspace history"
+          title="Workspace history"
           className="canvas-agent-icon-button"
           disabled={busy}
         >
@@ -70,53 +70,53 @@ export function CanvasAgentHistoryMenu({
         }}
       >
         <div className="canvas-agent-history-sticky">
-          <DropdownMenuLabel>Workflow history</DropdownMenuLabel>
+          <DropdownMenuLabel>Workspace history</DropdownMenuLabel>
           <div className="canvas-agent-history-current">
             <span>Active</span>
-            <strong title={activeWorkflowTitle}>{activeWorkflowTitle}</strong>
+            <strong title={activeWorkspaceTitle}>{activeWorkspaceTitle}</strong>
           </div>
           <DropdownMenuSeparator />
         </div>
         <DropdownMenuGroup>
-          {workflows.length === 0 ? (
-            <DropdownMenuItem disabled>Belum ada workflow</DropdownMenuItem>
+          {workspaces.length === 0 ? (
+            <DropdownMenuItem disabled>Belum ada workspace</DropdownMenuItem>
           ) : (
-            workflows.map((workflow) => (
+            workspaces.map((workspace) => (
               <div
-                key={workflow.id}
+                key={workspace.id}
                 role="button"
                 tabIndex={0}
                 className={cn(
                   "canvas-agent-history-item",
-                  workflow.id === activeWorkflowId &&
+                  workspace.id === activeWorkspaceId &&
                     "canvas-agent-history-item-active",
                 )}
                 onPointerEnter={() => {
-                  onPrefetchWorkflow(workflow.id);
+                  onPrefetchWorkspace(workspace.id);
                 }}
                 onFocus={() => {
-                  onPrefetchWorkflow(workflow.id);
+                  onPrefetchWorkspace(workspace.id);
                 }}
                 onClick={(event) => {
                   event.stopPropagation();
                 }}
                 onDoubleClick={(event) => {
                   event.stopPropagation();
-                  onSwitchWorkflow(workflow.id);
+                  onSwitchWorkspace(workspace.id);
                 }}
                 onKeyDown={(event) => {
                   if (event.key === "Enter" || event.key === " ") {
                     event.preventDefault();
                     event.stopPropagation();
-                    onSwitchWorkflow(workflow.id);
+                    onSwitchWorkspace(workspace.id);
                   }
                 }}
               >
                 <div className="canvas-agent-history-copy">
                   <Input
-                    key={workflow.id}
-                    defaultValue={workflow.title}
-                    aria-label={`Rename workflow ${workflow.title}`}
+                    key={workspace.id}
+                    defaultValue={workspace.title}
+                    aria-label={`Rename workspace ${workspace.title}`}
                     onClick={(event) => {
                       event.stopPropagation();
                     }}
@@ -124,7 +124,7 @@ export function CanvasAgentHistoryMenu({
                       event.stopPropagation();
                     }}
                     onBlur={(event) => {
-                      onRenameWorkflow(workflow, event.currentTarget.value);
+                      onRenameWorkspace(workspace, event.currentTarget.value);
                     }}
                     onKeyDown={(event) => {
                       event.stopPropagation();
@@ -134,11 +134,11 @@ export function CanvasAgentHistoryMenu({
                     }}
                   />
                   <small>
-                    {workflow.id === activeWorkflowId ? "active / " : ""}
-                    {workflow.isPinned ? "pinned / " : ""}
-                    {workflow.status === "archived"
+                    {workspace.id === activeWorkspaceId ? "active / " : ""}
+                    {workspace.isPinned ? "pinned / " : ""}
+                    {workspace.status === "archived"
                       ? "archived"
-                      : formatTimestamp(workflow.updatedAt)}
+                      : formatTimestamp(workspace.updatedAt)}
                   </small>
                 </div>
                 <div className="canvas-agent-history-actions">
@@ -147,26 +147,26 @@ export function CanvasAgentHistoryMenu({
                     variant="ghost"
                     size="icon-xs"
                     className="canvas-agent-history-pin-button"
-                    data-pinned={workflow.isPinned ? "true" : undefined}
+                    data-pinned={workspace.isPinned ? "true" : undefined}
                     disabled={busy}
                     aria-label={
-                      workflow.isPinned ? "Unpin workflow" : "Pin workflow"
+                      workspace.isPinned ? "Unpin workspace" : "Pin workspace"
                     }
-                    title={workflow.isPinned ? "Unpin workflow" : "Pin workflow"}
+                    title={workspace.isPinned ? "Unpin workspace" : "Pin workspace"}
                     onPointerDown={(event) => {
                       event.stopPropagation();
                     }}
                     onClick={(event) => {
                       event.preventDefault();
                       event.stopPropagation();
-                      onTogglePin(workflow);
+                      onTogglePin(workspace);
                     }}
                     onDoubleClick={(event) => {
                       event.preventDefault();
                       event.stopPropagation();
                     }}
                   >
-                    {workflow.isPinned ? (
+                    {workspace.isPinned ? (
                       <PinOff aria-hidden />
                     ) : (
                       <Pin aria-hidden />
@@ -178,15 +178,15 @@ export function CanvasAgentHistoryMenu({
                     size="icon-xs"
                     className="canvas-agent-history-delete-button"
                     disabled={busy}
-                    aria-label="Delete workflow"
-                    title="Delete workflow"
+                    aria-label="Delete workspace"
+                    title="Delete workspace"
                     onPointerDown={(event) => {
                       event.stopPropagation();
                     }}
                     onClick={(event) => {
                       event.preventDefault();
                       event.stopPropagation();
-                      onDeleteWorkflow(workflow);
+                      onDeleteWorkspace(workspace);
                     }}
                     onDoubleClick={(event) => {
                       event.preventDefault();

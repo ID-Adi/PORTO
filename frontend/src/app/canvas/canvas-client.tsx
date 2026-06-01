@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useTheme } from "next-themes";
+import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -12,17 +13,24 @@ import { trpc } from "@/lib/trpc";
 import { exportScenePNG, exportSceneSVG } from "./canvas-export";
 import { loadLocalFiles, saveLocalFiles } from "./canvas-files-store";
 import {
+  loadLocalWorkspaceScene,
   loadLocalScene,
   saveLocalScene,
+  saveLocalWorkspaceScene,
   type RemoteScene,
 } from "./canvas-storage";
+import { canvasWorkspaceKeys } from "./canvas-agent-query-keys";
 import {
-  CanvasWorkflowProvider,
-  persistWorkflowId,
-  readStoredWorkflowId,
-  type CanvasWorkflowContextValue,
-} from "./canvas-workflow-context";
-import { CanvasWorkflowPicker } from "./canvas-workflow-picker";
+  fetchWorkspaceScene,
+  prefetchWorkspaceBundle,
+} from "./canvas-workspace-prefetch";
+import {
+  CanvasWorkspaceProvider,
+  persistWorkspaceId,
+  readStoredWorkspaceId,
+  type CanvasWorkspaceContextValue,
+} from "./canvas-workspace-context";
+import { CanvasWorkspacePicker } from "./canvas-workspace-picker";
 
 import "@excalidraw/excalidraw/index.css";
 import "./canvas.css";
@@ -86,7 +94,8 @@ export function CanvasClient({ headerCollapsed, onToggleHeader }: CanvasClientPr
   const saveTimer = useRef<number | null>(null);
   const cloudSaveTimer = useRef<number | null>(null);
   const cloudBootstrappedRef = useRef(false);
-  // Scene workflow aktif sudah dimuat dari cloud → autosave cloud boleh jalan.
+  const sceneTransitionRef = useRef(0);
+  // Scene workspace aktif sudah dimuat dari cloud/cache → autosave cloud boleh jalan.
   const cloudReadyRef = useRef(false);
   // Ada perubahan canvas yang belum tersimpan ke DB.
   const dirtyRef = useRef(false);
@@ -101,45 +110,47 @@ export function CanvasClient({ headerCollapsed, onToggleHeader }: CanvasClientPr
   const user = session?.user;
   const isAuthed = Boolean(user);
 
-  const utils = trpc.useUtils();
+  const queryClient = useQueryClient();
   const saveSceneMutation = trpc.canvasAgent.saveWorkflowScene.useMutation();
   const createWorkflowMutation = trpc.canvasAgent.createWorkflow.useMutation();
 
-  // Workflow aktif — sumber kebenaran tunggal (canvas scene + agent chat).
-  const [activeWorkflowId, setActiveWorkflowIdState] = useState<number | null>(
-    () => readStoredWorkflowId()
+  // Workspace aktif — sumber kebenaran tunggal untuk canvas scene.
+  const [activeWorkspaceId, setActiveWorkspaceIdState] = useState<number | null>(
+    () => readStoredWorkspaceId()
   );
   const [pickerOpen, setPickerOpen] = useState(false);
 
   // Mirror nilai ke ref agar bisa dibaca di callback stabil.
-  const activeWorkflowIdRef = useRef(activeWorkflowId);
+  const activeWorkspaceIdRef = useRef(activeWorkspaceId);
   const isAuthedRef = useRef(isAuthed);
   useEffect(() => {
-    activeWorkflowIdRef.current = activeWorkflowId;
-  }, [activeWorkflowId]);
+    activeWorkspaceIdRef.current = activeWorkspaceId;
+  }, [activeWorkspaceId]);
   useEffect(() => {
     isAuthedRef.current = isAuthed;
   }, [isAuthed]);
 
-  const setActiveWorkflowId = useCallback((id: number | null) => {
-    setActiveWorkflowIdState(id);
-    activeWorkflowIdRef.current = id;
-    persistWorkflowId(id);
+  const setActiveWorkspaceId = useCallback((id: number | null) => {
+    setActiveWorkspaceIdState(id);
+    activeWorkspaceIdRef.current = id;
+    persistWorkspaceId(id);
   }, []);
 
   // Simpan scene aktif ke DB di background. Dipanggil oleh autosave & saat unload.
   const flushCloudSave = useCallback(async () => {
-    const id = activeWorkflowIdRef.current;
+    const id = activeWorkspaceIdRef.current;
     if (!isAuthedRef.current || id === null || !cloudReadyRef.current) return;
     if (!apiRef.current) return;
     try {
       await saveCurrentSceneToRef.current(id);
       dirtyRef.current = false;
-      void utils.canvasAgent.listWorkflows.invalidate();
+      void queryClient.invalidateQueries({
+        queryKey: canvasWorkspaceKeys.workspaces(),
+      });
     } catch {
       // Biarkan dirty tetap true agar dicoba lagi / beforeunload memperingatkan.
     }
-  }, [utils]);
+  }, [queryClient]);
 
   const handleChange = useCallback(
     (
@@ -149,16 +160,21 @@ export function CanvasClient({ headerCollapsed, onToggleHeader }: CanvasClientPr
     ) => {
       if (saveTimer.current) window.clearTimeout(saveTimer.current);
       saveTimer.current = window.setTimeout(() => {
-        // Draft lokal (working scene) — terpisah dari cloud per-workflow.
+        const workspaceId = activeWorkspaceIdRef.current;
+        // Draft lokal global tetap disimpan sebagai fallback lama.
         saveLocalScene(elements, appState);
         void saveLocalFiles(files);
+        if (workspaceId !== null) {
+          saveLocalWorkspaceScene(workspaceId, elements, appState);
+          void saveLocalFiles(files, workspaceId);
+        }
       }, 400);
 
-      // Autosave cloud (debounce lebih panjang) hanya bila scene workflow aktif
+      // Autosave cloud (debounce lebih panjang) hanya bila scene workspace aktif
       // sudah dimuat, supaya tidak menimpa DB dengan kanvas kosong saat awal.
       if (
         isAuthedRef.current &&
-        activeWorkflowIdRef.current !== null &&
+        activeWorkspaceIdRef.current !== null &&
         cloudReadyRef.current
       ) {
         dirtyRef.current = true;
@@ -180,10 +196,10 @@ export function CanvasClient({ headerCollapsed, onToggleHeader }: CanvasClientPr
     if (remote.files) apiRef.current.addFiles(Object.values(remote.files));
   }, []);
 
-  // Terapkan scene workflow ke canvas (atau kosongkan bila workflow belum punya
+  // Terapkan scene workspace ke canvas (atau kosongkan bila workspace belum punya
   // scene). Sinkronkan juga draft lokal supaya konsisten saat remount.
-  const applyWorkflowScene = useCallback(
-    (scene: RemoteScene | null) => {
+  const applyWorkspaceScene = useCallback(
+    (scene: RemoteScene | null, workspaceId?: number) => {
       if (!apiRef.current) return;
       if (!scene || !Array.isArray(scene.elements)) {
         apiRef.current.updateScene({ elements: [] });
@@ -194,26 +210,73 @@ export function CanvasClient({ headerCollapsed, onToggleHeader }: CanvasClientPr
         scene.elements,
         scene.appState as unknown as AppState
       );
+      if (workspaceId !== undefined) {
+        saveLocalWorkspaceScene(workspaceId, scene.elements, scene.appState);
+      }
       if (scene.files) void saveLocalFiles(scene.files);
+      if (scene.files && workspaceId !== undefined) {
+        void saveLocalFiles(scene.files, workspaceId);
+      }
     },
     [applyRemoteScene]
   );
 
-  const loadWorkflowScene = useCallback(
-    async (id: number) => {
+  const loadWorkspaceScene = useCallback(
+    async (id: number, transitionId = sceneTransitionRef.current) => {
+      let appliedScene = false;
+      const local = loadLocalWorkspaceScene(id);
+      if (
+        local &&
+        Array.isArray(local.elements) &&
+        transitionId === sceneTransitionRef.current &&
+        activeWorkspaceIdRef.current === id
+      ) {
+        applyWorkspaceScene(
+          {
+            elements: local.elements,
+            appState: local.appState,
+          },
+          id,
+        );
+        appliedScene = true;
+        void loadLocalFiles(id).then((files) => {
+          if (
+            files &&
+            transitionId === sceneTransitionRef.current &&
+            activeWorkspaceIdRef.current === id
+          ) {
+            apiRef.current?.addFiles(Object.values(files));
+          }
+        });
+      }
+
       try {
         // Endpoint khusus scene — tak menarik messages/proposals/runs.
-        const data = await utils.canvasAgent.getWorkflowScene.fetch({ id });
-        applyWorkflowScene((data?.sceneData ?? null) as RemoteScene | null);
+        const data = await fetchWorkspaceScene(queryClient, id);
+        if (
+          transitionId !== sceneTransitionRef.current ||
+          activeWorkspaceIdRef.current !== id
+        ) {
+          return;
+        }
+        applyWorkspaceScene((data?.sceneData ?? null) as RemoteScene | null, id);
+        appliedScene = true;
       } catch {
-        // workflow tak ditemukan / belum login — biarkan canvas apa adanya.
+        if (!appliedScene && activeWorkspaceIdRef.current === id) {
+          applyWorkspaceScene(null, id);
+        }
       } finally {
-        // Scene workflow aktif sudah final di canvas → autosave cloud boleh jalan.
-        cloudReadyRef.current = true;
-        dirtyRef.current = false;
+        if (
+          transitionId === sceneTransitionRef.current &&
+          activeWorkspaceIdRef.current === id
+        ) {
+          // Scene workspace aktif sudah final di canvas → autosave cloud boleh jalan.
+          cloudReadyRef.current = true;
+          dirtyRef.current = false;
+        }
       }
     },
-    [utils, applyWorkflowScene]
+    [queryClient, applyWorkspaceScene]
   );
 
   const saveCurrentSceneTo = useCallback(
@@ -222,29 +285,37 @@ export function CanvasClient({ headerCollapsed, onToggleHeader }: CanvasClientPr
       const elements = apiRef.current.getSceneElements();
       const appState = apiRef.current.getAppState();
       const files = apiRef.current.getFiles();
+      const sceneData = { elements, appState: slimAppState(appState), files };
       await saveSceneMutation.mutateAsync({
         id,
-        sceneData: { elements, appState: slimAppState(appState), files },
+        sceneData,
+      });
+      saveLocalWorkspaceScene(id, elements, appState);
+      void saveLocalFiles(files, id);
+      queryClient.setQueryData(canvasWorkspaceKeys.scene(id), {
+        sceneData,
       });
     },
-    [saveSceneMutation]
+    [queryClient, saveSceneMutation]
   );
 
   useEffect(() => {
     saveCurrentSceneToRef.current = saveCurrentSceneTo;
   }, [saveCurrentSceneTo]);
 
-  // Pindah workflow: save lama fire-and-forget → set aktif → muat scene baru.
-  const switchWorkflow = useCallback(
+  // Pindah workspace: save lama fire-and-forget → set aktif → muat scene baru.
+  const switchWorkspace = useCallback(
     async (nextId: number | null) => {
-      const prev = activeWorkflowIdRef.current;
+      const prev = activeWorkspaceIdRef.current;
+      const transitionId = sceneTransitionRef.current + 1;
+      sceneTransitionRef.current = transitionId;
       // Scene baru belum dimuat → matikan autosave cloud sementara agar tidak
-      // menimpa workflow tujuan dengan kanvas lama.
+      // menimpa workspace tujuan dengan kanvas lama.
       cloudReadyRef.current = false;
       if (cloudSaveTimer.current) window.clearTimeout(cloudSaveTimer.current);
 
       // UI berpindah instan.
-      setActiveWorkflowId(nextId);
+      setActiveWorkspaceId(nextId);
 
       // Fire-and-forget: simpan scene lama di background tanpa memblokir
       // perpindahan. User tak perlu menunggu save selesai untuk melihat scene
@@ -253,7 +324,9 @@ export function CanvasClient({ headerCollapsed, onToggleHeader }: CanvasClientPr
         void saveCurrentSceneTo(prev)
           .then(() => {
             dirtyRef.current = false;
-            void utils.canvasAgent.listWorkflows.invalidate();
+            void queryClient.invalidateQueries({
+              queryKey: canvasWorkspaceKeys.workspaces(),
+            });
           })
           .catch(() => {
             // best-effort — scene lama akan dicoba lagi oleh autosave berikutnya.
@@ -262,67 +335,82 @@ export function CanvasClient({ headerCollapsed, onToggleHeader }: CanvasClientPr
 
       // Hanya await load scene tujuan — satu-satunya operasi blocking.
       if (nextId !== null) {
-        await loadWorkflowScene(nextId);
+        void prefetchWorkspaceBundle(queryClient, nextId);
+        await loadWorkspaceScene(nextId, transitionId);
       } else {
-        applyWorkflowScene(null);
+        applyWorkspaceScene(null);
+        cloudReadyRef.current = false;
+        dirtyRef.current = false;
       }
     },
     [
+      queryClient,
       saveCurrentSceneTo,
-      setActiveWorkflowId,
-      loadWorkflowScene,
-      applyWorkflowScene,
-      utils,
+      setActiveWorkspaceId,
+      loadWorkspaceScene,
+      applyWorkspaceScene,
     ]
   );
 
-  // Pastikan ada workflow aktif; bila belum ada, buat baru & ADOPSI scene canvas
-  // saat ini (tanpa mengosongkan kanvas). Return id workflow aktif.
-  const ensureWorkflow = useCallback(
-    async (title = "Untitled workflow"): Promise<number> => {
-      const existing = activeWorkflowIdRef.current;
+  // Pastikan ada workspace aktif; bila belum ada, buat baru & ADOPSI scene canvas
+  // saat ini (tanpa mengosongkan kanvas). Return id workspace aktif.
+  const ensureWorkspace = useCallback(
+    async (title = "Untitled workspace"): Promise<number> => {
+      const existing = activeWorkspaceIdRef.current;
       if (existing !== null) return existing;
       const row = await createWorkflowMutation.mutateAsync({ title });
-      setActiveWorkflowId(row.id);
-      // Kanvas saat ini menjadi scene workflow baru → cloud boleh autosave.
+      setActiveWorkspaceId(row.id);
+      queryClient.setQueryData(canvasWorkspaceKeys.workspace(row.id), row);
+      // Kanvas saat ini menjadi scene workspace baru → cloud boleh autosave.
       cloudReadyRef.current = true;
       // Adopsi scene non-blocking supaya create terasa instan.
       void saveCurrentSceneTo(row.id).catch(() => {
         // best-effort adopsi scene
       });
-      void utils.canvasAgent.listWorkflows.invalidate();
+      void queryClient.invalidateQueries({
+        queryKey: canvasWorkspaceKeys.workspaces(),
+      });
       return row.id;
     },
-    [createWorkflowMutation, setActiveWorkflowId, saveCurrentSceneTo, utils]
+    [
+      createWorkflowMutation,
+      queryClient,
+      setActiveWorkspaceId,
+      saveCurrentSceneTo,
+    ]
   );
 
   const saveActiveScene = useCallback(async () => {
     try {
-      const id = await ensureWorkflow("Canvas workflow");
+      const id = await ensureWorkspace("Canvas workspace");
       await saveCurrentSceneTo(id);
       dirtyRef.current = false;
-      void utils.canvasAgent.listWorkflows.invalidate();
-      void utils.canvasAgent.getWorkflow.invalidate({ id });
-      toast.success("Tersimpan ke workflow");
+      void queryClient.invalidateQueries({
+        queryKey: canvasWorkspaceKeys.workspaces(),
+      });
+      void queryClient.invalidateQueries({
+        queryKey: canvasWorkspaceKeys.workspace(id),
+      });
+      toast.success("Tersimpan ke workspace");
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "Gagal menyimpan ke cloud"
       );
     }
-  }, [ensureWorkflow, saveCurrentSceneTo, utils]);
+  }, [ensureWorkspace, queryClient, saveCurrentSceneTo]);
 
-  // Auto-load scene workflow aktif sekali (setelah API siap & user login).
+  // Auto-load scene workspace aktif sekali (setelah API siap & user login).
   const maybeBootstrapCloud = useCallback(() => {
     if (cloudBootstrappedRef.current) return;
     if (!apiRef.current || !isAuthedRef.current) return;
-    const id = activeWorkflowIdRef.current;
+    const id = activeWorkspaceIdRef.current;
     if (id === null) return;
     cloudBootstrappedRef.current = true;
-    void loadWorkflowScene(id);
-  }, [loadWorkflowScene]);
+    void loadWorkspaceScene(id);
+  }, [loadWorkspaceScene]);
 
   // Saat CanvasPawa siap: pasang apiRef, restore files lokal, lalu coba bootstrap
-  // scene workflow dari cloud (kalau ada workflow aktif & sudah login).
+  // scene workspace dari cloud (kalau ada workspace aktif & sudah login).
   const handleApiReady = useCallback(
     (api: ExcalidrawImperativeAPI) => {
       apiRef.current = api;
@@ -372,7 +460,11 @@ export function CanvasClient({ headerCollapsed, onToggleHeader }: CanvasClientPr
       currentItemStartArrowhead: null,
       currentItemEndArrowhead: "arrow" as const,
     };
-    const saved = loadLocalScene();
+    const storedWorkspaceId = readStoredWorkspaceId();
+    const saved =
+      storedWorkspaceId !== null
+        ? loadLocalWorkspaceScene(storedWorkspaceId) ?? loadLocalScene()
+        : loadLocalScene();
     if (!saved) return { appState: defaultAppState };
     return {
       elements: saved.elements,
@@ -416,21 +508,21 @@ export function CanvasClient({ headerCollapsed, onToggleHeader }: CanvasClientPr
     []
   );
 
-  const workflowContext = useMemo<CanvasWorkflowContextValue>(
+  const workspaceContext = useMemo<CanvasWorkspaceContextValue>(
     () => ({
-      activeWorkflowId,
-      switchWorkflow,
+      activeWorkspaceId,
+      switchWorkspace,
       saveActiveScene,
-      ensureWorkflow,
+      ensureWorkspace,
       openPicker: () => setPickerOpen(true),
     }),
-    [activeWorkflowId, switchWorkflow, saveActiveScene, ensureWorkflow]
+    [activeWorkspaceId, switchWorkspace, saveActiveScene, ensureWorkspace]
   );
 
   if (!mounted) return <CanvasLoader />;
 
   return (
-    <CanvasWorkflowProvider value={workflowContext}>
+    <CanvasWorkspaceProvider value={workspaceContext}>
       <div className="canvas-porto-wrapper flex-1 overflow-hidden">
         <CanvasExcalidraw
           isDark={isDark}
@@ -452,12 +544,12 @@ export function CanvasClient({ headerCollapsed, onToggleHeader }: CanvasClientPr
           onSaveCloud={saveActiveScene}
           onLoadCloud={handleLoadCloud}
         />
-        <CanvasWorkflowPicker
+        <CanvasWorkspacePicker
           open={pickerOpen}
           onOpenChange={setPickerOpen}
           isAuthed={isAuthed}
         />
       </div>
-    </CanvasWorkflowProvider>
+    </CanvasWorkspaceProvider>
   );
 }

@@ -6,7 +6,10 @@ import type {
   RunRow,
   WorkflowRow,
 } from "./canvas-agent-types";
-import { canvasAgentKeys } from "./canvas-agent-query-keys";
+import {
+  canvasAgentThreadKeys,
+  canvasWorkspaceKeys,
+} from "./canvas-agent-query-keys";
 
 type MessagesData = InfiniteData<CanvasAgentMessagePage, number | undefined>;
 
@@ -21,7 +24,7 @@ export function patchWorkflowList(
   queryClient: QueryClient,
   updater: (rows: WorkflowRow[]) => WorkflowRow[],
 ) {
-  queryClient.setQueryData<WorkflowRow[]>(canvasAgentKeys.workflows(), (rows) =>
+  queryClient.setQueryData<WorkflowRow[]>(canvasWorkspaceKeys.workspaces(), (rows) =>
     rows ? sortWorkflowRows(updater(rows)) : rows,
   );
 }
@@ -32,7 +35,7 @@ export function appendMessage(
   message: CanvasAgentMessage,
 ) {
   queryClient.setQueryData<MessagesData>(
-    canvasAgentKeys.messages(workflowId),
+    canvasAgentThreadKeys.messages(workflowId),
     (current) => {
       if (!current) {
         return {
@@ -62,7 +65,7 @@ export function replaceMessage(
   replacement: CanvasAgentMessage,
 ) {
   queryClient.setQueryData<MessagesData>(
-    canvasAgentKeys.messages(workflowId),
+    canvasAgentThreadKeys.messages(workflowId),
     (current) => {
       if (!current) return current;
       const pages = current.pages.map((page) => ({
@@ -84,7 +87,7 @@ export function upsertServerMessage(
   clientMessageId?: string,
 ) {
   queryClient.setQueryData<MessagesData>(
-    canvasAgentKeys.messages(workflowId),
+    canvasAgentThreadKeys.messages(workflowId),
     (current) => {
       if (!current) {
         return {
@@ -138,7 +141,7 @@ export function updateMessage(
   updater: (message: CanvasAgentMessage) => CanvasAgentMessage,
 ) {
   queryClient.setQueryData<MessagesData>(
-    canvasAgentKeys.messages(workflowId),
+    canvasAgentThreadKeys.messages(workflowId),
     (current) => {
       if (!current) return current;
       return {
@@ -160,7 +163,7 @@ export function removeMessage(
   predicate: (message: CanvasAgentMessage) => boolean,
 ) {
   queryClient.setQueryData<MessagesData>(
-    canvasAgentKeys.messages(workflowId),
+    canvasAgentThreadKeys.messages(workflowId),
     (current) => {
       if (!current) return current;
       return {
@@ -180,7 +183,7 @@ export function upsertRun(
   run: RunRow | null,
 ) {
   if (!run) return;
-  queryClient.setQueryData<RunRow[]>(canvasAgentKeys.runs(workflowId), (rows) => {
+  queryClient.setQueryData<RunRow[]>(canvasAgentThreadKeys.runs(workflowId), (rows) => {
     const current = rows ?? [];
     return [run, ...current.filter((item) => item.id !== run.id)].slice(0, 20);
   });
@@ -192,7 +195,7 @@ export function upsertProposal(
   proposal: ProposalRow,
 ) {
   queryClient.setQueryData<ProposalRow[]>(
-    canvasAgentKeys.proposals(workflowId),
+    canvasAgentThreadKeys.proposals(workflowId),
     (rows) => {
       const current = rows ?? [];
       return [proposal, ...current.filter((item) => item.id !== proposal.id)];

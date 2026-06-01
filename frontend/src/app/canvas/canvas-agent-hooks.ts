@@ -16,9 +16,16 @@ import {
   upsertRun,
 } from "./canvas-agent-cache";
 import { canvasAgentApi } from "./canvas-agent-api";
-import { canvasAgentKeys } from "./canvas-agent-query-keys";
+import {
+  canvasAgentThreadKeys,
+  canvasWorkspaceKeys,
+} from "./canvas-agent-query-keys";
 import { useCanvasAgentStream } from "./canvas-agent-stream";
 import { applyProposalChanges, collectFrameRefs } from "./canvas-agent-utils";
+import {
+  AGENT_THREAD_STALE_TIME_MS,
+  ensureAgentThreadSnapshot,
+} from "./canvas-workspace-prefetch";
 
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import type { RefObject } from "react";
@@ -49,40 +56,40 @@ function isRunStale(run: RunRow, now = Date.now()) {
   return base > 0 && now - base > STALE_RUN_TIMEOUT_MS;
 }
 
-export function useCanvasAgentWorkflows(args: {
+export function useCanvasAgentWorkspaces(args: {
   enabled: boolean;
-  activeWorkflowId: number | null;
-  switchWorkflow: (id: number | null) => Promise<void>;
+  activeWorkspaceId: number | null;
+  switchWorkspace: (id: number | null) => Promise<void>;
 }) {
   const queryClient = useQueryClient();
-  const workflowsQuery = useQuery({
-    queryKey: canvasAgentKeys.workflows(),
+  const workspacesQuery = useQuery({
+    queryKey: canvasWorkspaceKeys.workspaces(),
     queryFn: canvasAgentApi.listWorkflows,
     enabled: args.enabled,
     staleTime: 30_000,
     refetchOnWindowFocus: true,
   });
 
-  const workflows = useMemo(
-    () => sortWorkflowRows(workflowsQuery.data ?? []),
-    [workflowsQuery.data],
+  const workspaces = useMemo(
+    () => sortWorkflowRows(workspacesQuery.data ?? []),
+    [workspacesQuery.data],
   );
 
   const createWorkflowMutation = useMutation({
     mutationFn: (title: string | undefined) =>
-      canvasAgentApi.createWorkflow({ title: title ?? "Untitled workflow" }),
+      canvasAgentApi.createWorkflow({ title: title ?? "Untitled workspace" }),
     onSuccess: async (row) => {
       patchWorkflowList(queryClient, (rows) => [row, ...rows]);
-      await args.switchWorkflow(row.id);
+      await args.switchWorkspace(row.id);
     },
   });
 
   const updateWorkflowMutation = useMutation({
     mutationFn: canvasAgentApi.updateWorkflow,
     onMutate: async (next) => {
-      await queryClient.cancelQueries({ queryKey: canvasAgentKeys.workflows() });
+      await queryClient.cancelQueries({ queryKey: canvasWorkspaceKeys.workspaces() });
       const previous = queryClient.getQueryData<WorkflowRow[]>(
-        canvasAgentKeys.workflows(),
+        canvasWorkspaceKeys.workspaces(),
       );
       patchWorkflowList(queryClient, (rows) =>
         rows.map((row) => (row.id === next.id ? { ...row, ...next } : row)),
@@ -90,13 +97,13 @@ export function useCanvasAgentWorkflows(args: {
       return { previous };
     },
     onError: (_error, _next, context) => {
-      queryClient.setQueryData(canvasAgentKeys.workflows(), context?.previous);
+      queryClient.setQueryData(canvasWorkspaceKeys.workspaces(), context?.previous);
     },
     onSuccess: (row) => {
       patchWorkflowList(queryClient, (rows) =>
         rows.map((item) => (item.id === row.id ? row : item)),
       );
-      queryClient.setQueryData(canvasAgentKeys.workflow(row.id), row);
+      queryClient.setQueryData(canvasWorkspaceKeys.workspace(row.id), row);
     },
   });
 
@@ -104,52 +111,54 @@ export function useCanvasAgentWorkflows(args: {
     mutationFn: canvasAgentApi.deleteWorkflow,
     onSuccess: async (_result, id) => {
       patchWorkflowList(queryClient, (rows) =>
-        rows.filter((workflow) => workflow.id !== id),
+        rows.filter((workspace) => workspace.id !== id),
       );
-      queryClient.removeQueries({ queryKey: canvasAgentKeys.workflow(id) });
-      if (id === args.activeWorkflowId) {
-        const fallback = workflows.find((workflow) => workflow.id !== id);
-        await args.switchWorkflow(fallback?.id ?? null);
+      queryClient.removeQueries({ queryKey: canvasWorkspaceKeys.workspace(id) });
+      queryClient.removeQueries({ queryKey: canvasWorkspaceKeys.scene(id) });
+      queryClient.removeQueries({ queryKey: canvasAgentThreadKeys.thread(id) });
+      if (id === args.activeWorkspaceId) {
+        const fallback = workspaces.find((workspace) => workspace.id !== id);
+        await args.switchWorkspace(fallback?.id ?? null);
       }
     },
   });
 
-  const createWorkflow = useCallback(
+  const createWorkspace = useCallback(
     (title?: string) => createWorkflowMutation.mutateAsync(title),
     [createWorkflowMutation],
   );
 
-  const renameWorkflow = useCallback(
-    async (workflow: WorkflowRow, nextTitle: string) => {
-      const title = nextTitle.trim() || "Untitled workflow";
-      if (title === workflow.title) return;
-      await updateWorkflowMutation.mutateAsync({ id: workflow.id, title });
+  const renameWorkspace = useCallback(
+    async (workspace: WorkflowRow, nextTitle: string) => {
+      const title = nextTitle.trim() || "Untitled workspace";
+      if (title === workspace.title) return;
+      await updateWorkflowMutation.mutateAsync({ id: workspace.id, title });
     },
     [updateWorkflowMutation],
   );
 
-  const togglePinWorkflow = useCallback(
-    async (workflow: WorkflowRow) => {
+  const togglePinWorkspace = useCallback(
+    async (workspace: WorkflowRow) => {
       await updateWorkflowMutation.mutateAsync({
-        id: workflow.id,
-        isPinned: !workflow.isPinned,
+        id: workspace.id,
+        isPinned: !workspace.isPinned,
       });
     },
     [updateWorkflowMutation],
   );
 
-  const deleteWorkflow = useCallback(
+  const deleteWorkspace = useCallback(
     (id: number) => deleteWorkflowMutation.mutateAsync(id),
     [deleteWorkflowMutation],
   );
 
   return {
-    workflowsQuery,
-    workflows,
-    createWorkflow,
-    renameWorkflow,
-    togglePinWorkflow,
-    deleteWorkflow,
+    workspacesQuery,
+    workspaces,
+    createWorkspace,
+    renameWorkspace,
+    togglePinWorkspace,
+    deleteWorkspace,
     isBusy:
       createWorkflowMutation.isPending ||
       updateWorkflowMutation.isPending ||
@@ -159,58 +168,80 @@ export function useCanvasAgentWorkflows(args: {
 
 export function useCanvasAgentChat(args: {
   enabled: boolean;
-  activeWorkflowId: number | null;
-  ensureWorkflow: (title?: string) => Promise<number>;
+  activeWorkspaceId: number | null;
+  ensureWorkspace: (title?: string) => Promise<number>;
   apiRef: RefObject<ExcalidrawImperativeAPI | null>;
 }) {
+  const { enabled, activeWorkspaceId, ensureWorkspace, apiRef } = args;
   const queryClient = useQueryClient();
   const stream = useCanvasAgentStream();
-  const workflowId = args.activeWorkflowId;
+  const workspaceId = activeWorkspaceId;
   const [retryingRunIds, setRetryingRunIds] = useState<Set<number>>(
     () => new Set(),
   );
   const retryingRunIdsRef = useRef<Set<number>>(new Set());
 
-  // Hentikan stream aktif saat user pindah antar-workflow agar tidak ada stream
-  // yang bocor memperbarui cache workflow lama di background. Jangan abort saat
-  // workflow baru dibuat dari null (kirim pesan pertama) — itu justru mematikan
+  // Hentikan stream aktif saat user pindah workspace agar tidak ada stream
+  // yang bocor memperbarui cache thread lama di background. Jangan abort saat
+  // workspace baru dibuat dari null (kirim pesan pertama) — itu justru mematikan
   // stream yang baru dimulai.
   const stopStream = stream.stop;
-  const prevWorkflowIdRef = useRef(workflowId);
+  const prevWorkspaceIdRef = useRef(workspaceId);
   useEffect(() => {
-    const prev = prevWorkflowIdRef.current;
-    prevWorkflowIdRef.current = workflowId;
-    if (prev !== null && prev !== workflowId) {
+    const prev = prevWorkspaceIdRef.current;
+    prevWorkspaceIdRef.current = workspaceId;
+    if (prev !== null && prev !== workspaceId) {
       stopStream();
     }
-  }, [workflowId, stopStream]);
+  }, [workspaceId, stopStream]);
 
   // Stop versi UI: selain abort stream, tandai run aktif jadi "cancelled" di
   // cache secara optimistis supaya spinner "Agent thinking..." langsung hilang
   // tanpa menunggu polling. Backend juga membatalkan run yang sama via abort.
   const stopStreamAndCancel = useCallback(() => {
     stream.stop();
-    if (workflowId === null) return;
+    if (workspaceId === null) return;
     queryClient.setQueryData<RunRow[]>(
-      canvasAgentKeys.runs(workflowId),
+      canvasAgentThreadKeys.runs(workspaceId),
       (rows) =>
         rows?.map((run) =>
           isRunActive(run) ? { ...run, status: "cancelled" } : run,
         ),
     );
-  }, [stream, queryClient, workflowId]);
+  }, [stream, queryClient, workspaceId]);
 
   const workflowQuery = useQuery({
-    queryKey: workflowId ? canvasAgentKeys.workflow(workflowId) : ["disabled"],
-    queryFn: () => canvasAgentApi.getWorkflowSummary(workflowId ?? 0),
-    enabled: args.enabled && workflowId !== null,
+    queryKey: workspaceId
+      ? canvasWorkspaceKeys.workspace(workspaceId)
+      : ["disabled", "workspace"],
+    queryFn: async () => {
+      const snapshot = await ensureAgentThreadSnapshot(
+        queryClient,
+        workspaceId ?? 0,
+      );
+      return snapshot.workflow;
+    },
+    enabled: enabled && workspaceId !== null,
+    staleTime: AGENT_THREAD_STALE_TIME_MS,
   });
 
   const messagesQuery = useInfiniteQuery({
-    queryKey: workflowId ? canvasAgentKeys.messages(workflowId) : ["disabled"],
+    queryKey: workspaceId
+      ? canvasAgentThreadKeys.messages(workspaceId)
+      : ["disabled", "messages"],
     queryFn: async ({ pageParam }) => {
+      if (pageParam === undefined) {
+        const snapshot = await ensureAgentThreadSnapshot(
+          queryClient,
+          workspaceId ?? 0,
+        );
+        return {
+          items: snapshot.messages.items as CanvasAgentMessage[],
+          nextCursor: snapshot.messages.nextCursor,
+        };
+      }
       const page = await canvasAgentApi.getWorkflowMessages({
-        id: workflowId ?? 0,
+        id: workspaceId ?? 0,
         cursor: pageParam,
         limit: 40,
       });
@@ -221,13 +252,23 @@ export function useCanvasAgentChat(args: {
     },
     initialPageParam: undefined as number | undefined,
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
-    enabled: args.enabled && workflowId !== null,
+    enabled: enabled && workspaceId !== null,
+    staleTime: AGENT_THREAD_STALE_TIME_MS,
   });
 
   const runsQuery = useQuery({
-    queryKey: workflowId ? canvasAgentKeys.runs(workflowId) : ["disabled"],
-    queryFn: () => canvasAgentApi.getWorkflowRuns(workflowId ?? 0),
-    enabled: args.enabled && workflowId !== null,
+    queryKey: workspaceId
+      ? canvasAgentThreadKeys.runs(workspaceId)
+      : ["disabled", "runs"],
+    queryFn: async () => {
+      const snapshot = await ensureAgentThreadSnapshot(
+        queryClient,
+        workspaceId ?? 0,
+      );
+      return snapshot.runs as RunRow[];
+    },
+    enabled: enabled && workspaceId !== null,
+    staleTime: AGENT_THREAD_STALE_TIME_MS,
     refetchInterval: (query) => {
       const now = Date.now();
       const active = query.state.data?.filter(isRunActive) ?? [];
@@ -236,9 +277,18 @@ export function useCanvasAgentChat(args: {
   });
 
   const proposalsQuery = useQuery({
-    queryKey: workflowId ? canvasAgentKeys.proposals(workflowId) : ["disabled"],
-    queryFn: () => canvasAgentApi.getWorkflowProposals(workflowId ?? 0),
-    enabled: args.enabled && workflowId !== null,
+    queryKey: workspaceId
+      ? canvasAgentThreadKeys.proposals(workspaceId)
+      : ["disabled", "proposals"],
+    queryFn: async () => {
+      const snapshot = await ensureAgentThreadSnapshot(
+        queryClient,
+        workspaceId ?? 0,
+      );
+      return snapshot.proposals as ProposalRow[];
+    },
+    enabled: enabled && workspaceId !== null,
+    staleTime: AGENT_THREAD_STALE_TIME_MS,
   });
 
   const retryRunMutation = useMutation({
@@ -246,7 +296,7 @@ export function useCanvasAgentChat(args: {
     onSuccess: (run) => {
       upsertRun(queryClient, run.workflowId, run);
       void queryClient.invalidateQueries({
-        queryKey: canvasAgentKeys.runs(run.workflowId),
+        queryKey: canvasAgentThreadKeys.runs(run.workflowId),
       });
     },
   });
@@ -256,16 +306,16 @@ export function useCanvasAgentChat(args: {
     onMutate: async (next) => {
       const proposalsKey =
         proposalsQuery.data?.find((proposal) => proposal.id === next.id)
-          ?.workflowId ?? workflowId;
+          ?.workflowId ?? workspaceId;
       if (!proposalsKey) return {};
       await queryClient.cancelQueries({
-        queryKey: canvasAgentKeys.proposals(proposalsKey),
+        queryKey: canvasAgentThreadKeys.proposals(proposalsKey),
       });
       const previous = queryClient.getQueryData<ProposalRow[]>(
-        canvasAgentKeys.proposals(proposalsKey),
+        canvasAgentThreadKeys.proposals(proposalsKey),
       );
       queryClient.setQueryData<ProposalRow[]>(
-        canvasAgentKeys.proposals(proposalsKey),
+        canvasAgentThreadKeys.proposals(proposalsKey),
         (rows) =>
           rows?.map((proposal) =>
             proposal.id === next.id ? { ...proposal, ...next } : proposal,
@@ -276,7 +326,7 @@ export function useCanvasAgentChat(args: {
     onError: (_error, _next, context) => {
       if (!context?.workflowId) return;
       queryClient.setQueryData(
-        canvasAgentKeys.proposals(context.workflowId),
+        canvasAgentThreadKeys.proposals(context.workflowId),
         context.previous,
       );
     },
@@ -309,14 +359,14 @@ export function useCanvasAgentChat(args: {
   const previousActiveRunIdsRef = useRef<Set<number>>(new Set());
 
   useEffect(() => {
-    if (!workflowId || staleActiveRuns.length === 0) return;
+    if (!workspaceId || staleActiveRuns.length === 0) return;
     void queryClient.invalidateQueries({
-      queryKey: canvasAgentKeys.runs(workflowId),
+      queryKey: canvasAgentThreadKeys.runs(workspaceId),
     });
-  }, [queryClient, staleActiveRuns.length, workflowId]);
+  }, [queryClient, staleActiveRuns.length, workspaceId]);
 
   useEffect(() => {
-    if (!workflowId) {
+    if (!workspaceId) {
       previousActiveRunIdsRef.current = new Set();
       return;
     }
@@ -330,37 +380,37 @@ export function useCanvasAgentChat(args: {
     if (!hadRunSettle) return;
     void Promise.all([
       queryClient.invalidateQueries({
-        queryKey: canvasAgentKeys.messages(workflowId),
+        queryKey: canvasAgentThreadKeys.messages(workspaceId),
       }),
       queryClient.invalidateQueries({
-        queryKey: canvasAgentKeys.proposals(workflowId),
+        queryKey: canvasAgentThreadKeys.proposals(workspaceId),
       }),
       queryClient.invalidateQueries({
-        queryKey: canvasAgentKeys.runs(workflowId),
+        queryKey: canvasAgentThreadKeys.runs(workspaceId),
       }),
       queryClient.invalidateQueries({
-        queryKey: canvasAgentKeys.workflows(),
+        queryKey: canvasWorkspaceKeys.workspaces(),
       }),
     ]);
-  }, [activeRuns, queryClient, workflowId]);
+  }, [activeRuns, queryClient, workspaceId]);
 
   const sendMessage = useCallback(
     async (content: string) => {
       const trimmed = content.trim();
       if (!trimmed || stream.isStreaming) return;
-      const nextWorkflowId = workflowId ?? (await args.ensureWorkflow());
+      const nextWorkspaceId = workspaceId ?? (await ensureWorkspace());
       const clientMessageId = `${Date.now()}:${Math.random()
         .toString(36)
         .slice(2)}`;
-      const frameRefs = collectFrameRefs(args.apiRef.current, trimmed);
+      const frameRefs = collectFrameRefs(apiRef.current, trimmed);
       await stream.start({
-        workflowId: nextWorkflowId,
+        workflowId: nextWorkspaceId,
         content: trimmed,
         frameRefs,
         clientMessageId,
       });
     },
-    [args, stream, workflowId],
+    [apiRef, ensureWorkspace, stream, workspaceId],
   );
 
   const retryRun = useCallback(
@@ -389,14 +439,14 @@ export function useCanvasAgentChat(args: {
 
   const applyProposal = useCallback(
     async (proposal: ProposalRow) => {
-      if (!args.apiRef.current) {
+      if (!apiRef.current) {
         toast.error("Canvas belum siap");
         return;
       }
 
       try {
         await applyProposalChanges(
-          args.apiRef.current,
+          apiRef.current,
           (proposal.changes ?? []) as ProposalChange[],
         );
         await updateProposalMutation.mutateAsync({
@@ -416,7 +466,7 @@ export function useCanvasAgentChat(args: {
         );
       }
     },
-    [args.apiRef, updateProposalMutation],
+    [apiRef, updateProposalMutation],
   );
 
   return {

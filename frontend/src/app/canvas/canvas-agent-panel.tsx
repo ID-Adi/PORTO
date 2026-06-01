@@ -1,10 +1,9 @@
 "use client";
 
 import { Bot, Plus, Trash2 } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-
-import { trpc } from "@/lib/trpc";
 
 import {
   AlertDialog,
@@ -22,15 +21,16 @@ import { CanvasAgentComposer } from "./canvas-agent-composer";
 import { CanvasAgentHistoryMenu } from "./canvas-agent-history-menu";
 import {
   useCanvasAgentChat,
-  useCanvasAgentWorkflows,
+  useCanvasAgentWorkspaces,
   useCanvasAgentConfig,
   useLocalModels,
 } from "./canvas-agent-hooks";
 import { CanvasAgentMessageList } from "./canvas-agent-message-list";
 import { CanvasAgentProposalList } from "./canvas-agent-proposal-list";
 import { CanvasAgentRunErrors } from "./canvas-agent-run-errors";
-import { useCanvasWorkflow } from "./canvas-workflow-context";
+import { useCanvasWorkspace } from "./canvas-workspace-context";
 import { formatTimestamp } from "./canvas-agent-utils";
+import { prefetchWorkspaceBundle } from "./canvas-workspace-prefetch";
 import {
   Dialog,
   DialogContent,
@@ -55,9 +55,9 @@ export function CanvasAgentPanel({
   isAuthed,
   enabled,
 }: CanvasAgentPanelProps) {
-  const { activeWorkflowId, switchWorkflow, ensureWorkflow } =
-    useCanvasWorkflow();
-  const utils = trpc.useUtils();
+  const { activeWorkspaceId, switchWorkspace, ensureWorkspace } =
+    useCanvasWorkspace();
+  const queryClient = useQueryClient();
   const [input, setInput] = useState("");
   const [historyOpen, setHistoryOpen] = useState(false);
   const { config, updateConfig } = useCanvasAgentConfig();
@@ -74,15 +74,15 @@ export function CanvasAgentPanel({
     () => new Set(),
   );
 
-  const workflowAccess = useCanvasAgentWorkflows({
+  const workspaceAccess = useCanvasAgentWorkspaces({
     enabled: enabled && isAuthed,
-    activeWorkflowId,
-    switchWorkflow,
+    activeWorkspaceId,
+    switchWorkspace,
   });
   const chat = useCanvasAgentChat({
     enabled: enabled && isAuthed,
-    activeWorkflowId,
-    ensureWorkflow,
+    activeWorkspaceId,
+    ensureWorkspace,
     apiRef,
   });
 
@@ -125,71 +125,72 @@ export function CanvasAgentPanel({
     el.scrollTop = el.scrollHeight;
   }, [chat.messages, chat.streamState, chat.activeRuns.length]);
 
-  const activeWorkflowRow = useMemo(() => {
-    if (activeWorkflowId === null) return null;
+  const activeWorkspaceRow = useMemo(() => {
+    if (activeWorkspaceId === null) return null;
     return (
-      workflowAccess.workflows.find(
-        (workflow) => workflow.id === activeWorkflowId,
+      workspaceAccess.workspaces.find(
+        (workspace) => workspace.id === activeWorkspaceId,
       ) ?? null
     );
-  }, [activeWorkflowId, workflowAccess.workflows]);
+  }, [activeWorkspaceId, workspaceAccess.workspaces]);
 
-  const activeWorkflowTitle =
-    chat.workflow?.title ?? activeWorkflowRow?.title ?? "Workflow baru";
-  const activeWorkflowUpdatedAt =
-    chat.workflow?.updatedAt ?? activeWorkflowRow?.updatedAt ?? null;
-  const activeWorkflowMeta = activeWorkflowUpdatedAt
-    ? formatTimestamp(activeWorkflowUpdatedAt)
+  const activeWorkspaceTitle =
+    chat.workflow?.title ?? activeWorkspaceRow?.title ?? "Workspace baru";
+  const activeWorkspaceMetaAt =
+    chat.workflow?.updatedAt ?? activeWorkspaceRow?.updatedAt ?? null;
+  const activeWorkspaceMeta = activeWorkspaceMetaAt
+    ? formatTimestamp(activeWorkspaceMetaAt)
     : "belum ada percakapan";
 
-  const busy = workflowAccess.isBusy || chat.isBusy;
+  const busy = workspaceAccess.isBusy || chat.isBusy;
 
-  async function handleCreateWorkflow() {
+  async function handleCreateWorkspace() {
     try {
-      await workflowAccess.createWorkflow("Untitled workflow");
-      toast.success("Workflow agent dibuat");
+      await workspaceAccess.createWorkspace("Untitled workspace");
+      toast.success("Workspace agent dibuat");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Gagal membuat workflow");
+      toast.error(error instanceof Error ? error.message : "Gagal membuat workspace");
     }
   }
 
-  // Hangatkan cache scene saat hover item history agar switch terasa instan.
-  const handlePrefetchWorkflow = useCallback(
+  // Hangatkan cache scene + thread saat hover item history agar switch terasa instan.
+  const handlePrefetchWorkspace = useCallback(
     (id: number) => {
-      if (id === activeWorkflowId) return;
-      void utils.canvasAgent.getWorkflowScene.prefetch({ id });
+      if (id === activeWorkspaceId) return;
+      void prefetchWorkspaceBundle(queryClient, id);
     },
-    [utils, activeWorkflowId],
+    [queryClient, activeWorkspaceId],
   );
 
-  function handleSwitchWorkflow(id: number) {
-    void switchWorkflow(id)
+  function handleSwitchWorkspace(id: number) {
+    void prefetchWorkspaceBundle(queryClient, id);
+    void switchWorkspace(id)
       .then(() => setHistoryOpen(false))
       .catch((error) => {
         toast.error(
-          error instanceof Error ? error.message : "Gagal memuat workflow",
+          error instanceof Error ? error.message : "Gagal memuat workspace",
         );
       });
   }
 
-  function handleRenameWorkflow(workflow: WorkflowRow, nextTitle: string) {
-    void workflowAccess.renameWorkflow(workflow, nextTitle).catch((error) => {
-      toast.error(error instanceof Error ? error.message : "Gagal rename workflow");
+  function handleRenameWorkspace(workspace: WorkflowRow, nextTitle: string) {
+    void workspaceAccess.renameWorkspace(workspace, nextTitle).catch((error) => {
+      toast.error(error instanceof Error ? error.message : "Gagal rename workspace");
     });
   }
 
-  function handleTogglePin(workflow: WorkflowRow) {
-    void workflowAccess.togglePinWorkflow(workflow).catch((error) => {
-      toast.error(error instanceof Error ? error.message : "Gagal pin workflow");
+  function handleTogglePin(workspace: WorkflowRow) {
+    void workspaceAccess.togglePinWorkspace(workspace).catch((error) => {
+      toast.error(error instanceof Error ? error.message : "Gagal pin workspace");
     });
   }
 
-  async function handleDeleteWorkflow(workflowId: number) {
+  async function handleDeleteWorkspace(workspaceId: number) {
     try {
-      await workflowAccess.deleteWorkflow(workflowId);
+      await workspaceAccess.deleteWorkspace(workspaceId);
       setDeleteTarget(null);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Gagal hapus workflow");
+      toast.error(error instanceof Error ? error.message : "Gagal hapus workspace");
     }
   }
 
@@ -221,35 +222,35 @@ export function CanvasAgentPanel({
       <div className="canvas-agent-panel" ref={panelRef}>
         <header className="canvas-agent-header">
           <div>
-            <span className="canvas-agent-section-kicker">active workflow</span>
-            <h3 title={activeWorkflowTitle}>{activeWorkflowTitle}</h3>
-            <p>{activeWorkflowMeta}</p>
+            <span className="canvas-agent-section-kicker">active workspace</span>
+            <h3 title={activeWorkspaceTitle}>{activeWorkspaceTitle}</h3>
+            <p>{activeWorkspaceMeta}</p>
           </div>
           <div className="canvas-agent-header-actions">
             <Button
               type="button"
               variant="outline"
               size="icon"
-              aria-label="New workflow"
-              title="New workflow"
+              aria-label="New workspace"
+              title="New workspace"
               className="canvas-agent-icon-button"
               disabled={busy}
-              onClick={handleCreateWorkflow}
+              onClick={handleCreateWorkspace}
             >
               <Plus aria-hidden />
             </Button>
             <CanvasAgentHistoryMenu
               open={historyOpen}
               onOpenChange={setHistoryOpen}
-              workflows={workflowAccess.workflows}
-              activeWorkflowId={activeWorkflowId}
-              activeWorkflowTitle={activeWorkflowTitle}
+              workspaces={workspaceAccess.workspaces}
+              activeWorkspaceId={activeWorkspaceId}
+              activeWorkspaceTitle={activeWorkspaceTitle}
               busy={busy}
-              onSwitchWorkflow={handleSwitchWorkflow}
-              onPrefetchWorkflow={handlePrefetchWorkflow}
-              onRenameWorkflow={handleRenameWorkflow}
+              onSwitchWorkspace={handleSwitchWorkspace}
+              onPrefetchWorkspace={handlePrefetchWorkspace}
+              onRenameWorkspace={handleRenameWorkspace}
               onTogglePin={handleTogglePin}
-              onDeleteWorkflow={setDeleteTarget}
+              onDeleteWorkspace={setDeleteTarget}
             />
           </div>
         </header>
@@ -267,7 +268,7 @@ export function CanvasAgentPanel({
         >
           <CanvasAgentMessageList
             messages={chat.messages}
-            isLoading={chat.messagesQuery.isLoading && activeWorkflowId !== null}
+            isLoading={chat.messagesQuery.isLoading && activeWorkspaceId !== null}
             isFetchingNextPage={chat.messagesQuery.isFetchingNextPage}
             hasNextPage={Boolean(chat.messagesQuery.hasNextPage)}
             onLoadMore={() => {
@@ -432,29 +433,29 @@ export function CanvasAgentPanel({
             <AlertDialogMedia>
               <Trash2 aria-hidden />
             </AlertDialogMedia>
-            <AlertDialogTitle>Hapus workflow?</AlertDialogTitle>
+            <AlertDialogTitle>Hapus workspace?</AlertDialogTitle>
             <AlertDialogDescription>
-              Workflow{" "}
+              Workspace{" "}
               <span className="canvas-agent-delete-dialog-title">
-                {deleteTarget?.title ?? "Untitled workflow"}
+                {deleteTarget?.title ?? "Untitled workspace"}
               </span>{" "}
               akan dihapus permanen dari akun ini.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={workflowAccess.isBusy}>
+            <AlertDialogCancel disabled={workspaceAccess.isBusy}>
               Batal
             </AlertDialogCancel>
             <AlertDialogAction
               variant="destructive"
-              disabled={!deleteTarget || workflowAccess.isBusy}
+              disabled={!deleteTarget || workspaceAccess.isBusy}
               onClick={(event) => {
                 event.preventDefault();
                 if (!deleteTarget) return;
-                void handleDeleteWorkflow(deleteTarget.id);
+                void handleDeleteWorkspace(deleteTarget.id);
               }}
             >
-              {workflowAccess.isBusy ? "Menghapus..." : "Hapus"}
+              {workspaceAccess.isBusy ? "Menghapus..." : "Hapus"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -13,7 +13,10 @@ import {
   upsertServerMessage,
 } from "./canvas-agent-cache";
 import { streamCanvasAgentMessage } from "./canvas-agent-api";
-import { canvasAgentKeys } from "./canvas-agent-query-keys";
+import {
+  canvasAgentThreadKeys,
+  canvasWorkspaceKeys,
+} from "./canvas-agent-query-keys";
 
 import type {
   CanvasAgentMessage,
@@ -122,7 +125,7 @@ export function useCanvasAgentStream() {
                 rawEvent.clientMessageId ?? input.clientMessageId,
               );
               await queryClient.invalidateQueries({
-                queryKey: canvasAgentKeys.workflows(),
+                queryKey: canvasWorkspaceKeys.workspaces(),
               });
               return;
             }
@@ -137,7 +140,7 @@ export function useCanvasAgentStream() {
                   message.id === optimisticMessageId(input.clientMessageId),
               );
               await queryClient.invalidateQueries({
-                queryKey: canvasAgentKeys.workflows(),
+                queryKey: canvasWorkspaceKeys.workspaces(),
               });
               toast.info(rawEvent.message);
               return;
@@ -205,7 +208,7 @@ export function useCanvasAgentStream() {
               activeRunId = rawEvent.run.id;
               upsertRun(queryClient, input.workflowId, rawEvent.run);
               await queryClient.invalidateQueries({
-                queryKey: canvasAgentKeys.workflows(),
+                queryKey: canvasWorkspaceKeys.workspaces(),
               });
               setStreamState("idle");
               return;
@@ -251,13 +254,13 @@ export function useCanvasAgentStream() {
         );
         await Promise.all([
           queryClient.invalidateQueries({
-            queryKey: canvasAgentKeys.messages(input.workflowId),
+            queryKey: canvasAgentThreadKeys.messages(input.workflowId),
           }),
           queryClient.invalidateQueries({
-            queryKey: canvasAgentKeys.runs(input.workflowId),
+            queryKey: canvasAgentThreadKeys.runs(input.workflowId),
           }),
           queryClient.invalidateQueries({
-            queryKey: canvasAgentKeys.proposals(input.workflowId),
+            queryKey: canvasAgentThreadKeys.proposals(input.workflowId),
           }),
         ]);
         // Abort = aksi sengaja user, jangan dilempar sebagai error.
@@ -276,13 +279,13 @@ export function useCanvasAgentStream() {
         if (!controller.signal.aborted && (!sawUserMessage || !sawTerminalEvent)) {
           await Promise.all([
             queryClient.invalidateQueries({
-              queryKey: canvasAgentKeys.messages(input.workflowId),
+              queryKey: canvasAgentThreadKeys.messages(input.workflowId),
             }),
             queryClient.invalidateQueries({
-              queryKey: canvasAgentKeys.runs(input.workflowId),
+              queryKey: canvasAgentThreadKeys.runs(input.workflowId),
             }),
             queryClient.invalidateQueries({
-              queryKey: canvasAgentKeys.proposals(input.workflowId),
+              queryKey: canvasAgentThreadKeys.proposals(input.workflowId),
             }),
           ]);
         }

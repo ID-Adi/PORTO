@@ -124,8 +124,8 @@ Logic di-**copy/move apa adanya** (bukan rewrite); yang berubah hanya import pat
 
 | Sumber sekarang (`frontend/src/...`) | Tujuan (`frontend-start/src/...`) | Catatan SSR / boundary |
 | --- | --- | --- |
-| `app/canvas/canvas-shell.tsx`, `app/canvas/canvas-client.tsx`, `app/canvas/canvas-excalidraw.tsx` | `features/canvas/` | client-only, di bawah route `ssr:false`. `canvas-client.tsx` tetap owner `apiRef`, scene save/load, `activeWorkflowId`, `switchWorkflow`, `ensureWorkflow` |
-| `app/canvas/canvas-workflow-context.tsx`, `canvas-workflow-picker.tsx` | `features/canvas/` | context tetap tipis (tidak menyimpan messages/stream/proposal); localStorage key versi sama (`porto:canvas:agent-active-workflow:v1`) |
+| `app/canvas/canvas-shell.tsx`, `app/canvas/canvas-client.tsx`, `app/canvas/canvas-excalidraw.tsx` | `features/canvas/` | client-only, di bawah route `ssr:false`. `canvas-client.tsx` tetap owner `apiRef`, scene save/load, `activeWorkspaceId`, `switchWorkspace`, `ensureWorkspace` |
+| `app/canvas/canvas-workspace-context.tsx`, `canvas-workspace-picker.tsx` | `features/canvas/` | context tetap tipis (tidak menyimpan messages/stream/proposal); localStorage key aktif `porto:canvas:active-workspace:v1` dengan fallback legacy `porto:canvas:agent-active-workflow:v1` |
 | `app/canvas/canvas-agent-{api,stream,query-keys,types,cache,utils}.ts` | `features/canvas-agent/api/` | identik; stream tetap fetch + ReadableStream parser |
 | `app/canvas/canvas-agent-hooks.ts` + stream hook | `features/canvas-agent/hooks/` | identik; hanya import path berubah |
 | `app/canvas/canvas-agent-{panel,message-list,proposal-list,composer,run-errors,history-menu}.tsx` | `features/canvas-agent/components/` | presentasional; tetap tidak tahu query key |
@@ -134,7 +134,7 @@ Logic di-**copy/move apa adanya** (bukan rewrite); yang berubah hanya import pat
 
 Aturan yang dipertahankan:
 
-- `sceneData` **tidak** masuk chat query, SSE payload, atau workflow list — tetap hanya lewat endpoint scene (lazy).
+- `sceneData` **tidak** masuk chat query, SSE payload, workspace list, atau thread snapshot — tetap hanya lewat endpoint scene (lazy).
 - Tidak mengganti nama teknis Excalidraw import/type/API.
 - Satu concern per file; hook boleh tahu query key, komponen presentasional tidak.
 
@@ -219,7 +219,7 @@ Selaras `Risiko dan Mitigasi` dokumen induk:
 | Excalidraw SSR error (akses `window`/canvas/localStorage) | Route `/canvas` `ssr: false`; editor sebagai client-only island; SSR hanya shell |
 | Cookie auth lintas-origin gagal | CORS backend izinkan origin Start + `credentials: "include"` di semua request; enforce auth server-side |
 | Dua `QueryClient`/provider | Satu QueryClient via router context; satu `QueryClientProvider` di root |
-| Scene payload besar | `scene` tetap lazy query terpisah; tidak pernah masuk chat/SSE/workflow list |
+| Scene payload besar | `scene` tetap lazy query terpisah; tidak pernah masuk chat/SSE/workspace list/thread snapshot |
 | Migrasi terlalu besar sekaligus | Branch khusus + parity `/canvas` dulu sebelum route lain |
 | Message duplicate saat final event | Pertahankan `clientMessageId` optimistic + draft assistant by `runId` (sudah ada di stream hook) |
 

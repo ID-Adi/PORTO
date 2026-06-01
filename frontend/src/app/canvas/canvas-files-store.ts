@@ -6,6 +6,10 @@ const DB_NAME = "porto-canvas";
 const STORE_NAME = "files";
 const FILES_KEY = "scene";
 
+function filesKey(workspaceId?: number): string {
+  return workspaceId === undefined ? FILES_KEY : `workspace:${workspaceId}`;
+}
+
 function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const req = window.indexedDB.open(DB_NAME, 1);
@@ -20,13 +24,16 @@ function openDB(): Promise<IDBDatabase> {
   });
 }
 
-export async function saveLocalFiles(files: BinaryFiles): Promise<void> {
+export async function saveLocalFiles(
+  files: BinaryFiles,
+  workspaceId?: number,
+): Promise<void> {
   if (typeof window === "undefined" || !window.indexedDB) return;
   try {
     const db = await openDB();
     await new Promise<void>((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, "readwrite");
-      tx.objectStore(STORE_NAME).put(files, FILES_KEY);
+      tx.objectStore(STORE_NAME).put(files, filesKey(workspaceId));
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
     });
@@ -36,13 +43,15 @@ export async function saveLocalFiles(files: BinaryFiles): Promise<void> {
   }
 }
 
-export async function loadLocalFiles(): Promise<BinaryFiles | null> {
+export async function loadLocalFiles(
+  workspaceId?: number,
+): Promise<BinaryFiles | null> {
   if (typeof window === "undefined" || !window.indexedDB) return null;
   try {
     const db = await openDB();
     const files = await new Promise<BinaryFiles | null>((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, "readonly");
-      const req = tx.objectStore(STORE_NAME).get(FILES_KEY);
+      const req = tx.objectStore(STORE_NAME).get(filesKey(workspaceId));
       req.onsuccess = () => resolve((req.result as BinaryFiles) ?? null);
       req.onerror = () => reject(req.error);
     });
@@ -53,13 +62,13 @@ export async function loadLocalFiles(): Promise<BinaryFiles | null> {
   }
 }
 
-export async function clearLocalFiles(): Promise<void> {
+export async function clearLocalFiles(workspaceId?: number): Promise<void> {
   if (typeof window === "undefined" || !window.indexedDB) return;
   try {
     const db = await openDB();
     await new Promise<void>((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, "readwrite");
-      tx.objectStore(STORE_NAME).delete(FILES_KEY);
+      tx.objectStore(STORE_NAME).delete(filesKey(workspaceId));
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
     });

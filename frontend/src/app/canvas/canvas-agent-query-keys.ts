@@ -1,13 +1,22 @@
-export const canvasAgentKeys = {
-  all: ["canvasAgent"] as const,
-  workflows: () => [...canvasAgentKeys.all, "workflows"] as const,
-  workflow: (id: number) => [...canvasAgentKeys.all, "workflow", id] as const,
-  messages: (workflowId: number) =>
-    [...canvasAgentKeys.workflow(workflowId), "messages"] as const,
-  runs: (workflowId: number) =>
-    [...canvasAgentKeys.workflow(workflowId), "runs"] as const,
-  proposals: (workflowId: number) =>
-    [...canvasAgentKeys.workflow(workflowId), "proposals"] as const,
-  scene: (workflowId: number) =>
-    [...canvasAgentKeys.workflow(workflowId), "scene"] as const,
+export const canvasWorkspaceKeys = {
+  all: ["canvasWorkspace"] as const,
+  workspaces: () => [...canvasWorkspaceKeys.all, "workspaces"] as const,
+  workspace: (workspaceId: number) =>
+    [...canvasWorkspaceKeys.all, "workspace", workspaceId] as const,
+  scene: (workspaceId: number) =>
+    [...canvasWorkspaceKeys.workspace(workspaceId), "scene"] as const,
+};
+
+export const canvasAgentThreadKeys = {
+  all: ["canvasAgentThread"] as const,
+  thread: (workspaceId: number) =>
+    [...canvasAgentThreadKeys.all, "workspace", workspaceId] as const,
+  snapshot: (workspaceId: number) =>
+    [...canvasAgentThreadKeys.thread(workspaceId), "snapshot"] as const,
+  messages: (workspaceId: number) =>
+    [...canvasAgentThreadKeys.thread(workspaceId), "messages"] as const,
+  runs: (workspaceId: number) =>
+    [...canvasAgentThreadKeys.thread(workspaceId), "runs"] as const,
+  proposals: (workspaceId: number) =>
+    [...canvasAgentThreadKeys.thread(workspaceId), "proposals"] as const,
 };
