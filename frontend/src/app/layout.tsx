@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { GeistMono } from "geist/font/mono";
 import { GeistPixelSquare } from "geist/font/pixel";
 import { GeistSans } from "geist/font/sans";
+import NextTopLoader from "nextjs-toploader";
 
 import { homePageContent } from "@/features/home/data/landing-content";
 import { siteConfig } from "@/config/site";
@@ -93,6 +94,15 @@ export default function RootLayout({ children }: RootLayoutProps) {
         />
       </head>
       <body suppressHydrationWarning>
+        {/* Top loading bar — indikator transisi rute (warna gold pastel) */}
+        <NextTopLoader
+          color="#E6C87D"
+          height={3}
+          showSpinner={false}
+          shadow="0 0 10px #E6C87D,0 0 5px #E6C87D"
+          easing="ease"
+          speed={300}
+        />
         <AppProviders>
           {children}
         </AppProviders>
