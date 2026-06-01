@@ -1,16 +1,16 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import {
   appendMessage,
   removeMessage,
-  replaceMessage,
   updateMessage,
   upsertProposal,
   upsertRun,
+  upsertServerMessage,
 } from "./canvas-agent-cache";
 import { streamCanvasAgentMessage } from "./canvas-agent-api";
 import { canvasAgentKeys } from "./canvas-agent-query-keys";
@@ -29,6 +29,10 @@ function optimisticMessageId(clientMessageId: string) {
   return `client:${clientMessageId}`;
 }
 
+function isStreamMessage(message: CanvasAgentMessage) {
+  return typeof message.id === "string" && message.id.startsWith("stream:");
+}
+
 function isCanvasAgentStreamEvent(value: unknown): value is CanvasAgentStreamEvent {
   return (
     typeof value === "object" &&
@@ -41,15 +45,34 @@ function isCanvasAgentStreamEvent(value: unknown): value is CanvasAgentStreamEve
 export function useCanvasAgentStream() {
   const queryClient = useQueryClient();
   const abortRef = useRef<AbortController | null>(null);
+  const failedResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [streamState, setStreamState] = useState<
     "idle" | "thinking" | "streaming" | "saving" | "failed"
   >("idle");
 
+  const clearFailedReset = useCallback(() => {
+    if (!failedResetRef.current) return;
+    clearTimeout(failedResetRef.current);
+    failedResetRef.current = null;
+  }, []);
+
+  const markFailed = useCallback(() => {
+    clearFailedReset();
+    setStreamState("failed");
+    failedResetRef.current = setTimeout(() => {
+      setStreamState((current) => (current === "failed" ? "idle" : current));
+      failedResetRef.current = null;
+    }, 5_000);
+  }, [clearFailedReset]);
+
+  useEffect(() => clearFailedReset, [clearFailedReset]);
+
   const stop = useCallback(() => {
+    clearFailedReset();
     abortRef.current?.abort();
     abortRef.current = null;
     setStreamState("idle");
-  }, []);
+  }, [clearFailedReset]);
 
   const start = useCallback(
     async (input: {
@@ -59,10 +82,14 @@ export function useCanvasAgentStream() {
       clientMessageId: string;
     }) => {
       const controller = new AbortController();
+      clearFailedReset();
       abortRef.current?.abort();
       abortRef.current = controller;
       setStreamState("thinking");
       let failed = false;
+      let activeRunId: number | null = null;
+      let sawUserMessage = false;
+      let sawTerminalEvent = false;
 
       const optimistic: CanvasAgentMessage = {
         id: optimisticMessageId(input.clientMessageId),
@@ -87,12 +114,12 @@ export function useCanvasAgentStream() {
             if (!isCanvasAgentStreamEvent(rawEvent)) return;
 
             if (rawEvent.type === "user_message") {
-              replaceMessage(
+              sawUserMessage = true;
+              upsertServerMessage(
                 queryClient,
                 input.workflowId,
-                (message) =>
-                  message.id === optimisticMessageId(input.clientMessageId),
                 rawEvent.message,
+                rawEvent.clientMessageId ?? input.clientMessageId,
               );
               await queryClient.invalidateQueries({
                 queryKey: canvasAgentKeys.workflows(),
@@ -101,7 +128,14 @@ export function useCanvasAgentStream() {
             }
 
             if (rawEvent.type === "agent_disabled") {
+              sawTerminalEvent = true;
               setStreamState("idle");
+              removeMessage(
+                queryClient,
+                input.workflowId,
+                (message) =>
+                  message.id === optimisticMessageId(input.clientMessageId),
+              );
               await queryClient.invalidateQueries({
                 queryKey: canvasAgentKeys.workflows(),
               });
@@ -110,6 +144,7 @@ export function useCanvasAgentStream() {
             }
 
             if (rawEvent.type === "run_started") {
+              activeRunId = rawEvent.run.id;
               setStreamState("streaming");
               upsertRun(queryClient, input.workflowId, rawEvent.run);
               appendMessage(queryClient, input.workflowId, {
@@ -129,6 +164,7 @@ export function useCanvasAgentStream() {
             }
 
             if (rawEvent.type === "assistant_delta") {
+              activeRunId = rawEvent.runId;
               setStreamState("streaming");
               updateMessage(
                 queryClient,
@@ -143,22 +179,30 @@ export function useCanvasAgentStream() {
             }
 
             if (rawEvent.type === "assistant_message") {
+              activeRunId = rawEvent.runId;
               setStreamState("saving");
-              replaceMessage(
+              upsertServerMessage(
+                queryClient,
+                input.workflowId,
+                rawEvent.message,
+              );
+              removeMessage(
                 queryClient,
                 input.workflowId,
                 (message) => message.id === streamMessageId(rawEvent.runId),
-                rawEvent.message,
               );
               return;
             }
 
             if (rawEvent.type === "proposal_created") {
+              activeRunId = rawEvent.runId;
               upsertProposal(queryClient, input.workflowId, rawEvent.proposal);
               return;
             }
 
             if (rawEvent.type === "run_completed") {
+              sawTerminalEvent = true;
+              activeRunId = rawEvent.run.id;
               upsertRun(queryClient, input.workflowId, rawEvent.run);
               await queryClient.invalidateQueries({
                 queryKey: canvasAgentKeys.workflows(),
@@ -168,13 +212,22 @@ export function useCanvasAgentStream() {
             }
 
             if (rawEvent.type === "run_failed") {
+              sawTerminalEvent = true;
               failed = true;
-              setStreamState("failed");
+              markFailed();
               upsertRun(queryClient, input.workflowId, rawEvent.run);
               removeMessage(
                 queryClient,
                 input.workflowId,
-                (message) => message.id === streamMessageId(rawEvent.run?.id ?? 0),
+                (message) =>
+                  message.id === optimisticMessageId(input.clientMessageId),
+              );
+              removeMessage(
+                queryClient,
+                input.workflowId,
+                (message) =>
+                  message.id ===
+                  streamMessageId(rawEvent.run?.id ?? activeRunId ?? 0),
               );
               toast.error(rawEvent.errorMessage);
             }
@@ -183,7 +236,11 @@ export function useCanvasAgentStream() {
       } catch (error) {
         const aborted = controller.signal.aborted;
         failed = !aborted;
-        setStreamState(aborted ? "idle" : "failed");
+        if (aborted) {
+          setStreamState("idle");
+        } else {
+          markFailed();
+        }
         // Bersihkan pesan optimis user yang mungkin nyangkut. Draft asisten
         // (stream:*) ikut hilang saat messages di-invalidate & refetch dari DB.
         // Tanpa ini, menekan "Stop" meninggalkan ghost message yang loading abadi.
@@ -207,18 +264,43 @@ export function useCanvasAgentStream() {
         if (!aborted) throw error;
       } finally {
         if (abortRef.current === controller) abortRef.current = null;
+        removeMessage(queryClient, input.workflowId, isStreamMessage);
+        if (!sawUserMessage) {
+          removeMessage(
+            queryClient,
+            input.workflowId,
+            (message) =>
+              message.id === optimisticMessageId(input.clientMessageId),
+          );
+        }
+        if (!controller.signal.aborted && (!sawUserMessage || !sawTerminalEvent)) {
+          await Promise.all([
+            queryClient.invalidateQueries({
+              queryKey: canvasAgentKeys.messages(input.workflowId),
+            }),
+            queryClient.invalidateQueries({
+              queryKey: canvasAgentKeys.runs(input.workflowId),
+            }),
+            queryClient.invalidateQueries({
+              queryKey: canvasAgentKeys.proposals(input.workflowId),
+            }),
+          ]);
+        }
         if (!controller.signal.aborted && !failed) {
           setStreamState("idle");
         }
       }
     },
-    [queryClient],
+    [clearFailedReset, markFailed, queryClient],
   );
 
   return {
     start,
     stop,
     streamState,
-    isStreaming: streamState === "thinking" || streamState === "streaming",
+    isStreaming:
+      streamState === "thinking" ||
+      streamState === "streaming" ||
+      streamState === "saving",
   };
 }

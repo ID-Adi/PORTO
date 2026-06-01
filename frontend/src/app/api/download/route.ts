@@ -5,6 +5,13 @@ import { BACKEND_URL } from "@/lib/backend-url";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+const BACKEND_INTERNAL_URL =
+  process.env.BACKEND_INTERNAL_URL ?? "http://porto-backend:4002";
+const PUBLIC_BACKEND_HOSTS = new Set([
+  "api.pawa.my.id",
+  "porto-api.pawa.my.id",
+]);
+
 function allowedHost(target: URL): boolean {
   try {
     const backend = new URL(BACKEND_URL);
@@ -13,8 +20,20 @@ function allowedHost(target: URL): boolean {
     /* ignore */
   }
   // Whitelist tambahan untuk environment prod yang tidak menyetel BACKEND_URL.
-  const extra = new Set(["porto-api.pawa.my.id", "localhost:4002"]);
+  const extra = new Set([...PUBLIC_BACKEND_HOSTS, "localhost:4002"]);
   return extra.has(target.host);
+}
+
+function upstreamUrlFor(target: URL): URL {
+  const shouldUseInternalBackend =
+    PUBLIC_BACKEND_HOSTS.has(target.hostname) &&
+    target.pathname.startsWith("/uploads/");
+
+  if (!shouldUseInternalBackend) return target;
+
+  const upstream = new URL(target.pathname, BACKEND_INTERNAL_URL);
+  upstream.search = target.search;
+  return upstream;
 }
 
 function safeFileNameFromUrl(target: URL, fallback = "download"): string {
@@ -49,11 +68,21 @@ export async function GET(request: Request): Promise<Response> {
     );
   }
 
-  const upstream = await fetch(target.toString(), {
-    method: "GET",
-    redirect: "follow",
-    cache: "no-store",
-  });
+  const upstreamUrl = upstreamUrlFor(target);
+
+  let upstream: Response;
+  try {
+    upstream = await fetch(upstreamUrl.toString(), {
+      method: "GET",
+      redirect: "follow",
+      cache: "no-store",
+    });
+  } catch {
+    return NextResponse.json(
+      { error: "Upstream unreachable" },
+      { status: 502 },
+    );
+  }
 
   if (!upstream.ok || !upstream.body) {
     return NextResponse.json(

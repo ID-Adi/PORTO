@@ -252,10 +252,11 @@ export function CanvasAgentPanel({
               void chat.messagesQuery.fetchNextPage();
             }}
             activeRunCount={chat.activeRuns.length}
+            hasLiveActivity={chat.activeRuns.length > 0 || chat.streamState !== "idle"}
           />
           <CanvasAgentRunErrors
             runs={visibleFailedRuns}
-            busy={chat.isBusy}
+            retryingRunIds={chat.retryingRunIds}
             onRetry={(run) => {
               void chat.retryRun(run).catch((error) => {
                 toast.error(

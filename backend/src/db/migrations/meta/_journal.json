@@ -155,6 +155,13 @@
       "when": 1780242460930,
       "tag": "0021_naive_betty_ross",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1780281568731,
+      "tag": "0022_smooth_wilson_fisk",
+      "breakpoints": true
     }
   ]
 }

@@ -8,7 +8,9 @@ import {
   DEFAULT_TTS_MODEL,
   DEFAULT_TTS_VOICE,
   DEFAULT_TTS_VOICES,
+  DEFAULT_VERTEX_ALLOWED_HTTP_DOMAINS,
   DEFAULT_VERTEX_LOCATION,
+  DEFAULT_VERTEX_SCOPES,
 } from "../../db/schema/index.js";
 import { decryptSecret, encryptSecret } from "../../lib/encrypted-secret.js";
 import { testProvider, type ListModelsArgs } from "../../lib/tts-providers.js";
@@ -43,6 +45,14 @@ const providerCredsInput = z.discriminatedUnion("provider", [
     serviceAccount: z.string().min(20).max(20000).optional(),
     projectId: z.string().min(1).max(200),
     location: z.string().min(1).max(60).optional().default(DEFAULT_VERTEX_LOCATION),
+    httpRequestEnabled: z.boolean().optional().default(true),
+    scopes: z.string().min(1).max(1000).optional().default(DEFAULT_VERTEX_SCOPES),
+    allowedHttpDomains: z
+      .string()
+      .min(1)
+      .max(1000)
+      .optional()
+      .default(DEFAULT_VERTEX_ALLOWED_HTTP_DOMAINS),
   }),
 ]);
 
@@ -55,6 +65,9 @@ const testProviderInput = z.discriminatedUnion("provider", [
     serviceAccount: z.string().max(20000).optional(),
     projectId: z.string().max(200).optional(),
     location: z.string().max(60).optional(),
+    httpRequestEnabled: z.boolean().optional(),
+    scopes: z.string().max(1000).optional(),
+    allowedHttpDomains: z.string().max(1000).optional(),
   }),
 ]);
 
@@ -83,6 +96,9 @@ function publicConfig(row: AiToolSettingsRow) {
       hasApiKey: Boolean(row.vertexServiceAccountEncrypted && row.vertexProjectId),
       projectId: row.vertexProjectId,
       location: row.vertexLocation,
+      httpRequestEnabled: row.vertexHttpRequestEnabled,
+      scopes: row.vertexScopes,
+      allowedHttpDomains: row.vertexAllowedHttpDomains,
     },
     // Kompat lama.
     ttsApiKeyLast4: row.ttsApiKeyLast4,
@@ -147,10 +163,24 @@ function buildTestCreds(
       : "");
   const projectId = input.projectId?.trim() || row.vertexProjectId || "";
   const location = input.location?.trim() || row.vertexLocation || DEFAULT_VERTEX_LOCATION;
+  const scopes = input.scopes?.trim() || row.vertexScopes || DEFAULT_VERTEX_SCOPES;
+  const allowedHttpDomains =
+    input.allowedHttpDomains?.trim() ||
+    row.vertexAllowedHttpDomains ||
+    DEFAULT_VERTEX_ALLOWED_HTTP_DOMAINS;
   if (!saJson || !projectId) {
     throw new Error("Service Account JSON / Project ID belum diisi");
   }
-  return { provider: "vertex", saJson, projectId, location };
+  return {
+    provider: "vertex",
+    saJson,
+    projectId,
+    location,
+    httpRequestEnabled:
+      input.httpRequestEnabled ?? row.vertexHttpRequestEnabled ?? true,
+    scopes,
+    allowedHttpDomains,
+  };
 }
 
 export const aiSettingsRouter = router({
@@ -209,6 +239,11 @@ export const aiSettingsRouter = router({
           ...(sa ? { vertexServiceAccountEncrypted: encryptSecret(sa) } : {}),
           vertexProjectId: input.projectId.trim(),
           vertexLocation: input.location.trim() || DEFAULT_VERTEX_LOCATION,
+          vertexHttpRequestEnabled: input.httpRequestEnabled,
+          vertexScopes: input.scopes.trim() || DEFAULT_VERTEX_SCOPES,
+          vertexAllowedHttpDomains:
+            input.allowedHttpDomains.trim() ||
+            DEFAULT_VERTEX_ALLOWED_HTTP_DOMAINS,
         };
       }
       const [row] = await db

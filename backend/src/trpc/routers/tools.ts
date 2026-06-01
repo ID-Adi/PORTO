@@ -21,6 +21,7 @@ import type {
 } from "../../db/schema/tool-generation.js";
 import { decryptSecret } from "../../lib/encrypted-secret.js";
 import { publicUrl } from "../../lib/public-url.js";
+import { SlidingWindowRateLimiter } from "../../lib/sliding-window-rate-limit.js";
 import { callOpenAiAudio } from "../../lib/tts-openai-audio.js";
 import {
   isRetryableTtsStatus,
@@ -643,6 +644,7 @@ async function callVertexTts({
   saJson,
   projectId,
   location,
+  scopes,
   model,
   text,
   speakers,
@@ -650,11 +652,12 @@ async function callVertexTts({
   saJson: string;
   projectId: string;
   location: string;
+  scopes?: string;
   model: string;
   text: string;
   speakers: TtsSpeaker[];
 }): Promise<PcmResult> {
-  const token = await vertexAccessToken(saJson);
+  const token = await vertexAccessToken(saJson, scopes);
   const modelName = model.replace(/^(publishers\/google\/models\/|models\/)/, "");
   const url = `${vertexBaseUrl(location, projectId)}/${modelName}:generateContent`;
 
@@ -745,6 +748,9 @@ function resolveProviderCreds(
     saJson: decryptSecret(settings.vertexServiceAccountEncrypted),
     projectId: settings.vertexProjectId,
     location: settings.vertexLocation,
+    scopes: settings.vertexScopes,
+    httpRequestEnabled: settings.vertexHttpRequestEnabled,
+    allowedHttpDomains: settings.vertexAllowedHttpDomains,
   };
 }
 
@@ -812,6 +818,7 @@ async function runTtsJob(args: {
                 saJson: creds.saJson,
                 projectId: creds.projectId,
                 location: creds.location,
+                scopes: creds.scopes,
                 model,
                 text,
                 speakers,
@@ -905,21 +912,20 @@ async function assertTtsRateLimit(userId: string): Promise<void> {
 
 // Throttle preview voice in-memory per user (preview ephemeral, tak menyisipkan
 // row sehingga tak bisa diandalkan via DB count). Reset saat proses restart.
-const previewHits = new Map<string, number[]>();
+const previewHits = new SlidingWindowRateLimiter({
+  windowMs: TTS_RATE_WINDOW_MS,
+  maxHits: TTS_PREVIEW_RATE_MAX_PER_WINDOW,
+  sweepEveryMs: 30_000,
+  maxSweepEntries: 100,
+});
 
 function assertPreviewRateLimit(userId: string): void {
-  const now = Date.now();
-  const recent = (previewHits.get(userId) ?? []).filter(
-    (t) => now - t < TTS_RATE_WINDOW_MS,
-  );
-  if (recent.length >= TTS_PREVIEW_RATE_MAX_PER_WINDOW) {
+  if (!previewHits.hit(userId)) {
     throw new TRPCError({
       code: "TOO_MANY_REQUESTS",
       message: "Terlalu banyak preview. Coba lagi sebentar.",
     });
   }
-  recent.push(now);
-  previewHits.set(userId, recent);
 }
 
 function isRetryableVideoStatusError(error: string): boolean {
@@ -1422,6 +1428,7 @@ export const toolsRouter = router({
                   saJson: creds.saJson,
                   projectId: creds.projectId,
                   location: creds.location,
+                  scopes: creds.scopes,
                   model: input.model,
                   text,
                   speakers,

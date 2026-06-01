@@ -65,18 +65,67 @@ export function replaceMessage(
     canvasAgentKeys.messages(workflowId),
     (current) => {
       if (!current) return current;
-      let replaced = false;
       const pages = current.pages.map((page) => ({
         ...page,
         items: page.items.map((message) => {
           if (!predicate(message)) return message;
-          replaced = true;
           return replacement;
         }),
       }));
-      if (!replaced) {
-        pages[0] = { ...pages[0], items: [...pages[0].items, replacement] };
+      return { ...current, pages };
+    },
+  );
+}
+
+export function upsertServerMessage(
+  queryClient: QueryClient,
+  workflowId: number,
+  message: CanvasAgentMessage,
+  clientMessageId?: string,
+) {
+  queryClient.setQueryData<MessagesData>(
+    canvasAgentKeys.messages(workflowId),
+    (current) => {
+      if (!current) {
+        return {
+          pages: [{ items: [message], nextCursor: null }],
+          pageParams: [undefined],
+        };
       }
+
+      let inserted = false;
+      const pages = current.pages.map((page, pageIndex) => {
+        const items: CanvasAgentMessage[] = [];
+        for (const item of page.items) {
+          if (item.id === message.id) {
+            if (!inserted) {
+              items.push(message);
+              inserted = true;
+            }
+            continue;
+          }
+
+          if (
+            clientMessageId &&
+            item.metadata?.clientMessageId === clientMessageId
+          ) {
+            if (!inserted) {
+              items.push(message);
+              inserted = true;
+            }
+            continue;
+          }
+
+          items.push(item);
+        }
+
+        if (!inserted && pageIndex === 0) {
+          items.push(message);
+          inserted = true;
+        }
+        return { ...page, items };
+      });
+
       return { ...current, pages };
     },
   );

@@ -14,6 +14,7 @@ import {
   friendlyAgentError,
   runCanvasAgentRun,
 } from "../lib/canvas-agent-runner.js";
+import { SlidingWindowRateLimiter } from "../lib/sliding-window-rate-limit.js";
 
 const MESSAGE_CONTENT_MAX = 12_000;
 const MAX_FRAME_REFS = 50;
@@ -57,20 +58,15 @@ type CanvasAgentStreamEvent =
   | { type: "run_failed"; run: unknown; errorMessage: string }
   | { type: "agent_disabled"; message: string };
 
-const rateLimitBuckets = new Map<string, number[]>();
+const rateLimitBuckets = new SlidingWindowRateLimiter({
+  windowMs: RATE_LIMIT_WINDOW_MS,
+  maxHits: RATE_LIMIT_MAX,
+  sweepEveryMs: 30_000,
+  maxSweepEntries: 100,
+});
 
 function checkRateLimit(userId: string) {
-  const now = Date.now();
-  const bucket = (rateLimitBuckets.get(userId) ?? []).filter(
-    (timestamp) => now - timestamp < RATE_LIMIT_WINDOW_MS,
-  );
-  if (bucket.length >= RATE_LIMIT_MAX) {
-    rateLimitBuckets.set(userId, bucket);
-    return false;
-  }
-  bucket.push(now);
-  rateLimitBuckets.set(userId, bucket);
-  return true;
+  return rateLimitBuckets.hit(userId);
 }
 
 async function writeEvent(

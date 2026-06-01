@@ -33,6 +33,9 @@ export const OPENAI_TTS_VOICES = [
 ] as const;
 
 export const DEFAULT_VERTEX_LOCATION = "us-central1";
+export const DEFAULT_VERTEX_SCOPES =
+  "https://www.googleapis.com/auth/cloud-platform";
+export const DEFAULT_VERTEX_ALLOWED_HTTP_DOMAINS = "All";
 export const DEFAULT_CANVAS_AGENT_MODEL = "gemini-3.1-flash";
 
 export type TtsProvider = "gemini" | "vertex" | "openrouter";
@@ -53,6 +56,13 @@ export const aiToolSettings = pgTable("ai_tool_settings", {
   vertexLocation: text("vertex_location")
     .notNull()
     .default(DEFAULT_VERTEX_LOCATION),
+  vertexHttpRequestEnabled: boolean("vertex_http_request_enabled")
+    .notNull()
+    .default(true),
+  vertexScopes: text("vertex_scopes").notNull().default(DEFAULT_VERTEX_SCOPES),
+  vertexAllowedHttpDomains: text("vertex_allowed_http_domains")
+    .notNull()
+    .default(DEFAULT_VERTEX_ALLOWED_HTTP_DOMAINS),
   ttsDefaultVoice: text("tts_default_voice")
     .notNull()
     .default(DEFAULT_TTS_VOICE),

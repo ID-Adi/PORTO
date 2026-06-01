@@ -213,7 +213,7 @@ export function AiSettingsForm() {
             <ApiKeyField
               provider="vertex"
               label="Vertex AI (Service Account)"
-              hint="Service Account JSON + Project ID + Location."
+              hint="Service Account JSON + Project ID + Location + HTTP scopes."
               status={query.data.vertex}
             />
             <ApiKeyField

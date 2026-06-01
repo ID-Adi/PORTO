@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Field } from "@/features/admin/components/form-field";
 import { trpc } from "@/lib/trpc";
@@ -25,6 +26,9 @@ type ProviderStatus = {
   last4?: string | null;
   projectId?: string | null;
   location?: string | null;
+  httpRequestEnabled?: boolean | null;
+  scopes?: string | null;
+  allowedHttpDomains?: string | null;
 };
 
 type ApiKeyFieldProps = {
@@ -43,6 +47,15 @@ export function ApiKeyField({ provider, label, hint, status }: ApiKeyFieldProps)
   const [serviceAccount, setServiceAccount] = useState("");
   const [projectId, setProjectId] = useState(status.projectId ?? "");
   const [location, setLocation] = useState(status.location ?? "us-central1");
+  const [httpRequestEnabled, setHttpRequestEnabled] = useState(
+    status.httpRequestEnabled ?? true,
+  );
+  const [scopes, setScopes] = useState(
+    status.scopes ?? "https://www.googleapis.com/auth/cloud-platform",
+  );
+  const [allowedHttpDomains, setAllowedHttpDomains] = useState(
+    status.allowedHttpDomains ?? "All",
+  );
   const [testResult, setTestResult] = useState<
     { ok: boolean; message?: string } | null
   >(null);
@@ -55,6 +68,11 @@ export function ApiKeyField({ provider, label, hint, status }: ApiKeyFieldProps)
     if (isVertex) {
       setProjectId(status.projectId ?? "");
       setLocation(status.location ?? "us-central1");
+      setHttpRequestEnabled(status.httpRequestEnabled ?? true);
+      setScopes(
+        status.scopes ?? "https://www.googleapis.com/auth/cloud-platform",
+      );
+      setAllowedHttpDomains(status.allowedHttpDomains ?? "All");
     }
     setOpen(true);
   }
@@ -95,6 +113,9 @@ export function ApiKeyField({ provider, label, hint, status }: ApiKeyFieldProps)
         serviceAccount?: string;
         projectId: string;
         location: string;
+        httpRequestEnabled: boolean;
+        scopes: string;
+        allowedHttpDomains: string;
       }
     | null {
     if (isVertex) {
@@ -106,6 +127,10 @@ export function ApiKeyField({ provider, label, hint, status }: ApiKeyFieldProps)
         serviceAccount: serviceAccount.trim() || undefined,
         projectId: projectId.trim(),
         location: location.trim() || "us-central1",
+        httpRequestEnabled,
+        scopes:
+          scopes.trim() || "https://www.googleapis.com/auth/cloud-platform",
+        allowedHttpDomains: allowedHttpDomains.trim() || "All",
       };
     }
     if (!apiKey.trim()) return null;
@@ -121,6 +146,9 @@ export function ApiKeyField({ provider, label, hint, status }: ApiKeyFieldProps)
         serviceAccount: serviceAccount.trim() || undefined,
         projectId: projectId.trim() || undefined,
         location: location.trim() || undefined,
+        httpRequestEnabled,
+        scopes: scopes.trim() || undefined,
+        allowedHttpDomains: allowedHttpDomains.trim() || undefined,
       });
     } else {
       test.mutate({
@@ -235,6 +263,45 @@ export function ApiKeyField({ provider, label, hint, status }: ApiKeyFieldProps)
                       value={location}
                       onChange={(e) => setLocation(e.target.value)}
                       placeholder="us-central1"
+                      className="rounded-none border-(--line) font-mono text-[11px]"
+                    />
+                  </div>
+                </div>
+                <div className="grid gap-3 border border-(--line) p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0 space-y-0.5">
+                      <Label htmlFor={`vertex-http-${provider}`}>
+                        Set up for use in HTTP Request node
+                      </Label>
+                      <p className="text-xs text-(--muted-foreground)">
+                        Dipakai untuk request Vertex REST, termasuk endpoint global.
+                      </p>
+                    </div>
+                    <Switch
+                      id={`vertex-http-${provider}`}
+                      checked={httpRequestEnabled}
+                      onCheckedChange={setHttpRequestEnabled}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor={`vertex-scopes-${provider}`}>Scope(s)</Label>
+                    <Input
+                      id={`vertex-scopes-${provider}`}
+                      value={scopes}
+                      onChange={(e) => setScopes(e.target.value)}
+                      placeholder="https://www.googleapis.com/auth/cloud-platform"
+                      className="rounded-none border-(--line) font-mono text-[11px]"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor={`vertex-domains-${provider}`}>
+                      Allowed HTTP Request Domains
+                    </Label>
+                    <Input
+                      id={`vertex-domains-${provider}`}
+                      value={allowedHttpDomains}
+                      onChange={(e) => setAllowedHttpDomains(e.target.value)}
+                      placeholder="All"
                       className="rounded-none border-(--line) font-mono text-[11px]"
                     />
                   </div>

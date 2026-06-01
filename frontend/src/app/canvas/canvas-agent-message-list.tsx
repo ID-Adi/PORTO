@@ -39,6 +39,7 @@ export function CanvasAgentMessageList({
   hasNextPage,
   onLoadMore,
   activeRunCount,
+  hasLiveActivity,
 }: {
   messages: CanvasAgentMessage[];
   isLoading: boolean;
@@ -46,6 +47,7 @@ export function CanvasAgentMessageList({
   hasNextPage: boolean;
   onLoadMore: () => void;
   activeRunCount: number;
+  hasLiveActivity: boolean;
 }) {
   return (
     <>
@@ -70,7 +72,7 @@ export function CanvasAgentMessageList({
         </div>
       ) : null}
 
-      {!isLoading && messages.length === 0 ? (
+      {!isLoading && messages.length === 0 && !hasLiveActivity ? (
         <div className="canvas-agent-placeholder">
           <Bot aria-hidden className="size-4" />
           <p>Mulai chat, atau mention @nama_frame untuk mengikat Agent ke frame.</p>

@@ -288,6 +288,7 @@ async function callVertex(args: {
   saJson: string;
   projectId: string;
   location: string;
+  scopes?: string;
   model: string;
   systemPrompt: string;
   prompt: string;
@@ -304,7 +305,7 @@ async function callVertex(args: {
   } catch {}
 
   if (isJson) {
-    const token = await vertexAccessToken(saTrimmed);
+    const token = await vertexAccessToken(saTrimmed, args.scopes);
     headers["Authorization"] = `Bearer ${token}`;
   } else {
     if (saTrimmed.startsWith("ya29.")) {
@@ -315,28 +316,52 @@ async function callVertex(args: {
   }
 
   const model = normalizeModel("vertex", args.model);
-  const res = await fetch(
-    `${vertexBaseUrl(args.location, args.projectId)}/${model}:generateContent`,
-    {
+  const body = JSON.stringify({
+    system_instruction: {
+      parts: [{ text: args.systemPrompt }],
+    },
+    contents: [{ role: "user", parts: [{ text: args.prompt }] }],
+    generationConfig: {
+      responseMimeType: "application/json",
+    },
+  });
+  const request = (location: string) =>
+    fetch(`${vertexBaseUrl(location, args.projectId)}/${model}:generateContent`, {
       method: "POST",
       headers,
-      body: JSON.stringify({
-        system_instruction: {
-          parts: [{ text: args.systemPrompt }],
-        },
-        contents: [{ role: "user", parts: [{ text: args.prompt }] }],
-        generationConfig: {
-          responseMimeType: "application/json",
-        },
-      }),
+      body,
       signal: AbortSignal.timeout(AGENT_TIMEOUT_MS),
-    },
-  );
+    });
+
+  let res = await request(args.location);
   const json = (await res.json()) as GeminiResponse;
   if (!res.ok) {
-    throw new Error(json.error?.message ?? `Vertex HTTP ${res.status}`);
+    const message = json.error?.message ?? `Vertex HTTP ${res.status}`;
+    if (shouldRetryVertexGlobal(args.location, res.status, message)) {
+      res = await request("global");
+      const fallbackJson = (await res.json()) as GeminiResponse;
+      if (!res.ok) {
+        throw new Error(
+          fallbackJson.error?.message ?? `Vertex HTTP ${res.status}`,
+        );
+      }
+      return geminiText(fallbackJson, "Vertex");
+    }
+    throw new Error(message);
   }
   return geminiText(json, "Vertex");
+}
+
+function shouldRetryVertexGlobal(
+  location: string,
+  status: number,
+  message: string,
+): boolean {
+  if (location.trim().toLowerCase() === "global") return false;
+  if (status !== 400 && status !== 404) return false;
+  return /not found|not available|not supported|location|region|publisher model/i.test(
+    message,
+  );
 }
 
 async function callOpenRouter(args: {
@@ -426,6 +451,7 @@ async function callProvider(args: {
     saJson: decryptSecret(args.settings.vertexServiceAccountEncrypted),
     projectId: args.settings.vertexProjectId,
     location: args.settings.vertexLocation,
+    scopes: args.settings.vertexScopes,
     model,
     systemPrompt: args.systemPrompt,
     prompt: args.prompt,
@@ -592,13 +618,6 @@ export async function runCanvasAgentRun(
 ): Promise<void> {
   try {
     const [run] = await db
-      .select()
-      .from(canvasAgentRuns)
-      .where(eq(canvasAgentRuns.id, runId))
-      .limit(1);
-    if (!run || (run.status !== "pending" && run.status !== "failed")) return;
-
-    const [runningRun] = await db
       .update(canvasAgentRuns)
       .set({
         status: "running",
@@ -606,10 +625,16 @@ export async function runCanvasAgentRun(
         startedAt: new Date(),
         updatedAt: new Date(),
       })
-      .where(eq(canvasAgentRuns.id, run.id))
+      .where(
+        and(
+          eq(canvasAgentRuns.id, runId),
+          eq(canvasAgentRuns.status, "pending"),
+        ),
+      )
       .returning();
+    if (!run) return;
     console.log(`[canvas-agent] run ${run.id} running`);
-    await callbacks.onRunStarted?.(runningRun ?? run);
+    await callbacks.onRunStarted?.(run);
 
     const [workflow] = await db
       .select()

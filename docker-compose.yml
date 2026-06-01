@@ -103,6 +103,9 @@ services:
       - ./frontend/.env
     environment:
       NODE_ENV: production
+      # Server-side only: frontend route handlers use Docker DNS to fetch
+      # backend uploads without resolving the public Cloudflare hostname.
+      BACKEND_INTERNAL_URL: ${BACKEND_INTERNAL_URL:-http://porto-backend:4002}
 
 volumes:
   postgres_data:

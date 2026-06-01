@@ -41,6 +41,12 @@ const presetModels = {
   ],
 };
 
+type ProviderKey = keyof typeof presetModels;
+
+function isProviderKey(value: unknown): value is ProviderKey {
+  return value === "gemini" || value === "vertex" || value === "openrouter";
+}
+
 export function CanvasAgentComposer({
   input,
   onInputChange,
@@ -72,6 +78,17 @@ export function CanvasAgentComposer({
       : streamState === "failed"
         ? "failed"
         : streamState;
+  const activeProviderKey = isProviderKey(activeProvider)
+    ? activeProvider
+    : null;
+  const activeIsPreset = Boolean(
+    activeProviderKey &&
+      activeModel &&
+      presetModels[activeProviderKey].includes(activeModel),
+  );
+  const customActive = Boolean(activeProviderKey && activeModel && !activeIsPreset);
+  const isActiveModel = (provider: ProviderKey, model: string) =>
+    activeProvider === provider && activeModel === model;
 
   return (
     <form
@@ -173,7 +190,7 @@ export function CanvasAgentComposer({
                     className="flex items-center justify-between px-2 py-1 cursor-pointer hover:bg-muted focus:bg-muted outline-none rounded-none"
                   >
                     <span>{m}</span>
-                    {activeModel === m && <span className="text-[10px]">✓</span>}
+                    {isActiveModel("gemini", m) && <span className="text-[10px]">✓</span>}
                   </DropdownMenuItem>
                 ))}
               </DropdownMenuGroup>
@@ -190,7 +207,7 @@ export function CanvasAgentComposer({
                       className="flex items-center justify-between px-2 py-1 cursor-pointer hover:bg-muted focus:bg-muted outline-none rounded-none"
                     >
                       <span>{m === "gemini-3-flash-preview" ? "Gemini 3 Flash (Prev)" : m}</span>
-                      {activeModel === m && <span className="text-[10px]">✓</span>}
+                      {isActiveModel("vertex", m) && <span className="text-[10px]">✓</span>}
                     </DropdownMenuItem>
                   ))}
                 </DropdownMenuGroup>
@@ -210,7 +227,7 @@ export function CanvasAgentComposer({
                       <span>
                         {m.replace("x-ai/", "").replace("google/", "").replace("anthropic/", "").replace("meta-llama/", "").replace("deepseek/", "")}
                       </span>
-                      {activeModel === m && <span className="text-[10px]">✓</span>}
+                      {isActiveModel("openrouter", m) && <span className="text-[10px]">✓</span>}
                     </DropdownMenuItem>
                   ))}
                 </DropdownMenuGroup>
@@ -219,9 +236,12 @@ export function CanvasAgentComposer({
             <DropdownMenuSeparator className="h-px bg-line my-1" />
             <DropdownMenuItem
               onClick={onOpenCustomModal}
-              className="flex items-center px-2 py-1.5 cursor-pointer text-primary font-bold hover:bg-muted focus:bg-muted outline-none rounded-none text-[10px]"
+              className="flex items-center justify-between px-2 py-1.5 cursor-pointer text-primary font-bold hover:bg-muted focus:bg-muted outline-none rounded-none text-[10px]"
             >
-              CUSTOM MODEL...
+              <span>
+                {customActive ? `CUSTOM: ${activeModel}` : "CUSTOM MODEL..."}
+              </span>
+              {customActive && <span className="text-[10px]">✓</span>}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

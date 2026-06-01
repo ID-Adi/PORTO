@@ -1,6 +1,8 @@
 import { JWT } from "google-auth-library";
 
 import {
+  DEFAULT_VERTEX_ALLOWED_HTTP_DOMAINS,
+  DEFAULT_VERTEX_SCOPES,
   DEFAULT_TTS_VOICES,
   OPENAI_TTS_VOICES,
   type TtsProvider,
@@ -63,13 +65,26 @@ type VertexCreds = {
   saJson: string;
   projectId: string;
   location: string;
+  httpRequestEnabled?: boolean;
+  scopes?: string;
+  allowedHttpDomains?: string;
 };
 
 // Cache JWT client per service-account JSON; google-auth-library auto-refresh token.
 const jwtClientCache = new Map<string, JWT>();
 
-function vertexJwtClient(saJson: string): JWT {
-  const cached = jwtClientCache.get(saJson);
+export function normalizeVertexScopes(scopes?: string | null): string[] {
+  const values = (scopes?.trim() || DEFAULT_VERTEX_SCOPES)
+    .split(/[\s,]+/)
+    .map((scope) => scope.trim())
+    .filter(Boolean);
+  return values.length > 0 ? values : [DEFAULT_VERTEX_SCOPES];
+}
+
+function vertexJwtClient(saJson: string, scopes?: string | null): JWT {
+  const normalizedScopes = normalizeVertexScopes(scopes);
+  const cacheKey = `${saJson}:${normalizedScopes.join(" ")}`;
+  const cached = jwtClientCache.get(cacheKey);
   if (cached) return cached;
   let parsed: { client_email?: string; private_key?: string };
   try {
@@ -86,14 +101,17 @@ function vertexJwtClient(saJson: string): JWT {
   const client = new JWT({
     email: parsed.client_email,
     key: parsed.private_key,
-    scopes: ["https://www.googleapis.com/auth/cloud-platform"],
+    scopes: normalizedScopes,
   });
-  jwtClientCache.set(saJson, client);
+  jwtClientCache.set(cacheKey, client);
   return client;
 }
 
-export async function vertexAccessToken(saJson: string): Promise<string> {
-  const client = vertexJwtClient(saJson);
+export async function vertexAccessToken(
+  saJson: string,
+  scopes?: string | null,
+): Promise<string> {
+  const client = vertexJwtClient(saJson, scopes);
   try {
     const { token } = await client.getAccessToken();
     if (!token) throw new Error("token kosong");
@@ -108,8 +126,20 @@ export async function vertexAccessToken(saJson: string): Promise<string> {
   }
 }
 
+export function vertexEndpointHost(location: string): string {
+  const normalizedLocation = location.trim() || "us-central1";
+  return normalizedLocation.toLowerCase() === "global"
+    ? "https://aiplatform.googleapis.com"
+    : `https://${normalizedLocation}-aiplatform.googleapis.com`;
+}
+
 export function vertexBaseUrl(location: string, projectId: string): string {
-  return `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models`;
+  const normalizedLocation = location.trim() || "us-central1";
+  return `${vertexEndpointHost(normalizedLocation)}/v1/projects/${projectId}/locations/${normalizedLocation}/publishers/google/models`;
+}
+
+function vertexPublisherModelsUrl(location: string): string {
+  return `${vertexEndpointHost(location)}/v1beta1/publishers/google/models`;
 }
 
 // --- List models (live) -----------------------------------------------------
@@ -162,8 +192,8 @@ export async function listProviderModels(
 
   // vertex
   try {
-    const token = await vertexAccessToken(args.saJson);
-    const url = `https://${args.location}-aiplatform.googleapis.com/v1beta1/publishers/google/models`;
+    const token = await vertexAccessToken(args.saJson, args.scopes);
+    const url = vertexPublisherModelsUrl(args.location);
     const res = await fetch(url, {
       headers: { Authorization: `Bearer ${token}` },
       signal: AbortSignal.timeout(20_000),
@@ -182,6 +212,12 @@ export async function listProviderModels(
     // jatuh ke fallback
   }
   return VERTEX_TTS_FALLBACK_MODELS.map((id) => ({ id, name: id }));
+}
+
+export function normalizeVertexAllowedHttpDomains(
+  value?: string | null,
+): string {
+  return value?.trim() || DEFAULT_VERTEX_ALLOWED_HTTP_DOMAINS;
 }
 
 // --- Test connection --------------------------------------------------------

@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import { and, desc, eq, lt } from "drizzle-orm";
+import { and, desc, eq, inArray, lt } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "../../db/index.js";
@@ -22,6 +22,8 @@ const WORKFLOW_TITLE_MAX = 120;
 const MESSAGE_CONTENT_MAX = 12_000;
 const MAX_FRAME_REFS = 50;
 const MAX_PROPOSAL_CHANGES = 200;
+const MAX_RUN_RETRIES = 3;
+const STALE_RUN_TIMEOUT_MS = 5 * 60_000;
 
 const workflowStatus = z.enum(["active", "archived"]);
 const messageRole = z.enum(["user", "assistant", "system"]);
@@ -86,6 +88,36 @@ const proposalInput = z.object({
   frameIds: z.array(z.string().min(1).max(120)).max(MAX_FRAME_REFS).default([]),
   changes: z.array(proposalChangeSchema).max(MAX_PROPOSAL_CHANGES).default([]),
 });
+
+function getRetryCount(snapshot: unknown) {
+  if (!snapshot || typeof snapshot !== "object" || Array.isArray(snapshot)) {
+    return 0;
+  }
+  const retryCount = (snapshot as Record<string, unknown>).retryCount;
+  return typeof retryCount === "number" && Number.isFinite(retryCount)
+    ? retryCount
+    : 0;
+}
+
+async function expireStaleWorkflowRuns(workflowId: number) {
+  const cutoff = new Date(Date.now() - STALE_RUN_TIMEOUT_MS);
+  await db
+    .update(canvasAgentRuns)
+    .set({
+      status: "failed",
+      errorMessage:
+        "Agent run timeout setelah server restart atau koneksi terputus. Silakan retry.",
+      completedAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(canvasAgentRuns.workflowId, workflowId),
+        inArray(canvasAgentRuns.status, ["pending", "running"]),
+        lt(canvasAgentRuns.updatedAt, cutoff),
+      ),
+    );
+}
 
 async function requireWorkflow(workflowId: number, userId: string) {
   const [workflow] = await db
@@ -213,6 +245,9 @@ export const canvasAgentRouter = router({
         enabled: row.canvasAgentEnabled,
         provider: row.canvasAgentProvider as "gemini" | "vertex" | "openrouter",
         model: row.canvasAgentModel,
+        geminiActive: Boolean(row.ttsApiKeyEncrypted),
+        openrouterActive: Boolean(row.openrouterApiKeyEncrypted),
+        vertexActive: Boolean(row.vertexServiceAccountEncrypted),
         updatedAt: row.updatedAt,
       };
     }),
@@ -283,6 +318,7 @@ export const canvasAgentRouter = router({
     .input(z.object({ id: z.number().int().positive() }))
     .query(async ({ ctx, input }) => {
       const workflow = await requireWorkflow(input.id, ctx.session.user.id);
+      await expireStaleWorkflowRuns(workflow.id);
       const [messages, proposals, runs] = await Promise.all([
         db
           .select()
@@ -346,6 +382,7 @@ export const canvasAgentRouter = router({
     .input(z.object({ id: z.number().int().positive() }))
     .query(async ({ ctx, input }) => {
       const workflow = await requireWorkflow(input.id, ctx.session.user.id);
+      await expireStaleWorkflowRuns(workflow.id);
       return db
         .select()
         .from(canvasAgentRuns)
@@ -499,11 +536,23 @@ export const canvasAgentRouter = router({
   retryRun: authenticatedProcedure
     .input(z.object({ id: z.number().int().positive() }))
     .mutation(async ({ ctx, input }) => {
-      const run = await requireRun(input.id, ctx.session.user.id);
+      let run = await requireRun(input.id, ctx.session.user.id);
+      await expireStaleWorkflowRuns(run.workflowId);
+      run = await requireRun(input.id, ctx.session.user.id);
       if (run.status !== "failed") {
+        if (run.status === "pending" || run.status === "running") {
+          return run;
+        }
         throw new TRPCError({
           code: "BAD_REQUEST",
           message: "Hanya run failed yang bisa di-retry",
+        });
+      }
+      const retryCount = getRetryCount(run.inputSnapshot);
+      if (retryCount >= MAX_RUN_RETRIES) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Retry maksimal ${MAX_RUN_RETRIES}x per run`,
         });
       }
       const [row] = await db
@@ -513,10 +562,29 @@ export const canvasAgentRouter = router({
           errorMessage: null,
           startedAt: null,
           completedAt: null,
+          inputSnapshot: {
+            ...run.inputSnapshot,
+            retryCount: retryCount + 1,
+          },
           updatedAt: new Date(),
         })
-        .where(eq(canvasAgentRuns.id, run.id))
+        .where(
+          and(
+            eq(canvasAgentRuns.id, run.id),
+            eq(canvasAgentRuns.status, "failed"),
+          ),
+        )
         .returning();
+      if (!row) {
+        const current = await requireRun(input.id, ctx.session.user.id);
+        if (current.status === "pending" || current.status === "running") {
+          return current;
+        }
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "Run sedang diproses ulang",
+        });
+      }
       enqueueCanvasAgentRun(row.id);
       return row;
     }),

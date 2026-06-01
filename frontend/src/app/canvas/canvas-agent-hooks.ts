@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   useInfiniteQuery,
   useMutation,
@@ -30,6 +30,23 @@ import type {
   RunRow,
   WorkflowRow,
 } from "./canvas-agent-types";
+
+const canvasAgentConfigKey = ["canvasAgent", "config"] as const;
+const STALE_RUN_TIMEOUT_MS = 5 * 60_000;
+
+function runTime(value: string | Date | null | undefined) {
+  if (!value) return 0;
+  return new Date(value).getTime();
+}
+
+function isRunActive(run: RunRow) {
+  return run.status === "pending" || run.status === "running";
+}
+
+function isRunStale(run: RunRow, now = Date.now()) {
+  const base = runTime(run.updatedAt) || runTime(run.startedAt) || runTime(run.createdAt);
+  return base > 0 && now - base > STALE_RUN_TIMEOUT_MS;
+}
 
 export function useCanvasAgentWorkflows(args: {
   enabled: boolean;
@@ -148,6 +165,10 @@ export function useCanvasAgentChat(args: {
   const queryClient = useQueryClient();
   const stream = useCanvasAgentStream();
   const workflowId = args.activeWorkflowId;
+  const [retryingRunIds, setRetryingRunIds] = useState<Set<number>>(
+    () => new Set(),
+  );
+  const retryingRunIdsRef = useRef<Set<number>>(new Set());
 
   // Hentikan stream aktif saat user pindah antar-workflow agar tidak ada stream
   // yang bocor memperbarui cache workflow lama di background. Jangan abort saat
@@ -191,6 +212,11 @@ export function useCanvasAgentChat(args: {
     queryKey: workflowId ? canvasAgentKeys.runs(workflowId) : ["disabled"],
     queryFn: () => canvasAgentApi.getWorkflowRuns(workflowId ?? 0),
     enabled: args.enabled && workflowId !== null,
+    refetchInterval: (query) => {
+      const now = Date.now();
+      const active = query.state.data?.filter(isRunActive) ?? [];
+      return active.some((run) => !isRunStale(run, now)) ? 1_500 : false;
+    },
   });
 
   const proposalsQuery = useQuery({
@@ -249,10 +275,58 @@ export function useCanvasAgentChat(args: {
   }, [messagesQuery.data]);
 
   const runs = runsQuery.data ?? [];
-  const activeRuns = runs.filter(
-    (run) => run.status === "pending" || run.status === "running",
+  const activeRuns = runs.filter(isRunActive);
+  const staleActiveRuns = activeRuns.filter((run) => isRunStale(run));
+  const latestSucceededAt = Math.max(
+    0,
+    ...runs
+      .filter((run) => run.status === "succeeded")
+      .map((run) => runTime(run.completedAt) || runTime(run.updatedAt)),
   );
-  const failedRuns = runs.filter((run) => run.status === "failed").slice(0, 3);
+  const failedRuns = runs
+    .filter(
+      (run) =>
+        run.status === "failed" &&
+        (runTime(run.createdAt) || runTime(run.updatedAt)) > latestSucceededAt,
+    )
+    .slice(0, 3);
+  const previousActiveRunIdsRef = useRef<Set<number>>(new Set());
+
+  useEffect(() => {
+    if (!workflowId || staleActiveRuns.length === 0) return;
+    void queryClient.invalidateQueries({
+      queryKey: canvasAgentKeys.runs(workflowId),
+    });
+  }, [queryClient, staleActiveRuns.length, workflowId]);
+
+  useEffect(() => {
+    if (!workflowId) {
+      previousActiveRunIdsRef.current = new Set();
+      return;
+    }
+
+    const activeRunIds = new Set(activeRuns.map((run) => run.id));
+    const hadRunSettle = [...previousActiveRunIdsRef.current].some(
+      (id) => !activeRunIds.has(id),
+    );
+    previousActiveRunIdsRef.current = activeRunIds;
+
+    if (!hadRunSettle) return;
+    void Promise.all([
+      queryClient.invalidateQueries({
+        queryKey: canvasAgentKeys.messages(workflowId),
+      }),
+      queryClient.invalidateQueries({
+        queryKey: canvasAgentKeys.proposals(workflowId),
+      }),
+      queryClient.invalidateQueries({
+        queryKey: canvasAgentKeys.runs(workflowId),
+      }),
+      queryClient.invalidateQueries({
+        queryKey: canvasAgentKeys.workflows(),
+      }),
+    ]);
+  }, [activeRuns, queryClient, workflowId]);
 
   const sendMessage = useCallback(
     async (content: string) => {
@@ -275,7 +349,17 @@ export function useCanvasAgentChat(args: {
 
   const retryRun = useCallback(
     async (run: RunRow) => {
-      await retryRunMutation.mutateAsync(run.id);
+      if (retryingRunIdsRef.current.has(run.id)) return;
+      retryingRunIdsRef.current = new Set(retryingRunIdsRef.current).add(run.id);
+      setRetryingRunIds(retryingRunIdsRef.current);
+      try {
+        await retryRunMutation.mutateAsync(run.id);
+      } finally {
+        const next = new Set(retryingRunIdsRef.current);
+        next.delete(run.id);
+        retryingRunIdsRef.current = next;
+        setRetryingRunIds(next);
+      }
     },
     [retryRunMutation],
   );
@@ -329,6 +413,7 @@ export function useCanvasAgentChat(args: {
     runs,
     activeRuns,
     failedRuns,
+    retryingRunIds,
     proposals: proposalsQuery.data ?? [],
     sendMessage,
     retryRun,
@@ -337,7 +422,7 @@ export function useCanvasAgentChat(args: {
     streamState: stream.streamState,
     stopStream: stream.stop,
     isSending: stream.isStreaming,
-    isBusy: retryRunMutation.isPending || updateProposalMutation.isPending,
+    isBusy: retryingRunIds.size > 0 || updateProposalMutation.isPending,
   };
 }
 
@@ -345,14 +430,20 @@ export function useCanvasAgentConfig() {
   const queryClient = useQueryClient();
 
   const configQuery = useQuery({
-    queryKey: ["canvasAgent", "config"],
+    queryKey: canvasAgentConfigKey,
     queryFn: canvasAgentApi.getConfig,
   });
 
   const updateConfigMutation = useMutation({
     mutationFn: canvasAgentApi.updateConfig,
     onSuccess: (data) => {
-      queryClient.setQueryData(["canvasAgent", "config"], data);
+      queryClient.setQueryData<typeof data | undefined>(
+        canvasAgentConfigKey,
+        (current) => ({
+          ...current,
+          ...data,
+        }),
+      );
       toast.success(`Model aktif diganti ke ${data.model} (${data.provider})`);
     },
     onError: (err) => {
