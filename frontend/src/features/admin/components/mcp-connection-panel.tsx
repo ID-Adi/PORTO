@@ -28,7 +28,6 @@ import { trpc } from "@/lib/trpc";
 
 const MCP_ENDPOINT = "https://api.pawa.my.id/api/mcp";
 const TOKEN_PLACEHOLDER = "porto_mcp_xxxxxxxxxxxxxx";
-const BRIDGE_PATH = "/absolute/path/to/PORTO/scripts/mcp-bridge.js";
 
 function formatDate(value: Date | string | null) {
   if (!value) return "-";
@@ -41,13 +40,20 @@ function formatDate(value: Date | string | null) {
   }).format(new Date(value));
 }
 
-function claudeSnippet(token: string) {
+// Cara termudah: satu perintah menulis config ke Claude Code / Codex /
+// Antigravity / OpenCode otomatis.
+function npxSnippet(token: string) {
+  return `npx porto-mcp@latest setup --token ${token}`;
+}
+
+// Config manual (npx-based) untuk client ber-skema mcpServers (Claude Code, dll).
+function manualSnippet(token: string) {
   return JSON.stringify(
     {
       mcpServers: {
         "porto-agent": {
-          command: "node",
-          args: [BRIDGE_PATH],
+          command: "npx",
+          args: ["-y", "porto-mcp@latest"],
           env: {
             PORTO_MCP_TOKEN: token,
             PORTO_MCP_ENDPOINT: MCP_ENDPOINT,
@@ -149,17 +155,27 @@ export function McpConnectionPanel() {
         </div>
       ) : null}
 
-      <Tabs defaultValue="claude" className="mt-1 gap-3">
+      <Tabs defaultValue="npx" className="mt-1 gap-3">
         <TabsList>
           <TabsIndicator />
-          <TabsTrigger value="claude">Claude Desktop</TabsTrigger>
+          <TabsTrigger value="npx">npx setup</TabsTrigger>
+          <TabsTrigger value="manual">Manual</TabsTrigger>
           <TabsTrigger value="curl">cURL</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="claude">
+        <TabsContent value="npx">
           <SnippetBlock
-            caption="claude_desktop_config.json"
-            code={claudeSnippet(snippetToken)}
+            caption="Otomatis tulis config (Claude Code · Codex · Antigravity · OpenCode)"
+            code={npxSnippet(snippetToken)}
+          />
+          <p className="mt-1.5 font-mono text-[10px] tracking-[0.12em] text-(--muted-foreground) uppercase">
+            Batasi ke satu client: tambah --client codex
+          </p>
+        </TabsContent>
+        <TabsContent value="manual">
+          <SnippetBlock
+            caption="Config manual (skema mcpServers)"
+            code={manualSnippet(snippetToken)}
           />
         </TabsContent>
         <TabsContent value="curl">

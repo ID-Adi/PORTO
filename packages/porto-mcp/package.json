@@ -1,0 +1,26 @@
+{
+  "name": "porto-mcp",
+  "version": "0.1.0",
+  "description": "PORTO MCP bridge + one-command setup for Claude Code, Codex, Antigravity CLI, and OpenCode.",
+  "bin": {
+    "porto-mcp": "bin/porto-mcp.js"
+  },
+  "type": "commonjs",
+  "files": [
+    "bin",
+    "lib",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "porto",
+    "claude",
+    "codex",
+    "opencode"
+  ],
+  "license": "MIT"
+}
