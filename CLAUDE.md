@@ -2,66 +2,100 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Repository shape
+
+Two independent pnpm projects orchestrated by root scripts (this is **not** a pnpm workspace — there is no `pnpm-workspace.yaml`; root scripts proxy via `pnpm --dir <pkg>`):
+
+- `frontend/` — Next.js (App Router) app, the public site + admin panel + canvas.
+- `backend/` — Hono server (port 4002): tRPC API, better-auth, Drizzle/Postgres, Redis, MCP bridge, AI/TTS tooling.
+
+The two are coupled by **end-to-end tRPC types**: `frontend/tsconfig.json` aliases `@porto/api` → `../backend/src/trpc/routers/_app.ts`, and `frontend/src/lib/trpc.ts` does `createTRPCReact<AppRouter>()`. Backend type changes flow into the frontend at compile time.
+
 ## Commands
 
-All commands run from the repo root via pnpm workspace:
-
+From repo root:
 ```bash
-pnpm install:frontend     # Install frontend dependencies
-pnpm dev:frontend         # Start Next.js dev server
-pnpm build:frontend       # Production build
-pnpm lint:frontend        # ESLint
+pnpm install:frontend / install:backend   # install deps per package
+pnpm dev:frontend                          # Next dev server on :3000
+pnpm dev:backend                           # Hono via tsx watch on :4002 (needs backend/.env)
+pnpm build:frontend                        # next build (uses --webpack, not turbopack)
+pnpm lint:frontend                         # eslint
+pnpm db:up / db:down                       # docker compose up -d / down (postgres+redis+services)
+pnpm db:generate / db:migrate / db:studio  # drizzle-kit (proxy into backend/)
 ```
 
-Or from within `frontend/`:
+From `backend/` (more scripts live here):
 ```bash
-pnpm dev / build / lint
+pnpm dev                 # run server (tsx, no build step — TS runs directly)
+pnpm db:generate         # drizzle-kit generate (after editing src/db/schema/*)
+pnpm db:migrate          # apply migrations
+pnpm db:seed:admin       # also: site, projects, skills, experience, socials, overview
+pnpm mcp:stdio           # run MCP server over stdio (for Claude/Cursor local config)
 ```
 
-Always run `pnpm lint` and `pnpm build` before committing to validate changes.
+**Validation before commit:** there is no test suite. Validate with `pnpm lint:frontend`, `pnpm build:frontend`, and `pnpm exec tsc --noEmit` in the relevant package (backend has no build step, so `tsc --noEmit` is the type gate). Backend changes that touch `src/db/schema/*` require `pnpm db:generate` to produce a migration.
 
-## Commit Style
+## Commit style
 
-Imperative, scoped prefix:
+Imperative, scoped prefix matching the area touched:
 ```
 frontend: refactor homepage layout
+backend: handle json-rpc notifications in mcp bridge
+canvas: implement model switcher for chat agent
 docs: update visual direction
 ```
 
-## Architecture
+## Backend architecture
 
-**Monolith structure** — `frontend/` is the active app; `backend/` is reserved.
+Entry: `backend/src/index.ts` mounts, in order that matters:
+- `/api/auth/:path{.+}` → better-auth handler. Password-reset routes are registered as individual `app.post()` **before** the auth catch-all (a Hono sub-router would 404-intercept auth routes).
+- `/api/canvas-agent` → SSE streaming for the canvas agent.
+- `/api/mcp` → MCP JSON-RPC bridge for external agents.
+- `/api/upload` → file upload; `/uploads/*` → static serve from a Docker volume.
+- `/api/trpc/*` → the tRPC `appRouter` (`src/trpc/routers/_app.ts`, ~15 sub-routers).
+
+ESM: backend is `"type": "module"`; relative imports use `.js` extensions even for `.ts` files (e.g. `import { x } from "./foo.js"`). Match this.
+
+**Auth & CORS** (`src/auth/index.ts`, `src/index.ts`): better-auth email/password with a non-input `role` field. CORS allowlist = localhost + `pawa.my.id`/`*.pawa.my.id` only; `credentials: true`; `/api/*` forced `Cache-Control: no-store` so a CDN can't cache CORS-less responses. `trustedOrigins` comes from `FRONTEND_URL`. Cross-subdomain cookies via `COOKIE_DOMAIN` — `resolveCookieDomain()` **throws at module load** if it's set but malformed (this can crash startup).
+
+**Database** (`src/db/`): Drizzle ORM over Postgres (`postgres` driver). Schema in `src/db/schema/`, migrations in `src/db/migrations/` (drizzle-kit, config at `backend/drizzle.config.ts`, reads `DATABASE_URL`). `ai_tool_settings` is a **singleton row (id=1)** holding TTS / canvas-agent / provider config.
+
+**Secrets**: provider API keys and Vertex service-account JSON are encrypted at rest (AES-256-GCM) via `src/lib/encrypted-secret.ts`, keyed by `AI_CONFIG_ENCRYPTION_KEY`. The frontend only ever receives `hasKey`/`last4`, never plaintext. Base URLs that aren't secrets (e.g. the local LLM Tailscale URL) are stored plaintext.
+
+**AI providers** (`src/lib/tts-providers.ts`, `tts-openai-audio.ts`, `canvas-agent-runner.ts`): `gemini` (AI Studio), `vertex` (SA JSON → OAuth), `openrouter`, and `local` (OpenAI-compatible, e.g. Ollama via Tailscale, no API key). Model lists are fetched live; "Test connection" probes the provider. Caveat: `listProviderModels` swallows Vertex errors to keep a fallback list for the TTS UI — connection testing must use the throwing `probeVertexModels` path.
+
+**Canvas agent**: `canvas_agent_workflows/messages/runs/proposals` tables. The SSE route (`src/routes/canvas-agent-stream.ts`) runs a job inline and threads the request `AbortSignal` into the provider call, so client "Stop" actually cancels the run (marked `cancelled`). Redis (`ioredis`, `REDIS_URL`) backs the canvas scene cache (`src/lib/scene-cache.ts`).
+
+**MCP** (`src/mcp/`): `registry.ts` + `server.ts` expose domain tools; `stdio.ts` is the stdio transport. External agents authenticate with a static token whose SHA-256 hash is stored on `ai_tool_settings`.
+
+## Frontend architecture
 
 ```
 frontend/src/
-├── app/             # Next.js App Router — routing, pages, API routes
-├── assets/          # Static assets (images, fonts, icons)
-├── components/      # Reusable UI
-│   ├── ui/          # shadcn/ui sourced components
-│   ├── anim/        # Animation primitives (e.g. ElectricBorder)
-│   └── common/      # Shared widgets (CommandMenu, ThemeToggle, CopyButton, ...)
-├── config/          # App-wide config (siteConfig)
-├── context/         # React context providers (Theme, Query, AppProviders)
-├── features/        # Domain features (e.g. home/) — sections, components, data, types
-├── hooks/           # Custom React hooks
-├── layout/          # Layout primitives (SiteShell, SiteHeader, SiteFooter, Panel, ScrollToTop, Icons)
-├── lib/             # Pure helpers (cn utils, query-client)
-├── services/        # API clients & external integrations
-└── types/           # Shared type definitions
+├── app/         # App Router routes/pages/API; (admin) group; canvas/; admin/
+├── components/  # ui/ (shadcn, style "radix-nova"), anim/, common/
+├── features/    # domain features: sections/, components/, data/, types/
+├── context/     # Theme, Query, AppProviders
+├── lib/         # trpc.ts, backend-url.ts, query-client, cn utils
+└── services/    # API clients & integrations
 ```
 
-**Feature anatomy** (`features/<domain>/`):
-- `sections/` — page-level section components
-- `components/` — domain-specific UI pieces
-- `data/` — typed static content (e.g. `landing-content.ts`)
-- `types/` — domain-specific types
+- **Routing**: App Router only; `app/page.tsx` composes from `features/`. Path alias `@/*` → `src/*`. New shadcn components go in `components/ui/`.
+- **Theme**: dark/light persisted in `localStorage` key `porto-theme`, hydrated by an inline `<script>` in the root layout — no state library.
+- **Data**: TanStack Query + tRPC client pointed at `BACKEND_URL` (`src/lib/backend-url.ts` = `NEXT_PUBLIC_BACKEND_URL ?? http://localhost:4002`).
+- **Canvas** (`app/canvas/`): the agent chat panel renders *inside* the Excalidraw DOM, which has global `user-select`/copy/scroll handlers — panel widgets must `stopPropagation` on wheel/touch/copy/cut to avoid Excalidraw hijacking them. Assistant messages render Markdown (`react-markdown` + `remark-gfm`).
 
-**Routing**: App Router only. Page composition happens in `app/page.tsx`, which imports from `features/`.
+Comments throughout the codebase are frequently written in Indonesian; match the surrounding language and density.
 
-**Theme**: Dark/light mode persisted in `localStorage` under key `porto-theme`. Hydration via inline `<script>` in root layout — no state management library.
+## Deployment (docker-compose.yml)
 
-**shadcn/ui config**: Style `radix-nova`, RSC enabled, icon library `lucide`, path aliases via `@/*` → `src/*`. New components go in `components/ui/`.
+Services: `postgres` (16), `redis` (7), `backend` (published to `127.0.0.1:4002`), `frontend` (Next standalone, `127.0.0.1:3001:3000`). Public ingress: **frontend via Cloudflare Tunnel** → localhost:3001; **backend via Caddy** (external `caddy` network) at `api.pawa.my.id`.
 
-## Design Direction
+Critical deploy gotchas:
+- **`NEXT_PUBLIC_*` are inlined at build time**, passed as Docker **build args** (`frontend/Dockerfile`). Changing the backend URL etc. requires **rebuilding the frontend image** (`docker compose build frontend`), not just a restart. Root `.env` supplies Postgres creds and can override these args; the compose default for `NEXT_PUBLIC_BACKEND_URL` is `https://api.pawa.my.id`.
+- **Frontend Docker build context = repo root** (not `frontend/`), because the build type-checks the imported backend `AppRouter`.
+- The backend container entrypoint runs `drizzle-kit migrate` (`set -e`) **before** starting — a failed migration blocks the whole backend from coming up.
 
-Minimalist technical/editorial — monochrome palette, thin borders, quiet texture, strong typographic hierarchy. Design decisions documented in `docs/catolta1.md`, `docs/detail_visual.md`, `docs/techstack.md`.
+## Design direction
+
+Minimalist technical/editorial — monochrome palette, thin borders, quiet texture, strong typographic hierarchy. Decisions documented in `docs/catolta1.md`, `docs/detail_visual.md`, `docs/techstack.md`.
