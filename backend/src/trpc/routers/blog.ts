@@ -2,7 +2,7 @@ import { desc, eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "../../db/index.js";
-import { blogPosts } from "../../db/schema/index.js";
+import { BLOG_CATEGORIES, blogPosts } from "../../db/schema/index.js";
 import { protectedProcedure, publicProcedure, router } from "../init.js";
 
 const blogInput = z.object({
@@ -11,6 +11,7 @@ const blogInput = z.object({
   description: z.string().nullish(),
   content: z.string().nullish(),
   meta: z.string().nullish(),
+  category: z.enum(BLOG_CATEGORIES).default("global"),
   coverUrl: z.string().nullish(),
   published: z.boolean().default(false),
   publishedAt: z.coerce.date().nullish(),
@@ -20,6 +21,18 @@ export const blogRouter = router({
   list: publicProcedure.query(async () => {
     return db.select().from(blogPosts).orderBy(desc(blogPosts.createdAt));
   }),
+  listByCategory: publicProcedure
+    .input(z.object({ category: z.enum(BLOG_CATEGORIES).optional() }))
+    .query(async ({ input }) => {
+      const where = input.category
+        ? eq(blogPosts.category, input.category)
+        : undefined;
+      return db
+        .select()
+        .from(blogPosts)
+        .where(where)
+        .orderBy(desc(blogPosts.createdAt));
+    }),
   byId: publicProcedure
     .input(z.object({ id: z.number().int() }))
     .query(async ({ input }) => {

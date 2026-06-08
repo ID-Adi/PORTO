@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 
+import { BLOG_CATEGORIES, type BlogCategory } from "../db/schema/index.js";
 import {
   getPublicCommandData,
   getPublicHomeData,
@@ -42,7 +43,15 @@ export const publicDataRoute = new Hono()
     return c.json(experience);
   })
   .get("/blog", async (c) => {
-    const blog = await withFallback(listPublicBlogPosts(), []);
+    const rawCategory = c.req.query("category");
+    let category: BlogCategory | undefined;
+    if (rawCategory !== undefined) {
+      if (!(BLOG_CATEGORIES as readonly string[]).includes(rawCategory)) {
+        return c.json({ error: "Invalid category" }, 400);
+      }
+      category = rawCategory as BlogCategory;
+    }
+    const blog = await withFallback(listPublicBlogPosts(category), []);
     return c.json(blog);
   })
   .get("/blog/:slug", async (c) => {

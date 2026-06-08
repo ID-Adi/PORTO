@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 import { TRPCError } from "@trpc/server";
 import { Mp3Encoder } from "@breezystack/lamejs";
 import { and, count, desc, eq, gte, ne } from "drizzle-orm";
+import sharp from "sharp";
 import { z } from "zod";
 
 import { db } from "../../db/index.js";
@@ -42,7 +43,7 @@ import { authenticatedProcedure, router } from "../init.js";
 
 type TtsProviderId = "gemini" | "vertex" | "openrouter";
 
-const KIND = z.enum(["image", "video", "tts"]);
+const KIND = z.enum(["image", "video", "tts", "image-converter"]);
 
 const IMAGE_ASPECT_RATIOS = ["1:1", "4:5", "3:4", "16:9", "9:16"] as const;
 const ALLOWED_MIME = new Set(["image/png", "image/jpeg", "image/webp"]);
@@ -231,6 +232,119 @@ async function callN8n(payload: {
   return json;
 }
 
+function sourceExtensionFromMime(mime: string): string {
+  if (mime.includes("png")) return "png";
+  if (mime.includes("webp")) return "webp";
+  return "jpg";
+}
+
+function outputMimeTypeForFormat(format: "webp" | "jpeg") {
+  return format === "jpeg" ? "image/jpeg" : "image/webp";
+}
+
+function outputExtensionForFormat(format: "webp" | "jpeg") {
+  return format === "jpeg" ? "jpg" : "webp";
+}
+
+async function convertImageForUser(args: {
+  userId: string;
+  source: {
+    base64: string;
+    mimeType: "image/png" | "image/jpeg" | "image/jpg" | "image/webp";
+    fileName: string;
+  };
+  format: "webp" | "jpeg";
+  quality: number;
+}) {
+  const { source, format, quality, userId } = args;
+  const originalBytes = decodedByteLength(source.base64);
+  if (originalBytes === 0) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Base64 gambar kosong",
+    });
+  }
+  if (originalBytes > MAX_FRAME_BYTES) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Ukuran gambar melebihi 10MB",
+    });
+  }
+
+  const buffer = Buffer.from(source.base64, "base64");
+  let transformed: sharp.Sharp;
+  try {
+    transformed = sharp(buffer, { failOn: "error" }).rotate();
+  } catch {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "File gambar tidak valid",
+    });
+  }
+
+  const metadata = await transformed.metadata();
+  if (!metadata.width || !metadata.height) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Dimensi gambar tidak terbaca",
+    });
+  }
+
+  const pipeline = transformed.clone();
+  const outputBuffer =
+    format === "jpeg"
+      ? await pipeline.jpeg({ quality, mozjpeg: true }).toBuffer()
+      : await pipeline.webp({ quality }).toBuffer();
+
+  const outputBytes = outputBuffer.byteLength;
+  const requestId = randomUUID();
+  const filename = `${requestId}.${outputExtensionForFormat(format)}`;
+  const outputPath = ensureContained(path.join(TOOLS_UPLOAD_DIR, filename));
+
+  await fs.mkdir(TOOLS_UPLOAD_DIR, { recursive: true });
+  await fs.writeFile(outputPath, outputBuffer);
+
+  const relUrl = `/uploads/tools/${filename}`;
+  const [row] = await db
+    .insert(toolGeneration)
+    .values({
+      userId,
+      kind: "image-converter",
+      prompt: `convert:${format}`,
+      aspectRatio: `${metadata.width}:${metadata.height}`,
+      requestId,
+      status: "success",
+      fileUrl: relUrl,
+      mimeType: outputMimeTypeForFormat(format),
+      fileSize: outputBytes,
+      inputMeta: {
+        sourceMimeType: source.mimeType,
+        sourceFileName: source.fileName,
+        originalBytes,
+      },
+      outputMeta: {
+        format,
+        quality,
+        width: metadata.width,
+        height: metadata.height,
+        originalBytes,
+        outputBytes,
+      },
+    })
+    .returning();
+
+  return {
+    id: row.id,
+    url: publicUrl(row.fileUrl),
+    mimeType: row.mimeType ?? outputMimeTypeForFormat(format),
+    originalBytes,
+    outputBytes,
+    width: metadata.width,
+    height: metadata.height,
+    format,
+  };
+}
+
 const framePayload = z.object({
   base64: z.string().min(1),
   mimeType: z.enum(ALLOWED_FRAME_MIME),
@@ -268,6 +382,16 @@ const generateTtsInput = z.object({
   styleInstruction: z.string().max(MAX_TTS_STYLE_LENGTH).optional().default(""),
   speakers: z.array(ttsSpeakerInput).min(1).max(MAX_TTS_SPEAKERS),
   format: z.enum(["wav", "mp3"]).optional().default("wav"),
+});
+
+const convertImageInput = z.object({
+  source: z.object({
+    base64: z.string().min(1),
+    mimeType: z.enum(["image/png", "image/jpeg", "image/jpg", "image/webp"]),
+    fileName: z.string().min(1).max(255),
+  }),
+  format: z.enum(["webp", "jpeg"]).optional().default("webp"),
+  quality: z.number().int().min(1).max(100).optional().default(82),
 });
 
 type TtsFormat = z.infer<typeof generateTtsInput>["format"];
@@ -460,6 +584,9 @@ function fallbackTtsSettings(): Pick<
   | "ttsDefaultVoice"
   | "ttsVoiceOptions"
   | "ttsEnabled"
+  | "providerGeminiEnabled"
+  | "providerVertexEnabled"
+  | "providerOpenrouterEnabled"
 > {
   return {
     ttsProvider: "gemini",
@@ -472,6 +599,9 @@ function fallbackTtsSettings(): Pick<
     ttsDefaultVoice: DEFAULT_TTS_VOICE,
     ttsVoiceOptions: [...DEFAULT_TTS_VOICES],
     ttsEnabled: false,
+    providerGeminiEnabled: false,
+    providerVertexEnabled: false,
+    providerOpenrouterEnabled: false,
   };
 }
 
@@ -707,8 +837,11 @@ async function withTtsRetry<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 // Kredensial provider yang sudah didekripsi (bentuk = ListModelsArgs).
-// Provider "local" hanya dipakai canvas agent, bukan jalur TTS ini.
-type ProviderCreds = Exclude<ListModelsArgs, { provider: "local" }>;
+// Provider "local" & "9router" hanya dipakai canvas agent, bukan jalur TTS ini.
+type ProviderCreds = Exclude<
+  ListModelsArgs,
+  { provider: "local" } | { provider: "9router" }
+>;
 type AiToolSettingsLike = Awaited<ReturnType<typeof readTtsSettings>>;
 
 // Ambil + dekripsi kredensial provider dari settings; lempar bila belum diatur.
@@ -716,6 +849,19 @@ function resolveProviderCreds(
   settings: AiToolSettingsLike,
   provider: TtsProviderId,
 ): ProviderCreds {
+  // Guard enabled lebih dulu: provider disabled tak boleh dipakai walau
+  // credential valid.
+  const enabledMap: Record<TtsProviderId, boolean> = {
+    gemini: settings.providerGeminiEnabled,
+    vertex: settings.providerVertexEnabled,
+    openrouter: settings.providerOpenrouterEnabled,
+  };
+  if (!enabledMap[provider]) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: `Provider ${provider} sedang disabled di AI Settings`,
+    });
+  }
   if (provider === "gemini") {
     if (!settings.ttsApiKeyEncrypted) {
       throw new TRPCError({
@@ -1113,14 +1259,22 @@ export const toolsRouter = router({
       defaultVoice: settings.ttsDefaultVoice,
       voiceOptions: settings.ttsVoiceOptions,
       // Status per-provider untuk menentukan provider mana yang bisa dipakai.
+      // `enabled` = flag global; disabled berarti provider tak boleh dipakai.
       providers: {
-        gemini: { hasApiKey: Boolean(settings.ttsApiKeyEncrypted) },
+        gemini: {
+          hasApiKey: Boolean(settings.ttsApiKeyEncrypted),
+          enabled: settings.providerGeminiEnabled,
+        },
         vertex: {
           hasApiKey: Boolean(
             settings.vertexServiceAccountEncrypted && settings.vertexProjectId,
           ),
+          enabled: settings.providerVertexEnabled,
         },
-        openrouter: { hasApiKey: Boolean(settings.openrouterApiKeyEncrypted) },
+        openrouter: {
+          hasApiKey: Boolean(settings.openrouterApiKeyEncrypted),
+          enabled: settings.providerOpenrouterEnabled,
+        },
       },
       // Kompat lama: hasApiKey = Gemini.
       hasApiKey: Boolean(settings.ttsApiKeyEncrypted),
@@ -1152,6 +1306,17 @@ export const toolsRouter = router({
         userId: ctx.session.user.id,
         userEmail: ctx.session.user.email ?? null,
         input,
+      });
+    }),
+
+  convertImage: authenticatedProcedure
+    .input(convertImageInput)
+    .mutation(async ({ ctx, input }) => {
+      return convertImageForUser({
+        userId: ctx.session.user.id,
+        source: input.source,
+        format: input.format,
+        quality: input.quality,
       });
     }),
 

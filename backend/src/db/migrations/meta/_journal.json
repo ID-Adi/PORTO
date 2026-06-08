@@ -169,6 +169,20 @@
       "when": 1780299143557,
       "tag": "0023_nostalgic_lifeguard",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1780850296627,
+      "tag": "0024_bumpy_gorgon",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1780854902139,
+      "tag": "0025_spicy_harry_osborn",
+      "breakpoints": true
     }
   ]
 }

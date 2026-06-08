@@ -14,6 +14,7 @@ import {
 } from "../db/schema/index.js";
 import { decryptSecret } from "./encrypted-secret.js";
 import {
+  NINE_ROUTER_DEFAULT_BASE_URL,
   normalizeBaseUrl,
   OPENROUTER_BASE_URL,
   TtsError,
@@ -33,7 +34,12 @@ function agentAbortSignal(signal?: AbortSignal): AbortSignal {
 const MAX_HISTORY_MESSAGES = 24;
 const MAX_SCENE_ELEMENTS = 120;
 
-type CanvasAgentProvider = "gemini" | "vertex" | "openrouter" | "local";
+type CanvasAgentProvider =
+  | "gemini"
+  | "vertex"
+  | "openrouter"
+  | "local"
+  | "9router";
 
 type CanvasAgentMessage = typeof canvasAgentMessages.$inferSelect;
 type CanvasAgentWorkflow = typeof canvasAgentWorkflows.$inferSelect;
@@ -106,13 +112,33 @@ function isProvider(value: string): value is CanvasAgentProvider {
     value === "gemini" ||
     value === "vertex" ||
     value === "openrouter" ||
-    value === "local"
+    value === "local" ||
+    value === "9router"
   );
 }
 
 function normalizeModel(provider: CanvasAgentProvider, model: string) {
-  if (provider === "openrouter" || provider === "local") return model.trim();
+  if (provider === "openrouter" || provider === "local" || provider === "9router")
+    return model.trim();
   return model.trim().replace(/^(publishers\/google\/models\/|models\/)/, "");
+}
+
+// Pastikan provider tidak dalam keadaan disabled di AI Settings. Provider
+// disabled tidak boleh dipakai walau credential valid.
+function assertProviderEnabled(
+  settings: CanvasAgentSettings,
+  provider: CanvasAgentProvider,
+) {
+  const enabledMap: Record<CanvasAgentProvider, boolean> = {
+    gemini: settings.providerGeminiEnabled,
+    vertex: settings.providerVertexEnabled,
+    openrouter: settings.providerOpenrouterEnabled,
+    local: settings.providerLocalEnabled,
+    "9router": settings.provider9routerEnabled,
+  };
+  if (!enabledMap[provider]) {
+    throw new Error(`Provider ${provider} sedang disabled di AI Settings`);
+  }
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -441,6 +467,39 @@ async function callLocal(args: {
   return openRouterText(json);
 }
 
+// 9router (OpenAI-compatible, self-hosted) — sama seperti OpenRouter tetapi
+// base URL dari settings dan tanpa header khusus OpenRouter.
+async function call9Router(args: {
+  apiKey: string;
+  baseUrl: string;
+  model: string;
+  systemPrompt: string;
+  prompt: string;
+  signal?: AbortSignal;
+}) {
+  const res = await fetch(`${normalizeBaseUrl(args.baseUrl)}/chat/completions`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${args.apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: args.model,
+      messages: [
+        { role: "system", content: args.systemPrompt },
+        { role: "user", content: args.prompt },
+      ],
+      response_format: { type: "json_object" },
+    }),
+    signal: agentAbortSignal(args.signal),
+  });
+  const json = (await res.json()) as OpenRouterResponse;
+  if (!res.ok) {
+    throw new Error(json.error?.message ?? `9router HTTP ${res.status}`);
+  }
+  return openRouterText(json);
+}
+
 async function settingsOrThrow() {
   const [settings] = await db
     .select()
@@ -464,6 +523,9 @@ async function callProvider(args: {
 }) {
   const provider = args.settings.canvasAgentProvider as CanvasAgentProvider;
   const model = args.settings.canvasAgentModel;
+
+  // Provider disabled tidak boleh dipakai walau credential valid.
+  assertProviderEnabled(args.settings, provider);
 
   if (provider === "gemini") {
     if (!args.settings.ttsApiKeyEncrypted) {
@@ -497,6 +559,23 @@ async function callProvider(args: {
     }
     return callLocal({
       baseUrl: args.settings.localBaseUrl,
+      model,
+      systemPrompt: args.systemPrompt,
+      prompt: args.prompt,
+      signal: args.signal,
+    });
+  }
+
+  if (provider === "9router") {
+    if (!args.settings.nineRouterApiKeyEncrypted) {
+      throw new Error("9router API key belum dikonfigurasi");
+    }
+    if (!args.settings.nineRouterBaseUrl) {
+      throw new Error("9router base URL belum dikonfigurasi");
+    }
+    return call9Router({
+      apiKey: decryptSecret(args.settings.nineRouterApiKeyEncrypted),
+      baseUrl: args.settings.nineRouterBaseUrl || NINE_ROUTER_DEFAULT_BASE_URL,
       model,
       systemPrompt: args.systemPrompt,
       prompt: args.prompt,

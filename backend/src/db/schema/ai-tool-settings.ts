@@ -38,7 +38,17 @@ export const DEFAULT_VERTEX_SCOPES =
 export const DEFAULT_VERTEX_ALLOWED_HTTP_DOMAINS = "All";
 export const DEFAULT_CANVAS_AGENT_MODEL = "gemini-3.1-flash";
 
+// 9router: AI router self-hosted dengan endpoint OpenAI-compatible.
+export const NINE_ROUTER_DEFAULT_BASE_URL = "http://localhost:20128/v1";
+
 export type TtsProvider = "gemini" | "vertex" | "openrouter";
+// Canvas Agent / agent CLI mendukung lebih banyak provider dari TTS.
+export type CanvasAgentProviderId =
+  | "gemini"
+  | "vertex"
+  | "openrouter"
+  | "local"
+  | "9router";
 
 export const aiToolSettings = pgTable("ai_tool_settings", {
   id: integer("id").primaryKey().default(1),
@@ -53,6 +63,29 @@ export const aiToolSettings = pgTable("ai_tool_settings", {
   // Provider Local LLM (OpenAI-compatible, via Tailscale) — base URL plaintext,
   // tanpa API key (keamanan ditangani jaringan Tailscale).
   localBaseUrl: text("local_base_url"),
+  // Provider 9router (OpenAI-compatible, self-hosted) — API key string + base URL.
+  nineRouterApiKeyEncrypted: text("nine_router_api_key_encrypted"),
+  nineRouterApiKeyLast4: text("nine_router_api_key_last4"),
+  nineRouterBaseUrl: text("nine_router_base_url")
+    .notNull()
+    .default(NINE_ROUTER_DEFAULT_BASE_URL),
+  // Flag enable/disable per provider credential (global). Disabled = tidak boleh
+  // dipakai walau credential valid. Tidak menghapus credential.
+  providerGeminiEnabled: boolean("provider_gemini_enabled")
+    .notNull()
+    .default(false),
+  providerVertexEnabled: boolean("provider_vertex_enabled")
+    .notNull()
+    .default(false),
+  providerOpenrouterEnabled: boolean("provider_openrouter_enabled")
+    .notNull()
+    .default(false),
+  providerLocalEnabled: boolean("provider_local_enabled")
+    .notNull()
+    .default(false),
+  provider9routerEnabled: boolean("provider_9router_enabled")
+    .notNull()
+    .default(false),
   // Provider Vertex AI (Google Cloud) — service account JSON + project + location.
   vertexServiceAccountEncrypted: text("vertex_service_account_encrypted"),
   vertexProjectId: text("vertex_project_id"),

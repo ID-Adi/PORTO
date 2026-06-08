@@ -1,7 +1,8 @@
-import { asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray } from "drizzle-orm";
 
 import { db } from "../db/index.js";
 import {
+  type BlogCategory,
   blogPosts,
   experienceCompanies,
   experiencePositions,
@@ -198,11 +199,15 @@ export async function listPublicExperience() {
   }));
 }
 
-export async function listPublicBlogPosts() {
+export async function listPublicBlogPosts(category?: BlogCategory) {
+  const where = category
+    ? and(eq(blogPosts.published, true), eq(blogPosts.category, category))
+    : eq(blogPosts.published, true);
+
   const rows = await db
     .select()
     .from(blogPosts)
-    .where(eq(blogPosts.published, true))
+    .where(where)
     .orderBy(desc(blogPosts.createdAt));
 
   return rows.map(withBlogPublicUrls);
@@ -285,7 +290,8 @@ export async function getPublicHomeData() {
     settle(listPublicProfileOverview(), []),
     settle(listPublicSocials(), []),
     settle(listPublicSkills(), []),
-    settle(listPublicBlogPosts(), []),
+    // Home showcase tetap editorial global; laporan Saham/Crypto tidak mencampur.
+    settle(listPublicBlogPosts("global"), []),
     settle(listPublicExperience(), []),
     settle(listPublicProjects(), []),
     settle(listPublicBookmarks(), []),
@@ -306,7 +312,8 @@ export async function getPublicHomeData() {
 export async function getPublicCommandData() {
   const [skillsData, blogData, socialsData] = await Promise.all([
     settle(listPublicSkills(), []),
-    settle(listPublicBlogPosts(), []),
+    // Command menu tetap editorial global.
+    settle(listPublicBlogPosts("global"), []),
     settle(listPublicSocials(), []),
   ]);
 

@@ -1077,8 +1077,8 @@ export function GenerateCard({ kind }: GenerateCardProps) {
   const previewAspectRatio = session.aspectRatio;
 
   return (
-    <article className="flex flex-col border-(--line) bg-(--background)">
-      <header className="screen-line-bottom flex items-center justify-between gap-3 px-4 py-3">
+    <article className="flex h-full min-h-0 flex-col border-(--line) bg-(--background)">
+      <header className="screen-line-bottom shrink-0 flex items-center justify-between gap-3 px-4 py-3">
         <div className="flex min-w-0 items-center gap-2.5">
           <span
             aria-hidden
@@ -1118,295 +1118,297 @@ export function GenerateCard({ kind }: GenerateCardProps) {
         </div>
       </header>
 
-      <div className="px-4 py-4">
+      <div className="shrink-0 px-4 py-4">
         <p className="font-mono text-xs leading-6 text-(--muted-foreground)">
           {copy.description}
         </p>
       </div>
 
-      <div className="screen-line-top px-4 py-4">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:gap-4">
-          {kind === "image" ? (
-            <ReferenceRail
-              values={session.references}
-              onChange={setReference}
-              onExpand={onExpandReference}
-              disabled={isGenerating}
-            />
-          ) : (
-            <VideoFrameRail
-              firstFrame={session.firstFrame}
-              lastFrame={session.lastFrame}
-              onFirstFrameChange={setFirstFrame}
-              onLastFrameChange={setLastFrame}
-              disabled={isGenerating}
-            />
-          )}
-          <div className="flex items-start justify-center lg:flex-1">
-            <motion.div
-              layout
-              transition={{
-                type: "spring",
-                stiffness: 320,
-                damping: 32,
-              }}
-              className="relative"
-              style={buildPreviewStyle(previewAspectRatio, kind)}
-            >
-              <AnimatePresence mode="wait" initial={false}>
-                {isGenerating ? (
-                  <motion.div
-                    key="generating"
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -8 }}
-                    transition={{ duration: 0.25, ease: "easeOut" }}
-                    className="absolute inset-0"
-                  >
-                    <GeneratingAnimation
-                      label={copy.workingLabel}
-                      startedAt={session.startedAt}
-                    />
-                  </motion.div>
-                ) : previewEntry?.resultUrl ? (
-                  <motion.div
-                    key={`result-${previewEntry.source}-${previewEntry.resultUrl}`}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ duration: 0.25 }}
-                    className="absolute inset-0 overflow-hidden border border-(--line)"
-                  >
-                    {kind === "image" ? (
-                      /* eslint-disable-next-line @next/next/no-img-element */
-                      <img
-                        src={previewEntry.resultUrl}
-                        alt={previewEntry.prompt || "Hasil generate"}
-                        className="absolute inset-0 size-full object-cover"
+      <div className="screen-line-top min-h-0 flex-1 overflow-y-auto px-4 py-4">
+        <div className="flex min-h-full flex-col gap-4">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:gap-4">
+            {kind === "image" ? (
+              <ReferenceRail
+                values={session.references}
+                onChange={setReference}
+                onExpand={onExpandReference}
+                disabled={isGenerating}
+              />
+            ) : (
+              <VideoFrameRail
+                firstFrame={session.firstFrame}
+                lastFrame={session.lastFrame}
+                onFirstFrameChange={setFirstFrame}
+                onLastFrameChange={setLastFrame}
+                disabled={isGenerating}
+              />
+            )}
+            <div className="flex min-w-0 items-start justify-center lg:flex-1">
+              <motion.div
+                layout
+                transition={{
+                  type: "spring",
+                  stiffness: 320,
+                  damping: 32,
+                }}
+                className="relative"
+                style={buildPreviewStyle(previewAspectRatio, kind)}
+              >
+                <AnimatePresence mode="wait" initial={false}>
+                  {isGenerating ? (
+                    <motion.div
+                      key="generating"
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -8 }}
+                      transition={{ duration: 0.25, ease: "easeOut" }}
+                      className="absolute inset-0"
+                    >
+                      <GeneratingAnimation
+                        label={copy.workingLabel}
+                        startedAt={session.startedAt}
                       />
-                    ) : (
-                      <video
-                        key={previewEntry.resultUrl}
-                        src={getProxiedVideoUrl(previewEntry.resultUrl)}
-                        controls
-                        preload="auto"
-                        muted
-                        playsInline
-                        className="absolute inset-0 size-full object-cover"
-                      />
-                    )}
-                  </motion.div>
-                ) : (
-                  <motion.div
-                    key="empty"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ duration: 0.2 }}
-                    className="absolute inset-0 border border-dashed border-(--line) bg-(--muted)/20"
-                  >
-                    <div className="absolute inset-0 grid place-items-center gap-1 text-center font-mono text-[10px] tracking-[0.2em] uppercase text-(--muted-foreground)">
-                      output preview · {previewAspectRatio}
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </motion.div>
+                    </motion.div>
+                  ) : previewEntry?.resultUrl ? (
+                    <motion.div
+                      key={`result-${previewEntry.source}-${previewEntry.resultUrl}`}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ duration: 0.25 }}
+                      className="absolute inset-0 overflow-hidden border border-(--line)"
+                    >
+                      {kind === "image" ? (
+                        /* eslint-disable-next-line @next/next/no-img-element */
+                        <img
+                          src={previewEntry.resultUrl}
+                          alt={previewEntry.prompt || "Hasil generate"}
+                          className="absolute inset-0 size-full object-cover"
+                        />
+                      ) : (
+                        <video
+                          key={previewEntry.resultUrl}
+                          src={getProxiedVideoUrl(previewEntry.resultUrl)}
+                          controls
+                          preload="auto"
+                          muted
+                          playsInline
+                          className="absolute inset-0 size-full object-cover"
+                        />
+                      )}
+                    </motion.div>
+                  ) : (
+                    <motion.div
+                      key="empty"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ duration: 0.2 }}
+                      className="absolute inset-0 border border-dashed border-(--line) bg-(--muted)/20"
+                    >
+                      <div className="absolute inset-0 grid place-items-center gap-1 text-center font-mono text-[10px] tracking-[0.2em] uppercase text-(--muted-foreground)">
+                        output preview · {previewAspectRatio}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </motion.div>
+            </div>
+
+            <HistoryPanel
+              kind={historyPanelKind}
+              entries={historyPanelEntries}
+              onDelete={(id) => onDeleteHistory(id, historyPanelKind)}
+              onSave={(entry) => onSaveHistory(entry, historyPanelKind)}
+              onExpand={(entry) => onExpandHistory(entry, historyPanelKind)}
+              onAddAsReference={kind === "image" ? addAsReference : undefined}
+              onAddToVideoFrame={
+                kind === "video" && historyPanelKind === "image"
+                  ? addHistoryImageToVideoFrame
+                  : undefined
+              }
+              addingReferenceId={addingReferenceId}
+              downloadProgress={downloadProgress}
+              isLoading={historyPanelIsLoading}
+              modeToggle={historyModeToggle}
+            />
           </div>
 
-          <HistoryPanel
-            kind={historyPanelKind}
-            entries={historyPanelEntries}
-            onDelete={(id) => onDeleteHistory(id, historyPanelKind)}
-            onSave={(entry) => onSaveHistory(entry, historyPanelKind)}
-            onExpand={(entry) => onExpandHistory(entry, historyPanelKind)}
-            onAddAsReference={kind === "image" ? addAsReference : undefined}
-            onAddToVideoFrame={
-              kind === "video" && historyPanelKind === "image"
-                ? addHistoryImageToVideoFrame
-                : undefined
-            }
-            addingReferenceId={addingReferenceId}
-            downloadProgress={downloadProgress}
-            isLoading={historyPanelIsLoading}
-            modeToggle={historyModeToggle}
-          />
+          <form
+            onSubmit={onSubmit}
+            className="screen-line-top flex flex-col gap-3 pt-4"
+          >
+            <fieldset
+              disabled={isGenerating}
+              className="flex flex-col gap-2 disabled:cursor-not-allowed"
+            >
+              <div className="flex items-center justify-between font-mono text-[10px] tracking-[0.2em] uppercase text-(--muted-foreground)">
+                <span id={`aspect-label-${kind}`}>Aspect Ratio</span>
+                <span className="tabular-nums">{session.aspectRatio}</span>
+              </div>
+              <div
+                role="radiogroup"
+                aria-labelledby={`aspect-label-${kind}`}
+                aria-disabled={isGenerating}
+                className="flex flex-wrap gap-1"
+              >
+                {aspectOptions.map((option) => {
+                  const active = session.aspectRatio === option.value;
+                  const unsupported = option.disabled === true;
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      role="radio"
+                      aria-checked={active}
+                      aria-disabled={unsupported || undefined}
+                      title={unsupported ? "Belum didukung — segera hadir" : undefined}
+                      tabIndex={active ? 0 : -1}
+                      onClick={() => setAspectRatio(option.value)}
+                      disabled={isGenerating || unsupported}
+                      className={cn(
+                        "inline-flex h-7 min-w-12 items-center justify-center border px-2 font-mono text-[10px] tracking-[0.12em] uppercase transition-colors",
+                        active
+                          ? "border-(--foreground) bg-(--foreground) text-(--background)"
+                          : "border-(--line) text-(--muted-foreground) hover:border-(--foreground)/40 hover:text-(--foreground)",
+                        unsupported &&
+                          "line-through decoration-(--muted-foreground)/60",
+                        "disabled:pointer-events-none disabled:opacity-50",
+                      )}
+                    >
+                      {option.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </fieldset>
+
+            <label
+              htmlFor={`prompt-${kind}`}
+              className="flex items-center justify-between font-mono text-[10px] tracking-[0.2em] uppercase text-(--muted-foreground)"
+            >
+              <span>{kind === "video" ? "Caption · optional" : "Prompt"}</span>
+              <span className="tabular-nums">
+                {session.prompt.length.toString().padStart(3, "0")} ch
+              </span>
+            </label>
+            <div className="relative">
+              <Textarea
+                ref={textareaRef}
+                id={`prompt-${kind}`}
+                value={session.prompt}
+                onChange={onPromptChange}
+                onKeyDown={onPromptKeyDown}
+                onSelect={onPromptSelect}
+                onBlur={() => {
+                  // Delay agar onClick di popover sempat terjadi sebelum tutup.
+                  setTimeout(closeMention, 120);
+                }}
+                placeholder={copy.placeholder}
+                rows={3}
+                disabled={isGenerating}
+                className="resize-none font-mono text-xs leading-6"
+              />
+              {kind === "image" && mention.open ? (
+                mentionCandidates.length === 0 ? (
+                  <div className="absolute top-full left-0 z-30 mt-1 w-64 max-w-full border border-(--line) bg-(--background) px-3 py-2 font-mono text-[10px] tracking-[0.14em] text-(--muted-foreground) uppercase">
+                    Tidak ada referensi terisi
+                  </div>
+                ) : (
+                  <ul
+                    role="listbox"
+                    aria-label="Pilih referensi"
+                    className="absolute top-full left-0 z-30 mt-1 max-h-56 w-64 max-w-full overflow-y-auto border border-(--line) bg-(--background) shadow-sm"
+                  >
+                    {mentionCandidates.map((ref, i) => {
+                      const active = i === mention.activeIndex;
+                      return (
+                        <li key={ref.idx}>
+                          <button
+                            type="button"
+                            role="option"
+                            aria-selected={active}
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              insertMention(ref.idx);
+                            }}
+                            onMouseEnter={() =>
+                              setMention((prev) => ({ ...prev, activeIndex: i }))
+                            }
+                            className={cn(
+                              "flex w-full items-center gap-2 px-2 py-1.5 text-left font-mono text-[11px] transition-colors",
+                              active
+                                ? "bg-(--foreground) text-(--background)"
+                                : "text-(--foreground) hover:bg-(--muted)/60",
+                            )}
+                          >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={ref.file.dataUrl}
+                              alt=""
+                              className="size-6 shrink-0 border border-(--line) object-cover"
+                            />
+                            <span className="font-semibold tabular-nums">
+                              @{ref.idx + 1}
+                            </span>
+                            <span className="line-clamp-1 text-[10px] opacity-80">
+                              {ref.file.fileName}
+                            </span>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )
+              ) : null}
+            </div>
+
+            <div className="flex items-center justify-between gap-2">
+              <div className="font-mono text-[10px] tracking-[0.18em] text-(--muted-foreground) uppercase">
+                {videoTransientMessage
+                  ? "veo busy · retrying"
+                  : isGenerating && elapsedSeconds
+                    ? `elapsed ${elapsedSeconds}s`
+                    : "ready to dispatch"}
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={onReset}
+                  disabled={
+                    isGenerating ||
+                    (kind === "image"
+                      ? !session.prompt
+                      : !session.prompt &&
+                        !session.firstFrame &&
+                        !session.lastFrame)
+                  }
+                  className="h-8 px-2 font-mono text-[11px] tracking-wide"
+                >
+                  <RotateCcw className="size-3.5" />
+                  Reset
+                </Button>
+                <Button
+                  type="submit"
+                  size="sm"
+                  disabled={
+                    isGenerating ||
+                    (kind === "image"
+                      ? !session.prompt.trim()
+                      : !session.firstFrame)
+                  }
+                  className="h-8 gap-1.5 px-3 font-mono text-[11px] tracking-wide"
+                >
+                  <Send className="size-3.5" />
+                  {isGenerating ? "Running…" : copy.submitLabel}
+                </Button>
+              </div>
+            </div>
+          </form>
         </div>
       </div>
 
-      <form
-        onSubmit={onSubmit}
-        className="screen-line-top flex flex-col gap-3 px-4 py-4"
-      >
-        <fieldset
-          disabled={isGenerating}
-          className="flex flex-col gap-2 disabled:cursor-not-allowed"
-        >
-          <div className="flex items-center justify-between font-mono text-[10px] tracking-[0.2em] uppercase text-(--muted-foreground)">
-            <span id={`aspect-label-${kind}`}>Aspect Ratio</span>
-            <span className="tabular-nums">{session.aspectRatio}</span>
-          </div>
-          <div
-            role="radiogroup"
-            aria-labelledby={`aspect-label-${kind}`}
-            aria-disabled={isGenerating}
-            className="flex flex-wrap gap-1"
-          >
-            {aspectOptions.map((option) => {
-              const active = session.aspectRatio === option.value;
-              const unsupported = option.disabled === true;
-              return (
-                <button
-                  key={option.value}
-                  type="button"
-                  role="radio"
-                  aria-checked={active}
-                  aria-disabled={unsupported || undefined}
-                  title={unsupported ? "Belum didukung — segera hadir" : undefined}
-                  tabIndex={active ? 0 : -1}
-                  onClick={() => setAspectRatio(option.value)}
-                  disabled={isGenerating || unsupported}
-                  className={cn(
-                    "inline-flex h-7 min-w-12 items-center justify-center border px-2 font-mono text-[10px] tracking-[0.12em] uppercase transition-colors",
-                    active
-                      ? "border-(--foreground) bg-(--foreground) text-(--background)"
-                      : "border-(--line) text-(--muted-foreground) hover:border-(--foreground)/40 hover:text-(--foreground)",
-                    unsupported &&
-                      "line-through decoration-(--muted-foreground)/60",
-                    "disabled:pointer-events-none disabled:opacity-50",
-                  )}
-                >
-                  {option.label}
-                </button>
-              );
-            })}
-          </div>
-        </fieldset>
-
-        <label
-          htmlFor={`prompt-${kind}`}
-          className="flex items-center justify-between font-mono text-[10px] tracking-[0.2em] uppercase text-(--muted-foreground)"
-        >
-          <span>{kind === "video" ? "Caption · optional" : "Prompt"}</span>
-          <span className="tabular-nums">
-            {session.prompt.length.toString().padStart(3, "0")} ch
-          </span>
-        </label>
-        <div className="relative">
-          <Textarea
-            ref={textareaRef}
-            id={`prompt-${kind}`}
-            value={session.prompt}
-            onChange={onPromptChange}
-            onKeyDown={onPromptKeyDown}
-            onSelect={onPromptSelect}
-            onBlur={() => {
-              // Delay agar onClick di popover sempat terjadi sebelum tutup.
-              setTimeout(closeMention, 120);
-            }}
-            placeholder={copy.placeholder}
-            rows={3}
-            disabled={isGenerating}
-            className="resize-none font-mono text-xs leading-6"
-          />
-          {kind === "image" && mention.open ? (
-            mentionCandidates.length === 0 ? (
-              <div className="absolute top-full left-0 z-30 mt-1 w-64 max-w-full border border-(--line) bg-(--background) px-3 py-2 font-mono text-[10px] tracking-[0.14em] text-(--muted-foreground) uppercase">
-                Tidak ada referensi terisi
-              </div>
-            ) : (
-              <ul
-                role="listbox"
-                aria-label="Pilih referensi"
-                className="absolute top-full left-0 z-30 mt-1 max-h-56 w-64 max-w-full overflow-y-auto border border-(--line) bg-(--background) shadow-sm"
-              >
-                {mentionCandidates.map((ref, i) => {
-                  const active = i === mention.activeIndex;
-                  return (
-                    <li key={ref.idx}>
-                      <button
-                        type="button"
-                        role="option"
-                        aria-selected={active}
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          insertMention(ref.idx);
-                        }}
-                        onMouseEnter={() =>
-                          setMention((prev) => ({ ...prev, activeIndex: i }))
-                        }
-                        className={cn(
-                          "flex w-full items-center gap-2 px-2 py-1.5 text-left font-mono text-[11px] transition-colors",
-                          active
-                            ? "bg-(--foreground) text-(--background)"
-                            : "text-(--foreground) hover:bg-(--muted)/60",
-                        )}
-                      >
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={ref.file.dataUrl}
-                          alt=""
-                          className="size-6 shrink-0 border border-(--line) object-cover"
-                        />
-                        <span className="font-semibold tabular-nums">
-                          @{ref.idx + 1}
-                        </span>
-                        <span className="line-clamp-1 text-[10px] opacity-80">
-                          {ref.file.fileName}
-                        </span>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            )
-          ) : null}
-        </div>
-
-        <div className="flex items-center justify-between gap-2">
-          <div className="font-mono text-[10px] tracking-[0.18em] text-(--muted-foreground) uppercase">
-            {videoTransientMessage
-              ? "veo busy · retrying"
-              : isGenerating && elapsedSeconds
-                ? `elapsed ${elapsedSeconds}s`
-                : "ready to dispatch"}
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={onReset}
-              disabled={
-                isGenerating ||
-                (kind === "image"
-                  ? !session.prompt
-                  : !session.prompt &&
-                    !session.firstFrame &&
-                    !session.lastFrame)
-              }
-              className="h-8 px-2 font-mono text-[11px] tracking-wide"
-            >
-              <RotateCcw className="size-3.5" />
-              Reset
-            </Button>
-            <Button
-              type="submit"
-              size="sm"
-              disabled={
-                isGenerating ||
-                (kind === "image"
-                  ? !session.prompt.trim()
-                  : !session.firstFrame)
-              }
-              className="h-8 gap-1.5 px-3 font-mono text-[11px] tracking-wide"
-            >
-              <Send className="size-3.5" />
-              {isGenerating ? "Running…" : copy.submitLabel}
-            </Button>
-          </div>
-        </div>
-      </form>
-
-      <MediaExpandModal
+        <MediaExpandModal
         open={expandTarget !== null}
         onOpenChange={(open) => {
           if (!open) setExpandTarget(null);

@@ -65,7 +65,7 @@ export function CanvasAgentPanel({
     useLocalModels();
   const [isCustomOpen, setIsCustomOpen] = useState(false);
   const [customProvider, setCustomProvider] = useState<
-    "gemini" | "vertex" | "openrouter" | "local"
+    "gemini" | "vertex" | "openrouter" | "local" | "9router"
   >("gemini");
   const [customModelId, setCustomModelId] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<WorkflowRow | null>(null);
@@ -337,7 +337,8 @@ export function CanvasAgentPanel({
                 (config.provider === "gemini" && config.geminiActive) ||
                 (config.provider === "vertex" && config.vertexActive) ||
                 (config.provider === "openrouter" && config.openrouterActive) ||
-                (config.provider === "local" && config.localActive);
+                (config.provider === "local" && config.localActive) ||
+                (config.provider === "9router" && config.nineRouterActive);
               const fallbackProvider = config.geminiActive
                 ? "gemini"
                 : config.vertexActive
@@ -346,7 +347,9 @@ export function CanvasAgentPanel({
                     ? "openrouter"
                     : config.localActive
                       ? "local"
-                      : "gemini";
+                      : config.nineRouterActive
+                        ? "9router"
+                        : "gemini";
               setCustomProvider(providerActive ? config.provider : fallbackProvider);
               setCustomModelId(providerActive ? config.model : "");
             }
@@ -375,6 +378,7 @@ export function CanvasAgentPanel({
                 {config?.vertexActive && <option value="vertex">Vertex AI</option>}
                 {config?.openrouterActive && <option value="openrouter">OpenRouter</option>}
                 {config?.localActive && <option value="local">Local LLM</option>}
+                {config?.nineRouterActive && <option value="9router">9router</option>}
               </select>
             </div>
             <div className="grid gap-1">
@@ -386,7 +390,9 @@ export function CanvasAgentPanel({
                 placeholder={
                   customProvider === "openrouter"
                     ? "Contoh: x-ai/grok-4.1-fast"
-                    : "Contoh: gemini-3.5-flash"
+                    : customProvider === "9router"
+                      ? "Contoh: kr/claude-sonnet-4.5"
+                      : "Contoh: gemini-3.5-flash"
                 }
                 className="h-9 w-full border border-line bg-background px-3 outline-none focus:border-foreground rounded-none text-xs text-foreground"
               />

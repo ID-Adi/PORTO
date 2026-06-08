@@ -28,6 +28,15 @@ const STALE_RUN_TIMEOUT_MS = 5 * 60_000;
 
 const workflowStatus = z.enum(["active", "archived"]);
 const messageRole = z.enum(["user", "assistant", "system"]);
+
+const AGENT_PROVIDER = z.enum([
+  "gemini",
+  "vertex",
+  "openrouter",
+  "local",
+  "9router",
+]);
+type AgentProviderId = z.infer<typeof AGENT_PROVIDER>;
 const proposalStatus = z.enum([
   "pending_approval",
   "approved",
@@ -196,6 +205,13 @@ export const canvasAgentRouter = router({
         openrouterApiKeyEncrypted: aiToolSettings.openrouterApiKeyEncrypted,
         vertexServiceAccountEncrypted: aiToolSettings.vertexServiceAccountEncrypted,
         localBaseUrl: aiToolSettings.localBaseUrl,
+        nineRouterApiKeyEncrypted: aiToolSettings.nineRouterApiKeyEncrypted,
+        nineRouterBaseUrl: aiToolSettings.nineRouterBaseUrl,
+        providerGeminiEnabled: aiToolSettings.providerGeminiEnabled,
+        providerVertexEnabled: aiToolSettings.providerVertexEnabled,
+        providerOpenrouterEnabled: aiToolSettings.providerOpenrouterEnabled,
+        providerLocalEnabled: aiToolSettings.providerLocalEnabled,
+        provider9routerEnabled: aiToolSettings.provider9routerEnabled,
         updatedAt: aiToolSettings.updatedAt,
       })
       .from(aiToolSettings)
@@ -211,18 +227,29 @@ export const canvasAgentRouter = router({
         openrouterActive: false,
         vertexActive: false,
         localActive: false,
+        nineRouterActive: false,
         updatedAt: null,
       };
     }
 
     return {
       enabled: settings.enabled,
-      provider: settings.provider as "gemini" | "vertex" | "openrouter" | "local",
+      provider: settings.provider as AgentProviderId,
       model: settings.model,
-      geminiActive: Boolean(settings.ttsApiKeyEncrypted),
-      openrouterActive: Boolean(settings.openrouterApiKeyEncrypted),
-      vertexActive: Boolean(settings.vertexServiceAccountEncrypted),
-      localActive: Boolean(settings.localBaseUrl),
+      // active = credential configured DAN provider enabled.
+      geminiActive:
+        Boolean(settings.ttsApiKeyEncrypted) && settings.providerGeminiEnabled,
+      openrouterActive:
+        Boolean(settings.openrouterApiKeyEncrypted) &&
+        settings.providerOpenrouterEnabled,
+      vertexActive:
+        Boolean(settings.vertexServiceAccountEncrypted) &&
+        settings.providerVertexEnabled,
+      localActive:
+        Boolean(settings.localBaseUrl) && settings.providerLocalEnabled,
+      nineRouterActive:
+        Boolean(settings.nineRouterApiKeyEncrypted) &&
+        settings.provider9routerEnabled,
       updatedAt: settings.updatedAt,
     };
   }),
@@ -255,7 +282,7 @@ export const canvasAgentRouter = router({
   updateConfig: authenticatedProcedure
     .input(
       z.object({
-        provider: z.enum(["gemini", "vertex", "openrouter", "local"]),
+        provider: AGENT_PROVIDER,
         model: z.string().min(1).max(160),
       })
     )
@@ -272,16 +299,19 @@ export const canvasAgentRouter = router({
 
       return {
         enabled: row.canvasAgentEnabled,
-        provider: row.canvasAgentProvider as
-          | "gemini"
-          | "vertex"
-          | "openrouter"
-          | "local",
+        provider: row.canvasAgentProvider as AgentProviderId,
         model: row.canvasAgentModel,
-        geminiActive: Boolean(row.ttsApiKeyEncrypted),
-        openrouterActive: Boolean(row.openrouterApiKeyEncrypted),
-        vertexActive: Boolean(row.vertexServiceAccountEncrypted),
-        localActive: Boolean(row.localBaseUrl),
+        geminiActive:
+          Boolean(row.ttsApiKeyEncrypted) && row.providerGeminiEnabled,
+        openrouterActive:
+          Boolean(row.openrouterApiKeyEncrypted) &&
+          row.providerOpenrouterEnabled,
+        vertexActive:
+          Boolean(row.vertexServiceAccountEncrypted) &&
+          row.providerVertexEnabled,
+        localActive: Boolean(row.localBaseUrl) && row.providerLocalEnabled,
+        nineRouterActive:
+          Boolean(row.nineRouterApiKeyEncrypted) && row.provider9routerEnabled,
         updatedAt: row.updatedAt,
       };
     }),

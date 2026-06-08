@@ -50,7 +50,7 @@ export const canvasAgentApi = {
   }) => canvasAgentTrpc.canvasAgent.updateProposalStatus.mutate(input),
   getConfig: () => canvasAgentTrpc.canvasAgent.getConfig.query(),
   updateConfig: (input: {
-    provider: "gemini" | "vertex" | "openrouter" | "local";
+    provider: "gemini" | "vertex" | "openrouter" | "local" | "9router";
     model: string;
   }) => canvasAgentTrpc.canvasAgent.updateConfig.mutate(input),
   listLocalModels: () => canvasAgentTrpc.canvasAgent.listLocalModels.query(),

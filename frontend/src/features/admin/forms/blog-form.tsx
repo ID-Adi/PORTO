@@ -9,8 +9,16 @@ import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Field, TextField } from "@/features/admin/components/form-field";
 import { MediaPickerField } from "@/features/admin/components/media-picker-field";
+import type { BlogCategory } from "@/features/public-data/types";
 
 const MarkdownEditor = dynamic(
   () => import("@/features/admin/components/markdown-editor"),
@@ -30,6 +38,7 @@ type BlogFormState = {
   description: string;
   content: string;
   meta: string;
+  category: BlogCategory;
   coverUrl: string;
   published: boolean;
   publishedAt: string;
@@ -41,10 +50,16 @@ const empty: BlogFormState = {
   description: "",
   content: "",
   meta: "",
+  category: "global",
   coverUrl: "",
   published: false,
   publishedAt: "",
 };
+
+const CATEGORY_OPTIONS: { value: BlogCategory; label: string }[] = [
+  { value: "global", label: "Global" },
+  { value: "saham_crypto", label: "Saham & Crypto" },
+];
 
 export function BlogForm({
   id,
@@ -92,6 +107,7 @@ export function BlogForm({
       description: state.description || null,
       content: state.content || null,
       meta: state.meta || null,
+      category: state.category,
       coverUrl: state.coverUrl || null,
       published: state.published,
       publishedAt: state.publishedAt ? new Date(state.publishedAt) : null,
@@ -137,6 +153,27 @@ export function BlogForm({
         onChange={(e) => set("meta", e.target.value)}
         hint="Free-form meta string used in listings."
       />
+      <Field
+        label="Category"
+        htmlFor="category"
+        hint="Global = artikel editorial; Saham & Crypto = laporan runtime harian."
+      >
+        <Select
+          value={state.category}
+          onValueChange={(v) => set("category", v as BlogCategory)}
+        >
+          <SelectTrigger id="category" className="w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {CATEGORY_OPTIONS.map((opt) => (
+              <SelectItem key={opt.value} value={opt.value}>
+                {opt.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </Field>
       <MediaPickerField
         label="Cover image"
         value={state.coverUrl}

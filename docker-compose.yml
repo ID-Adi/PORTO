@@ -86,6 +86,7 @@ services:
         # Override lewat root .env bila perlu; default = nilai produksi.
         NEXT_PUBLIC_BACKEND_URL: ${NEXT_PUBLIC_BACKEND_URL:-https://api.pawa.my.id}
         NEXT_PUBLIC_ADMIN_EMAIL: ${NEXT_PUBLIC_ADMIN_EMAIL:-adi@pawa.my.id}
+        NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-https://pawa.my.id}
     container_name: porto-frontend
     restart: unless-stopped
     ports:

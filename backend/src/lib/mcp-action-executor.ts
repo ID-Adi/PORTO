@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { db } from "../db/index.js";
 import {
+  BLOG_CATEGORIES,
   blogPosts,
   canvasAgentProposals,
   mcpActionRequests,
@@ -15,6 +16,7 @@ const blogDraftPayload = z.object({
   description: z.string().nullish(),
   content: z.string().nullish(),
   meta: z.string().nullish(),
+  category: z.enum(BLOG_CATEGORIES).optional().default("global"),
   coverUrl: z.string().nullish(),
   published: z.boolean().optional().default(false),
   publishedAt: z.coerce.date().nullish(),

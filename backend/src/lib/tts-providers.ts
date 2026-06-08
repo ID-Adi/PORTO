@@ -11,6 +11,10 @@ import {
 export const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 const GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta";
 
+// 9router (OpenAI-compatible, self-hosted). Re-export agar konsumen lain
+// (router/runner) bisa pakai konstanta yang sama tanpa import dari schema.
+export { NINE_ROUTER_DEFAULT_BASE_URL } from "../db/schema/ai-tool-settings.js";
+
 // Model TTS Gemini yang dikenal — fallback bila list dari API gagal/ kosong.
 const VERTEX_TTS_FALLBACK_MODELS = [
   "gemini-3.1-flash-tts-preview",
@@ -148,6 +152,7 @@ export type ListModelsArgs =
   | { provider: "gemini"; apiKey: string }
   | { provider: "openrouter"; apiKey: string }
   | { provider: "local"; baseUrl: string }
+  | { provider: "9router"; apiKey: string; baseUrl: string }
   | ({ provider: "vertex" } & VertexCreds);
 
 // Strip trailing slash agar penggabungan `${baseUrl}/models` konsisten.
@@ -218,6 +223,23 @@ export async function listProviderModels(
 
   if (args.provider === "local") {
     return listLocalChatModels(args.baseUrl);
+  }
+
+  if (args.provider === "9router") {
+    // OpenAI-compatible: GET ${baseUrl}/models dengan Bearer key.
+    const res = await fetch(`${normalizeBaseUrl(args.baseUrl)}/models`, {
+      headers: { Authorization: `Bearer ${args.apiKey}` },
+      signal: AbortSignal.timeout(20_000),
+    });
+    if (!res.ok) {
+      throw new TtsError(`9router list models HTTP ${res.status}`, false);
+    }
+    const json = (await res.json()) as {
+      data?: Array<{ id?: string; name?: string }>;
+    };
+    return (json.data ?? [])
+      .filter((m) => m.id)
+      .map((m) => ({ id: m.id!, name: m.name ?? m.id! }));
   }
 
   // vertex — pakai probe yang melempar; di sini error ditelan agar UI tetap

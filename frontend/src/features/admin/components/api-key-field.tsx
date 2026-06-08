@@ -19,7 +19,7 @@ import { Field } from "@/features/admin/components/form-field";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 
-type ProviderKey = "gemini" | "vertex" | "openrouter" | "local";
+type ProviderKey = "gemini" | "vertex" | "openrouter" | "local" | "9router";
 
 type ProviderStatus = {
   hasApiKey?: boolean;
@@ -32,7 +32,11 @@ type ProviderStatus = {
   // Provider local (OpenAI-compatible via Tailscale).
   configured?: boolean | null;
   baseUrl?: string | null;
+  // Flag enable/disable global per provider.
+  enabled?: boolean;
 };
+
+const NINE_ROUTER_DEFAULT_BASE_URL = "http://localhost:20128/v1";
 
 type ApiKeyFieldProps = {
   provider: ProviderKey;
@@ -66,6 +70,7 @@ export function ApiKeyField({ provider, label, hint, status }: ApiKeyFieldProps)
 
   const isVertex = provider === "vertex";
   const isLocal = provider === "local";
+  const isNineRouter = provider === "9router";
 
   // Seed project/location dari status saat modal DIBUKA (status bisa baru tiba
   // setelah mount; seeding di handler menghindari clobber saat user mengetik).
@@ -81,6 +86,9 @@ export function ApiKeyField({ provider, label, hint, status }: ApiKeyFieldProps)
     }
     if (isLocal) {
       setBaseUrl(status.baseUrl ?? "");
+    }
+    if (isNineRouter) {
+      setBaseUrl(status.baseUrl ?? NINE_ROUTER_DEFAULT_BASE_URL);
     }
     setOpen(true);
   }
@@ -106,6 +114,18 @@ export function ApiKeyField({ provider, label, hint, status }: ApiKeyFieldProps)
     },
   });
 
+  const toggleEnabled = trpc.aiSettings.updateProviderEnabled.useMutation({
+    onSuccess: (_data, vars) => {
+      toast.success(
+        `${label} ${vars.enabled ? "diaktifkan" : "dinonaktifkan"}`,
+      );
+      utils.aiSettings.getTtsConfig.invalidate();
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const enabled = Boolean(status.enabled);
+
   function resetAndClose() {
     setOpen(false);
     setReveal(false);
@@ -117,6 +137,7 @@ export function ApiKeyField({ provider, label, hint, status }: ApiKeyFieldProps)
   function buildCreds():
     | { provider: "gemini" | "openrouter"; apiKey: string }
     | { provider: "local"; baseUrl: string }
+    | { provider: "9router"; apiKey: string; baseUrl: string }
     | {
         provider: "vertex";
         serviceAccount?: string;
@@ -130,6 +151,14 @@ export function ApiKeyField({ provider, label, hint, status }: ApiKeyFieldProps)
     if (isLocal) {
       if (!baseUrl.trim()) return null;
       return { provider: "local", baseUrl: baseUrl.trim() };
+    }
+    if (isNineRouter) {
+      if (!apiKey.trim()) return null;
+      return {
+        provider: "9router",
+        apiKey: apiKey.trim(),
+        baseUrl: baseUrl.trim() || NINE_ROUTER_DEFAULT_BASE_URL,
+      };
     }
     if (isVertex) {
       if (!projectId.trim()) return null;
@@ -155,6 +184,12 @@ export function ApiKeyField({ provider, label, hint, status }: ApiKeyFieldProps)
     // Test pakai value yang diketik bila ada; backend fallback ke tersimpan.
     if (isLocal) {
       test.mutate({ provider: "local", baseUrl: baseUrl.trim() || undefined });
+    } else if (isNineRouter) {
+      test.mutate({
+        provider: "9router",
+        apiKey: apiKey.trim() || undefined,
+        baseUrl: baseUrl.trim() || undefined,
+      });
     } else if (isVertex) {
       test.mutate({
         provider: "vertex",
@@ -209,22 +244,46 @@ export function ApiKeyField({ provider, label, hint, status }: ApiKeyFieldProps)
 
   return (
     <Field label={label} htmlFor={`apikey-${provider}`} hint={hint}>
-      <Button
-        id={`apikey-${provider}`}
-        type="button"
-        variant="outline"
-        onClick={openModal}
-        className="w-fit justify-start gap-2 font-mono text-[11px]"
-      >
-        <KeyRound className="size-3.5" aria-hidden />
-        {buttonText}
-        <span
-          className={cn(
-            "ml-1 size-1.5 rounded-full",
-            configured ? "bg-emerald-500" : "bg-(--muted-foreground)/40",
-          )}
-        />
-      </Button>
+      <div className="flex flex-wrap items-center gap-3">
+        <Button
+          id={`apikey-${provider}`}
+          type="button"
+          variant="outline"
+          onClick={openModal}
+          className="w-fit justify-start gap-2 font-mono text-[11px]"
+        >
+          <KeyRound className="size-3.5" aria-hidden />
+          {buttonText}
+          <span
+            className={cn(
+              "ml-1 size-1.5 rounded-full",
+              configured ? "bg-emerald-500" : "bg-(--muted-foreground)/40",
+            )}
+          />
+        </Button>
+
+        {/* Toggle enable/disable global. Disabled tidak menghapus credential. */}
+        <div className="flex items-center gap-2">
+          <Switch
+            id={`enabled-${provider}`}
+            checked={enabled}
+            disabled={toggleEnabled.isPending}
+            onCheckedChange={(checked) =>
+              toggleEnabled.mutate({ provider, enabled: checked })
+            }
+          />
+          <span
+            className={cn(
+              "font-mono text-[10px] tracking-[0.16em] uppercase",
+              enabled
+                ? "text-(--foreground)"
+                : "text-(--muted-foreground)",
+            )}
+          >
+            {enabled ? "Enabled" : "Disabled"}
+          </span>
+        </div>
+      </div>
 
       <Dialog
         open={open}
@@ -253,6 +312,55 @@ export function ApiKeyField({ provider, label, hint, status }: ApiKeyFieldProps)
                   suffix <code>/v1</code>. Tanpa API key.
                 </p>
               </div>
+            ) : isNineRouter ? (
+              <>
+                <div className="space-y-1.5">
+                  <Label htmlFor={`ninerouter-key-${provider}`}>API key</Label>
+                  <div className="relative">
+                    <Input
+                      id={`ninerouter-key-${provider}`}
+                      type={reveal ? "text" : "password"}
+                      value={apiKey}
+                      onChange={(e) => setApiKey(e.target.value)}
+                      placeholder={
+                        status.hasApiKey
+                          ? `Tersimpan ····${status.last4 ?? "****"}. Isi untuk mengganti.`
+                          : "Tempel API key dari dashboard 9router"
+                      }
+                      className="rounded-none border-(--line) pr-9 font-mono text-[11px]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setReveal((v) => !v)}
+                      aria-label={reveal ? "Hide" : "Show"}
+                      className="absolute top-1/2 right-2 -translate-y-1/2 text-(--muted-foreground) hover:text-(--foreground)"
+                    >
+                      {reveal ? (
+                        <EyeOff className="size-4" />
+                      ) : (
+                        <Eye className="size-4" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor={`ninerouter-baseurl-${provider}`}>
+                    Base URL
+                  </Label>
+                  <Input
+                    id={`ninerouter-baseurl-${provider}`}
+                    value={baseUrl}
+                    onChange={(e) => setBaseUrl(e.target.value)}
+                    placeholder={NINE_ROUTER_DEFAULT_BASE_URL}
+                    className="rounded-none border-(--line) font-mono text-[11px]"
+                  />
+                  <p className="text-xs text-(--muted-foreground)">
+                    Endpoint OpenAI-compatible dari 9router. Default{" "}
+                    <code>{NINE_ROUTER_DEFAULT_BASE_URL}</code>. API key diambil
+                    dari dashboard 9router.
+                  </p>
+                </div>
+              </>
             ) : isVertex ? (
               <>
                 <div className="flex min-w-0 flex-col gap-1.5">

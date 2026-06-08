@@ -165,6 +165,15 @@ a {
   scrollbar-color: var(--border) transparent;
 }
 
+/* Sembunyikan scrollbar untuk baris yang di-scroll horizontal (mis. tag blog) */
+.scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
 .page-frame {
   width: min(calc(100% - (var(--page-gutter) * 2)), var(--page-width));
   margin-inline: auto;

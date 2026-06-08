@@ -41,6 +41,10 @@ export default function EditBlogPage({
             description: query.data.description ?? "",
             content: query.data.content ?? "",
             meta: query.data.meta ?? "",
+            category:
+              query.data.category === "saham_crypto"
+                ? "saham_crypto"
+                : "global",
             coverUrl: query.data.coverUrl ?? "",
             published: query.data.published,
             publishedAt: toLocalDateTime(query.data.publishedAt),

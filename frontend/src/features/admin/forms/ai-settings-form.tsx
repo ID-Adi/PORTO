@@ -19,7 +19,7 @@ type AiSettingsState = {
   ttsVoiceOptionsText: string;
   ttsEnabled: boolean;
   canvasAgentModel: string;
-  canvasAgentProvider: "gemini" | "vertex" | "openrouter";
+  canvasAgentProvider: "gemini" | "vertex" | "openrouter" | "local" | "9router";
   canvasAgentSystemPrompt: string;
   canvasAgentEnabled: boolean;
 };
@@ -174,6 +174,8 @@ export function AiSettingsForm() {
             <option value="gemini">Gemini</option>
             <option value="vertex">Vertex AI</option>
             <option value="openrouter">OpenRouter</option>
+            <option value="local">Local LLM</option>
+            <option value="9router">9router</option>
           </select>
         </Field>
 
@@ -227,6 +229,12 @@ export function AiSettingsForm() {
               label="Local LLM (Tailscale)"
               hint="OpenAI-compatible base URL, mis. http://host:11434/v1."
               status={query.data.local}
+            />
+            <ApiKeyField
+              provider="9router"
+              label="9router API key"
+              hint="OpenAI-compatible endpoint dari 9router, default http://localhost:20128/v1."
+              status={query.data.nineRouter}
             />
           </>
         ) : null}

@@ -11,6 +11,7 @@ import {
   DEFAULT_VERTEX_ALLOWED_HTTP_DOMAINS,
   DEFAULT_VERTEX_LOCATION,
   DEFAULT_VERTEX_SCOPES,
+  NINE_ROUTER_DEFAULT_BASE_URL,
 } from "../../db/schema/index.js";
 import { decryptSecret, encryptSecret } from "../../lib/encrypted-secret.js";
 import { testProvider, type ListModelsArgs } from "../../lib/tts-providers.js";
@@ -21,6 +22,14 @@ const SINGLETON_ID = 1;
 type AiToolSettingsRow = typeof aiToolSettings.$inferSelect;
 
 const TTS_PROVIDER = z.enum(["gemini", "vertex", "openrouter"]);
+// Canvas Agent mendukung lebih banyak provider (Local & 9router) dari TTS.
+const AGENT_PROVIDER = z.enum([
+  "gemini",
+  "vertex",
+  "openrouter",
+  "local",
+  "9router",
+]);
 
 // Settings umum (enable, model default, voice) — TANPA key (key via updateProviderKey).
 const ttsConfigInput = z.object({
@@ -30,7 +39,7 @@ const ttsConfigInput = z.object({
   ttsVoiceOptions: z.array(z.string().min(1).max(80)).min(1).max(30),
   ttsEnabled: z.boolean(),
   canvasAgentEnabled: z.boolean().optional().default(false),
-  canvasAgentProvider: TTS_PROVIDER.optional().default("gemini"),
+  canvasAgentProvider: AGENT_PROVIDER.optional().default("gemini"),
   canvasAgentModel: z.string().min(1).max(160).optional().default(DEFAULT_CANVAS_AGENT_MODEL),
   canvasAgentSystemPrompt: z.string().max(8000).optional().nullable(),
 });
@@ -40,6 +49,11 @@ const providerCredsInput = z.discriminatedUnion("provider", [
   z.object({ provider: z.literal("gemini"), apiKey: z.string().min(8).max(400) }),
   z.object({ provider: z.literal("openrouter"), apiKey: z.string().min(8).max(400) }),
   z.object({ provider: z.literal("local"), baseUrl: z.url().max(500) }),
+  z.object({
+    provider: z.literal("9router"),
+    apiKey: z.string().min(8).max(400),
+    baseUrl: z.url().max(500).optional().default(NINE_ROUTER_DEFAULT_BASE_URL),
+  }),
   z.object({
     provider: z.literal("vertex"),
     // Opsional: bila kosong & SA sudah tersimpan, hanya update project/location.
@@ -63,6 +77,11 @@ const testProviderInput = z.discriminatedUnion("provider", [
   z.object({ provider: z.literal("openrouter"), apiKey: z.string().max(400).optional() }),
   z.object({ provider: z.literal("local"), baseUrl: z.string().max(500).optional() }),
   z.object({
+    provider: z.literal("9router"),
+    apiKey: z.string().max(400).optional(),
+    baseUrl: z.string().max(500).optional(),
+  }),
+  z.object({
     provider: z.literal("vertex"),
     serviceAccount: z.string().max(20000).optional(),
     projectId: z.string().max(200).optional(),
@@ -85,18 +104,22 @@ function publicConfig(row: AiToolSettingsRow) {
     canvasAgentProvider: row.canvasAgentProvider,
     canvasAgentModel: row.canvasAgentModel,
     canvasAgentSystemPrompt: row.canvasAgentSystemPrompt,
-    // Per-provider (tak pernah kirim secret plaintext).
+    // Per-provider (tak pernah kirim secret plaintext). `enabled` = flag global
+    // yang menentukan apakah provider boleh dipakai walau credential valid.
     gemini: {
       hasApiKey: Boolean(row.ttsApiKeyEncrypted),
       last4: row.ttsApiKeyLast4,
+      enabled: row.providerGeminiEnabled,
     },
     openrouter: {
       hasApiKey: Boolean(row.openrouterApiKeyEncrypted),
       last4: row.openrouterApiKeyLast4,
+      enabled: row.providerOpenrouterEnabled,
     },
     local: {
       configured: Boolean(row.localBaseUrl),
       baseUrl: row.localBaseUrl,
+      enabled: row.providerLocalEnabled,
     },
     vertex: {
       hasApiKey: Boolean(row.vertexServiceAccountEncrypted && row.vertexProjectId),
@@ -105,6 +128,13 @@ function publicConfig(row: AiToolSettingsRow) {
       httpRequestEnabled: row.vertexHttpRequestEnabled,
       scopes: row.vertexScopes,
       allowedHttpDomains: row.vertexAllowedHttpDomains,
+      enabled: row.providerVertexEnabled,
+    },
+    nineRouter: {
+      hasApiKey: Boolean(row.nineRouterApiKeyEncrypted),
+      last4: row.nineRouterApiKeyLast4,
+      baseUrl: row.nineRouterBaseUrl,
+      enabled: row.provider9routerEnabled,
     },
     // Kompat lama.
     ttsApiKeyLast4: row.ttsApiKeyLast4,
@@ -165,6 +195,19 @@ function buildTestCreds(
     const baseUrl = input.baseUrl?.trim() || row.localBaseUrl || "";
     if (!baseUrl) throw new Error("Base URL Local LLM belum diisi");
     return { provider: "local", baseUrl };
+  }
+  if (input.provider === "9router") {
+    const apiKey =
+      input.apiKey?.trim() ||
+      (row.nineRouterApiKeyEncrypted
+        ? decryptSecret(row.nineRouterApiKeyEncrypted)
+        : "");
+    if (!apiKey) throw new Error("9router API key belum diisi");
+    const baseUrl =
+      input.baseUrl?.trim() ||
+      row.nineRouterBaseUrl ||
+      NINE_ROUTER_DEFAULT_BASE_URL;
+    return { provider: "9router", apiKey, baseUrl };
   }
   // vertex
   const saJson =
@@ -243,6 +286,15 @@ export const aiSettingsRouter = router({
       } else if (input.provider === "local") {
         // Base URL disimpan plaintext (host privat Tailscale, bukan secret).
         patch = { localBaseUrl: input.baseUrl.trim() };
+      } else if (input.provider === "9router") {
+        // API key di-encrypt; base URL plaintext (bukan secret).
+        const key = input.apiKey.trim();
+        patch = {
+          nineRouterApiKeyEncrypted: encryptSecret(key),
+          nineRouterApiKeyLast4: key.slice(-4),
+          nineRouterBaseUrl:
+            input.baseUrl.trim() || NINE_ROUTER_DEFAULT_BASE_URL,
+        };
       } else {
         const sa = input.serviceAccount?.trim();
         if (!sa && !existing.vertexServiceAccountEncrypted) {
@@ -260,6 +312,37 @@ export const aiSettingsRouter = router({
             DEFAULT_VERTEX_ALLOWED_HTTP_DOMAINS,
         };
       }
+      const [row] = await db
+        .update(aiToolSettings)
+        .set({ ...patch, updatedAt: new Date() })
+        .where(eq(aiToolSettings.id, existing.id))
+        .returning();
+      return publicConfig(row);
+    }),
+
+  // Enable/disable penggunaan provider (global). Tidak menyentuh credential.
+  updateProviderEnabled: protectedProcedure
+    .input(
+      z.object({
+        provider: AGENT_PROVIDER,
+        enabled: z.boolean(),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      const existing = await getOrCreateSettings();
+      const column = {
+        gemini: "providerGeminiEnabled",
+        vertex: "providerVertexEnabled",
+        openrouter: "providerOpenrouterEnabled",
+        local: "providerLocalEnabled",
+        "9router": "provider9routerEnabled",
+      } as const satisfies Record<
+        z.infer<typeof AGENT_PROVIDER>,
+        keyof AiToolSettingsRow
+      >;
+      const patch: Partial<AiToolSettingsRow> = {
+        [column[input.provider]]: input.enabled,
+      };
       const [row] = await db
         .update(aiToolSettings)
         .set({ ...patch, updatedAt: new Date() })

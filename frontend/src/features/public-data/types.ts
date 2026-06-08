@@ -38,6 +38,8 @@ export type PublicSkill = {
   iconUrl: string | null;
 };
 
+export type BlogCategory = "global" | "saham_crypto";
+
 export type PublicBlogPost = {
   id: number;
   title: string;
@@ -45,6 +47,7 @@ export type PublicBlogPost = {
   description: string | null;
   content: string | null;
   meta: string | null;
+  category: BlogCategory;
   coverUrl: string | null;
   published: boolean;
   publishedAt: Date | string | null;

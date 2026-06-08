@@ -1,0 +1,1 @@
+ALTER TABLE "blog_posts" ADD COLUMN "category" text DEFAULT 'global' NOT NULL;

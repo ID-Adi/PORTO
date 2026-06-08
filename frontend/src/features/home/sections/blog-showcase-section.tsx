@@ -25,7 +25,8 @@ export function BlogShowcaseSection({
   const isLoading = injectedPosts === undefined ? query.isLoading : injectedLoading;
   const data = injectedPosts ?? query.data ?? [];
 
-  const published = data.filter((p) => p.published);
+  // Home showcase tetap editorial global; laporan Saham/Crypto tidak dicampur.
+  const published = data.filter((p) => p.published && p.category === "global");
   const topTwo = [...published]
     .sort((a, b) => getTimestamp(b) - getTimestamp(a))
     .slice(0, 2);

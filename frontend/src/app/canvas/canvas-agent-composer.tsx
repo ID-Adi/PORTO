@@ -39,13 +39,31 @@ const presetModels = {
     "meta-llama/llama-3.3-70b-instruct",
     "deepseek/deepseek-chat",
   ],
+  // 9router: route/model mengikuti dashboard. Beberapa contoh umum; model lain
+  // bisa lewat "CUSTOM MODEL...".
+  "9router": [
+    "kr/claude-sonnet-4.5",
+    "fe_oa_/gpt-5.5",
+  ],
 };
 
 type ProviderKey = keyof typeof presetModels;
 
 function isProviderKey(value: unknown): value is ProviderKey {
-  return value === "gemini" || value === "vertex" || value === "openrouter";
+  return (
+    value === "gemini" ||
+    value === "vertex" ||
+    value === "openrouter" ||
+    value === "9router"
+  );
 }
+
+type SelectableProvider =
+  | "gemini"
+  | "vertex"
+  | "openrouter"
+  | "local"
+  | "9router";
 
 export function CanvasAgentComposer({
   input,
@@ -75,10 +93,7 @@ export function CanvasAgentComposer({
   localModels?: { id: string; name?: string }[];
   localModelsLoading?: boolean;
   onModelMenuOpenChange?: (open: boolean) => void;
-  onSelectModel: (
-    provider: "gemini" | "vertex" | "openrouter" | "local",
-    model: string,
-  ) => void;
+  onSelectModel: (provider: SelectableProvider, model: string) => void;
   onOpenCustomModal: () => void;
 }) {
   const statusText =
@@ -277,6 +292,28 @@ export function CanvasAgentComposer({
                       </DropdownMenuItem>
                     ))
                   )}
+                </DropdownMenuGroup>
+              </>
+            )}
+            {config?.nineRouterActive && (
+              <>
+                <DropdownMenuSeparator className="h-px bg-line my-1" />
+                <DropdownMenuGroup>
+                  <DropdownMenuLabel className="px-2 py-1 text-[9px] text-muted-foreground tracking-widest">
+                    9ROUTER
+                  </DropdownMenuLabel>
+                  {presetModels["9router"].map((m) => (
+                    <DropdownMenuItem
+                      key={m}
+                      onClick={() => onSelectModel("9router", m)}
+                      className="flex items-center justify-between px-2 py-1 cursor-pointer hover:bg-muted focus:bg-muted outline-none rounded-none"
+                    >
+                      <span>{m}</span>
+                      {isActiveModel("9router", m) && (
+                        <span className="text-[10px]">✓</span>
+                      )}
+                    </DropdownMenuItem>
+                  ))}
                 </DropdownMenuGroup>
               </>
             )}

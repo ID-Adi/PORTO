@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { registerBlogMcp } from "./domains/blog.js";
 import { registerCanvasMcp } from "./domains/canvas.js";
+import { registerMarketBlogMcp } from "./domains/market-blog.js";
 import { registerToolsImageMcp } from "./domains/tools-image.js";
 
 export type PortoMcpContext = {
@@ -53,6 +54,7 @@ export type PortoMcpRegistry = {
 export function createPortoMcpRegistry(): PortoMcpRegistry {
   const registry: PortoMcpRegistry = { resources: [], tools: [] };
   registerBlogMcp(registry);
+  registerMarketBlogMcp(registry);
   registerToolsImageMcp(registry);
   registerCanvasMcp(registry);
   return registry;

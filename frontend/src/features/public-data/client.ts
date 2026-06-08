@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 
 import type {
+  BlogCategory,
   PublicBlogPost,
   PublicCommandData,
   PublicContactData,
@@ -76,10 +77,13 @@ export function usePublicExperience() {
   });
 }
 
-export function usePublicBlogPosts() {
+export function usePublicBlogPosts(category?: BlogCategory) {
   return useQuery({
-    queryKey: ["public-data", "blog"],
-    queryFn: () => fetchPublicData<PublicBlogPost[]>("blog"),
+    queryKey: ["public-data", "blog", category ?? "all"],
+    queryFn: () =>
+      fetchPublicData<PublicBlogPost[]>(
+        category ? `blog?category=${category}` : "blog",
+      ),
     staleTime: PUBLIC_DATA_STALE_MS,
   });
 }
