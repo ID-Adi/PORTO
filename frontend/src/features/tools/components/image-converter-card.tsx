@@ -238,6 +238,7 @@ export function ImageConverterCard() {
     readSession(),
   );
   const [dragActive, setDragActive] = useState(false);
+  const [isDownloadingLatest, setIsDownloadingLatest] = useState(false);
 
   useEffect(() => {
     writeSession(session);
@@ -344,6 +345,38 @@ export function ImageConverterCard() {
     }
   }
 
+  async function onDownloadLatest() {
+    const url = latestResultUrl;
+    if (!url) return;
+
+    const latestFormat = latestResultMime?.includes("jpeg") ? "jpg" : "webp";
+    const sourceName =
+      session.file?.fileName ?? history[0]?.sourceName ?? `converted-${history[0]?.id ?? "latest"}`;
+    const baseName = sourceName.replace(/\.[^.]+$/, "").replace(/[^a-zA-Z0-9._-]+/g, "-");
+    const filename = `${baseName || "converted-image"}.${latestFormat}`;
+
+    setIsDownloadingLatest(true);
+    try {
+      const response = await fetch(url, { credentials: "include" });
+      if (!response.ok) throw new Error("File hasil tidak bisa diunduh");
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = objectUrl;
+      link.download = filename;
+      link.rel = "noopener";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(objectUrl);
+      toast.success("Download dimulai");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Gagal download file");
+    } finally {
+      setIsDownloadingLatest(false);
+    }
+  }
+
   function onReset() {
     setSession(defaultSession());
   }
@@ -402,9 +435,9 @@ export function ImageConverterCard() {
         </p>
       </div>
 
-      <div className="screen-line-top min-h-0 flex-1 overflow-y-auto">
-        <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-stretch">
-        <section className="min-w-0 border-b border-(--line) p-4 sm:p-5 lg:border-r lg:border-b-0">
+      <div className="screen-line-top min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
+        <div className="flex flex-col lg:flex-row lg:items-stretch">
+        <section className="min-w-0 border-b border-(--line) p-4 sm:p-5 lg:flex-1 lg:border-r lg:border-b-0">
           <form className="grid min-w-0 gap-4" onSubmit={onSubmit}>
             <div
               onDragEnter={(event) => {
@@ -538,8 +571,8 @@ export function ImageConverterCard() {
           </form>
         </section>
 
-        <aside className="flex min-h-full flex-col p-4 sm:p-5">
-          <div className="grid gap-4">
+        <aside className="flex min-h-full w-full min-w-0 flex-col p-4 sm:p-5 lg:w-[320px] lg:shrink-0">
+          <div className="grid min-w-0 gap-4">
             <div>
               <p className="profile-kicker">Output format</p>
               <div className="mt-2 grid grid-cols-2 gap-2">
@@ -626,14 +659,19 @@ export function ImageConverterCard() {
             </div>
 
             {latestResultUrl ? (
-              <a
-                href={latestResultUrl}
-                download
-                className="inline-flex items-center justify-center gap-2 border border-(--line) px-3 py-2 font-mono text-[11px] tracking-[0.16em] text-(--muted-foreground) uppercase hover:text-(--foreground)"
+              <button
+                type="button"
+                onClick={() => void onDownloadLatest()}
+                disabled={isDownloadingLatest}
+                className="inline-flex items-center justify-center gap-2 border border-(--line) px-3 py-2 font-mono text-[11px] tracking-[0.16em] text-(--muted-foreground) uppercase hover:text-(--foreground) disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <Download className="size-3.5" />
-                Download latest
-              </a>
+                {isDownloadingLatest ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : (
+                  <Download className="size-3.5" />
+                )}
+                {isDownloadingLatest ? "Saving…" : "Download latest"}
+              </button>
             ) : null}
 
             <div className="border border-(--line)">

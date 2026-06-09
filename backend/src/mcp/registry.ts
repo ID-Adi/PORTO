@@ -121,19 +121,20 @@ export function createPortoMcpServer(context: PortoMcpContext) {
   }
 
   for (const tool of registry.tools) {
-    const registerTool = server.registerTool as unknown as (
-      name: string,
-      config: {
-        title: string;
-        description: string;
-        inputSchema: unknown;
-        annotations?: PortoMcpToolDefinition["annotations"];
-      },
-      callback: (input: Record<string, unknown>) => Promise<{
-        content: Array<{ type: "text"; text: string }>;
-      }>,
-    ) => void;
-    registerTool(
+    (server as unknown as {
+      registerTool: (
+        name: string,
+        config: {
+          title: string;
+          description: string;
+          inputSchema: unknown;
+          annotations?: PortoMcpToolDefinition["annotations"];
+        },
+        callback: (input: Record<string, unknown>) => Promise<{
+          content: Array<{ type: "text"; text: string }>;
+        }>,
+      ) => void;
+    }).registerTool(
       tool.name,
       {
         title: tool.title,

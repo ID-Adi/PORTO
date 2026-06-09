@@ -188,3 +188,83 @@ admin; `published` = blog post-nya sudah dipublikasikan.
 - Disclaimer edukasi selalu disertakan di konten.
 - `sources` selalu disimpan (blok Sumber + `sourceMetadata`).
 - Tidak ada instruksi beli/jual; tidak ada klaim harga real-time.
+
+---
+
+# Tool harian saham berbasis AI agent: `blog_propose_stock_daily`
+
+Berbeda dari `market_blog_create_stock_draft` (generator template deterministik,
+kerangka kosong), tool ini menerima **konten markdown PENUH** yang disusun runtime
+AI agent (cron) dari data scraping riil. Backend hanya menormalkan: menjamin
+heading judul, **disclaimer**, dan blok **Sumber** hadir, lalu meng-enqueue ke
+approval queue. Tabel GFM dibiarkan apa adanya — frontend render via `remark-gfm`.
+
+Kategori hasil: `saham`. **Tidak auto-publish** — masuk `mcp_action_requests`
+(`action: blog_propose_create`), direview & approve admin di `/admin/mcp`.
+
+## Input
+
+| Field           | Tipe        | Wajib | Catatan |
+| --------------- | ----------- | ----- | ------- |
+| `title`         | string      | ya    | Judul laporan. |
+| `summary`       | string      | ya    | → `description` (≤180 char). |
+| `content`       | string      | ya    | **Markdown penuh** dari AI (boleh tabel GFM). Heading `# title` + disclaimer + blok Sumber di-inject otomatis bila belum ada. |
+| `marketDate`    | string      | ya    | `YYYY-MM-DD`. Dipakai untuk slug & meta. |
+| `assets`        | string[]    | tidak | mis. `["IHSG","BBCA","ANTM"]` → meta (≤6 pertama). |
+| `sources`       | string[]    | tidak | Blok Sumber + `sourceMetadata.sources`. |
+| `sourceRuntime` | string      | tidak | mis. `cronjob-saham-daily`. |
+
+Slug: `saham-${marketDate}-${slugify(title)}`. Meta compact:
+`saham, daily, <marketDate>, <≤6 aset>, <host sumber>`.
+
+## Return (contoh)
+
+```jsonc
+{
+  "ok": true,
+  "type": "stock",
+  "draftId": "456",
+  "requestId": 456,
+  "category": "saham",
+  "status": "pending_approval",
+  "title": "Laporan Pasar Saham Indonesia — 2026-06-08",
+  "slug": "saham-2026-06-08-laporan-pasar-saham-indonesia-2026-06-08",
+  "approvalUrl": "/admin/mcp",
+  "sources": ["yfinance (IHSG, LQ45, FX)", "CNBC Indonesia (berita)"]
+}
+```
+
+## Contoh `tools/call` via curl
+
+```bash
+curl -sS "$PORTO_MCP_ENDPOINT" \
+  -H "Authorization: Bearer *** \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0", "id": 1, "method": "tools/call",
+    "params": {
+      "name": "blog_propose_stock_daily",
+      "arguments": {
+        "title": "Laporan Pasar Saham Indonesia — 2026-06-08",
+        "summary": "IHSG terkoreksi 4,2% ke 5.594; RSI oversold; asing net sell.",
+        "content": "# Laporan Pasar Saham Indonesia — 2026-06-08\n\n## Snapshot IHSG\n\n| Metrik | Nilai |\n| --- | --- |\n| Close | 5.594,77 |\n",
+        "marketDate": "2026-06-08",
+        "assets": ["IHSG", "BBCA", "ANTM"],
+        "sources": ["yfinance", "CNBC Indonesia"],
+        "sourceRuntime": "cronjob-saham-daily"
+      }
+    }
+  }'
+```
+
+## Runtime cron terkait
+
+- **Script context**: `~/.hermes/profiles/work/scripts/stock_blog_context.sh`
+  — cek freshness `data/market.json` (run pipeline bila stale >18 jam), cetak JSON
+  ringkas (market + berita) ke stdout untuk diinject ke prompt cron. Tidak panggil
+  LLM, tidak post MCP.
+- **Cron job**: "Saham → Blog (AI Agent Analytic)" (`10 6 * * 1-5`), job_id
+  `11b914d07473`. Mode AI agent: parse konteks → susun markdown kerangka rapi →
+  panggil `blog_propose_stock_daily` → laporkan requestId ke Telegram.
+  **Status awal: paused** sampai backend (tool ini) di-deploy ke produksi
+  (`https://api.pawa.my.id/api/mcp`).
