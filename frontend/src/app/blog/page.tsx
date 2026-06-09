@@ -24,7 +24,7 @@ import {
 const BLOG_CATEGORY_TABS: { value: BlogCategory; label: string }[] = [
   { value: "global", label: "Global" },
   { value: "saham_crypto", label: "Saham & Crypto" },
-  { value: "study", label: "Study" },
+  { value: "learning", label: "Learning" },
 ];
 
 const CATEGORY_STORAGE_KEY = "porto.blog.activeCategory";
@@ -56,9 +56,9 @@ const CATEGORY_COPY: Record<
       "Laporan pasar saham dan crypto dari agent cronjob berbasis data runtime.",
     empty: "Belum ada laporan Saham & Crypto yang dipublikasikan.",
   },
-  study: {
+  learning: {
     description: "Catatan belajar, riset, dan breakdown konsep teknis.",
-    empty: "Belum ada artikel study yang dipublikasikan.",
+    empty: "Belum ada artikel learning yang dipublikasikan.",
   },
 };
 

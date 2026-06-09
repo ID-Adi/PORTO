@@ -1,7 +1,7 @@
 export const BLOG_CATEGORIES = [
   "global",
   "saham_crypto",
-  "study",
+  "learning",
 ] as const;
 
 export type BlogCategory = (typeof BLOG_CATEGORIES)[number];
@@ -9,7 +9,7 @@ export type BlogCategory = (typeof BLOG_CATEGORIES)[number];
 export const BLOG_CATEGORY_LABELS: Record<BlogCategory, string> = {
   global: "Global",
   saham_crypto: "Saham & Crypto",
-  study: "Study",
+  learning: "Learning",
 };
 
 export function isBlogCategory(value: unknown): value is BlogCategory {

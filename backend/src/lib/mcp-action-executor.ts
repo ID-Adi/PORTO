@@ -8,6 +8,7 @@ import {
   blogPosts,
   canvasAgentProposals,
   mcpActionRequests,
+  normalizeBlogCategory,
 } from "../db/schema/index.js";
 
 const blogDraftPayload = z.object({
@@ -16,7 +17,10 @@ const blogDraftPayload = z.object({
   description: z.string().nullish(),
   content: z.string().nullish(),
   meta: z.string().nullish(),
-  category: z.enum(BLOG_CATEGORIES).optional().default("global"),
+  category: z.preprocess(
+    normalizeBlogCategory,
+    z.enum(BLOG_CATEGORIES).optional().default("global"),
+  ),
   coverUrl: z.string().nullish(),
   published: z.boolean().optional().default(false),
   publishedAt: z.coerce.date().nullish(),

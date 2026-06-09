@@ -115,16 +115,17 @@ export default function AdminMcpPage() {
           <p className="text-sm text-(--muted-foreground)">Loading...</p>
         ) : pending && pending.length > 0 ? (
           <div className="overflow-hidden border border-(--line)">
-            <div className="grid grid-cols-[120px_1fr_120px_128px] border-b border-(--line) bg-(--muted)/30 px-3 py-2 font-mono text-[11px] tracking-[0.14em] text-(--muted-foreground) uppercase">
+            <div className="grid grid-cols-[120px_minmax(0,1fr)_170px_120px_128px] border-b border-(--line) bg-(--muted)/30 px-3 py-2 font-mono text-[11px] tracking-[0.14em] text-(--muted-foreground) uppercase">
               <span>Domain</span>
               <span>Action</span>
+              <span>Diajukan</span>
               <span>Risk</span>
               <span className="text-right">Decision</span>
             </div>
             {pending.map((item) => (
               <div
                 key={item.id}
-                className="grid grid-cols-[120px_1fr_120px_128px] items-center gap-3 border-b border-(--line) px-3 py-3 last:border-b-0"
+                className="grid grid-cols-[120px_minmax(0,1fr)_170px_120px_128px] items-center gap-3 border-b border-(--line) px-3 py-3 last:border-b-0"
               >
                 <span className="text-xs text-(--muted-foreground)">
                   {item.domain}
@@ -135,6 +136,13 @@ export default function AdminMcpPage() {
                     {payloadSummary(item.payload)}
                   </p>
                 </div>
+                <time
+                  dateTime={new Date(item.createdAt).toISOString()}
+                  className="font-mono text-[11px] leading-5 tracking-[0.08em] text-(--muted-foreground) uppercase"
+                  title="Asia/Makassar"
+                >
+                  {formatWitaDateTime(item.createdAt)}
+                </time>
                 <Badge variant="outline">{riskLabel(item.action)}</Badge>
                 <div className="flex justify-end gap-1.5">
                   <Button
@@ -274,6 +282,23 @@ function StatusDot({ active }: { active: boolean }) {
     />
   );
 }
+
+function formatWitaDateTime(value: string | number | Date) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+
+  return `${witaDateTimeFormatter.format(date).replace(",", "")} WITA`;
+}
+
+const witaDateTimeFormatter = new Intl.DateTimeFormat("id-ID", {
+  timeZone: "Asia/Makassar",
+  day: "2-digit",
+  month: "short",
+  year: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+});
 
 function payloadSummary(payload: unknown) {
   if (!payload || typeof payload !== "object") return "No payload";

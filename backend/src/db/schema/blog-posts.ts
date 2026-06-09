@@ -3,16 +3,27 @@ import { boolean, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
 /**
  * Kategori blog. `global` = artikel editorial/teknis biasa.
  * `saham_crypto` = laporan runtime harian Saham & Crypto.
- * `study` = catatan belajar, riset, dan breakdown konsep.
+ * `learning` = catatan belajar, riset, dan breakdown konsep.
  * Codebase tidak memakai pgEnum, jadi disimpan sebagai text dengan validasi
  * ketat di zod (tRPC & MCP) — menambah nilai di sini tidak perlu migrasi.
  */
 export const BLOG_CATEGORIES = [
   "global",
   "saham_crypto",
-  "study",
+  "learning",
 ] as const;
 export type BlogCategory = (typeof BLOG_CATEGORIES)[number];
+
+/**
+ * Normalisasi nilai kategori sebelum validasi enum. Alias legacy untuk rename:
+ * `study` lama dipetakan ke `learning` agar draft/agent yang masih mengirim
+ * `study` tetap lolos pasca-rename. Catatan: `saham`/`crypto` SENGAJA tidak
+ * dipetakan — draft pending legacy bercategory tersebut di-reject manual lewat
+ * dashboard /admin/mcp.
+ */
+export function normalizeBlogCategory(value: unknown): unknown {
+  return value === "study" ? "learning" : value;
+}
 
 export const blogPosts = pgTable("blog_posts", {
   id: serial("id").primaryKey(),

@@ -15,6 +15,7 @@
     "db:seed:experience": "tsx --env-file=.env src/scripts/seed-experience.ts",
     "db:seed:socials": "tsx --env-file=.env src/scripts/seed-socials.ts",
     "db:seed:overview": "tsx --env-file=.env src/scripts/seed-profile-overview.ts",
+    "db:backfill:blog-categories": "tsx --env-file=.env src/scripts/backfill-blog-categories.ts",
     "mcp:stdio": "tsx --env-file=.env src/mcp/stdio.ts"
   },
   "dependencies": {

@@ -6,6 +6,7 @@ import {
   BLOG_CATEGORIES,
   blogPosts,
   mcpActionRequests,
+  normalizeBlogCategory,
 } from "../../db/schema/index.js";
 import type { PortoMcpRegistry } from "../registry.js";
 
@@ -284,7 +285,10 @@ const blogPayloadShape = {
   description: z.string().nullish(),
   content: z.string().nullish(),
   meta: z.string().nullish(),
-  category: z.enum(BLOG_CATEGORIES).default("global"),
+  category: z.preprocess(
+    normalizeBlogCategory,
+    z.enum(BLOG_CATEGORIES).default("global"),
+  ),
   coverUrl: z.string().nullish(),
 };
 
