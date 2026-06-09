@@ -23,9 +23,8 @@ import {
 
 const BLOG_CATEGORY_TABS: { value: BlogCategory; label: string }[] = [
   { value: "global", label: "Global" },
-  { value: "saham", label: "Saham" },
-  { value: "crypto", label: "Crypto" },
-  { value: "saham_crypto", label: "Gabungan" },
+  { value: "saham_crypto", label: "Saham & Crypto" },
+  { value: "study", label: "Study" },
 ];
 
 const CATEGORY_STORAGE_KEY = "porto.blog.activeCategory";
@@ -54,18 +53,12 @@ const CATEGORY_COPY: Record<
   },
   saham_crypto: {
     description:
-      "Arsip legacy laporan gabungan Saham & Crypto dari agent cronjob.",
+      "Laporan pasar saham dan crypto dari agent cronjob berbasis data runtime.",
     empty: "Belum ada laporan Saham & Crypto yang dipublikasikan.",
   },
-  saham: {
-    description:
-      "Laporan pasar saham harian dari agent cronjob berbasis data runtime.",
-    empty: "Belum ada laporan saham yang dipublikasikan.",
-  },
-  crypto: {
-    description:
-      "Laporan pasar crypto harian dari agent cronjob berbasis data runtime.",
-    empty: "Belum ada laporan crypto yang dipublikasikan.",
+  study: {
+    description: "Catatan belajar, riset, dan breakdown konsep teknis.",
+    empty: "Belum ada artikel study yang dipublikasikan.",
   },
 };
 

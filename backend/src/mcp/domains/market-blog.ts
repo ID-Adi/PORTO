@@ -126,7 +126,7 @@ export function registerMarketBlogMcp(registry: PortoMcpRegistry) {
       name: "market_blog_create_stock_draft",
       title: "Create Stock Market Blog Draft",
       description:
-        "Membuat draft blog saham (kategori `saham`) dan mengirimkannya ke approval queue (status pending_approval). Tidak publish otomatis.",
+        "Membuat draft blog saham (kategori `saham_crypto`) dan mengirimkannya ke approval queue (status pending_approval). Tidak publish otomatis.",
       inputSchema: stockDraftShape,
       annotations: { openWorldHint: false },
       execute: async (context, input) => {
@@ -150,7 +150,7 @@ export function registerMarketBlogMcp(registry: PortoMcpRegistry) {
       name: "blog_propose_stock_daily",
       title: "Propose Daily Stock Market Blog (AI content)",
       description:
-        "Membuat draft blog saham harian (kategori `saham`) dari konten markdown PENUH yang disusun AI agent (boleh tabel GFM). Masuk approval queue (pending_approval). Tidak publish otomatis. Disclaimer & blok Sumber dijamin hadir.",
+        "Membuat draft blog saham harian (kategori `saham_crypto`) dari konten markdown PENUH yang disusun AI agent (boleh tabel GFM). Masuk approval queue (pending_approval). Tidak publish otomatis. Disclaimer & blok Sumber dijamin hadir.",
       inputSchema: stockDailyShape,
       annotations: { openWorldHint: false },
       execute: async (context, input) => {
@@ -162,7 +162,7 @@ export function registerMarketBlogMcp(registry: PortoMcpRegistry) {
           type: "stock" as const,
           draftId: String(row.id),
           requestId: row.id,
-          category: "saham" as const,
+          category: "saham_crypto" as const,
           status: "pending_approval" as const,
           title: draft.title,
           slug: draft.slug,
@@ -176,7 +176,7 @@ export function registerMarketBlogMcp(registry: PortoMcpRegistry) {
       name: "market_blog_create_crypto_draft",
       title: "Create Crypto Market Blog Draft",
       description:
-        "Membuat draft blog crypto (kategori `crypto`) dan mengirimkannya ke approval queue (status pending_approval). Tidak publish otomatis.",
+        "Membuat draft blog crypto (kategori `saham_crypto`) dan mengirimkannya ke approval queue (status pending_approval). Tidak publish otomatis.",
       inputSchema: cryptoDraftShape,
       annotations: { openWorldHint: false },
       execute: async (context, input) => {
@@ -200,7 +200,7 @@ export function registerMarketBlogMcp(registry: PortoMcpRegistry) {
       name: "blog_propose_crypto_daily",
       title: "Propose Daily Crypto Market Blog (AI content)",
       description:
-        "Membuat draft blog crypto harian (kategori `crypto`) dari konten markdown PENUH yang disusun AI agent (boleh tabel GFM). Masuk approval queue (pending_approval). Tidak publish otomatis. Disclaimer & blok Sumber dijamin hadir.",
+        "Membuat draft blog crypto harian (kategori `saham_crypto`) dari konten markdown PENUH yang disusun AI agent (boleh tabel GFM). Masuk approval queue (pending_approval). Tidak publish otomatis. Disclaimer & blok Sumber dijamin hadir.",
       inputSchema: cryptoDailyShape,
       annotations: { openWorldHint: false },
       execute: async (context, input) => {
@@ -212,7 +212,7 @@ export function registerMarketBlogMcp(registry: PortoMcpRegistry) {
           type: "crypto" as const,
           draftId: String(row.id),
           requestId: row.id,
-          category: "crypto" as const,
+          category: "saham_crypto" as const,
           status: "pending_approval" as const,
           title: draft.title,
           slug: draft.slug,

@@ -87,7 +87,7 @@ export async function GET(request: Request, context: PublicRouteContext) {
     return Response.json({ error: "Not found" }, { status: 404 });
   }
 
-  // Teruskan filter kategori untuk list blog (?category=global|saham_crypto|saham|crypto).
+  // Teruskan filter kategori untuk list blog (?category=global|saham_crypto|study).
   if (path === "blog") {
     const category = new URL(request.url).searchParams.get("category");
     if (category) {

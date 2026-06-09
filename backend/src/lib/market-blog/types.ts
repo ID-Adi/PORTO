@@ -84,7 +84,7 @@ export type StockDailyInput = z.infer<typeof StockDailyInputSchema>;
 /**
  * Shape untuk tool harian crypto berbasis AI agent (`blog_propose_crypto_daily`).
  * Paralel dengan stock daily: `content` markdown penuh dari AI (boleh tabel GFM),
- * backend hanya menormalkan + meng-enqueue approval. Kategori hasil: `crypto`.
+ * backend hanya menormalkan + meng-enqueue approval.
  */
 export const cryptoDailyShape = {
   title: z.string().trim().min(1),
@@ -149,7 +149,7 @@ export type MarketBlogDraft = {
   description: string;
   content: string;
   meta: string;
-  category: "saham" | "crypto";
+  category: "saham_crypto";
   coverUrl: null;
   published: false;
   publishedAt: null;

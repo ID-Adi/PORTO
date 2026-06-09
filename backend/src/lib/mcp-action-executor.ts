@@ -179,13 +179,16 @@ export async function approveMcpActionRequest(args: {
       return updated;
     }
 
-    return completeAction(row.id, args.approvedBy, {
-      note: "Approved without executor-specific side effects.",
-    });
+    throw new Error(
+      `Unsupported MCP action executor: ${row.domain}.${row.action}`,
+    );
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Failed to approve MCP action";
-    const [failed] = await db
+    const message = formatApprovalError(error, {
+      action: row.action,
+      domain: row.domain,
+      payload: row.payload,
+    });
+    await db
       .update(mcpActionRequests)
       .set({
         status: "failed",
@@ -197,7 +200,7 @@ export async function approveMcpActionRequest(args: {
       })
       .where(eq(mcpActionRequests.id, row.id))
       .returning();
-    return failed;
+    throw new TRPCError({ code: "BAD_REQUEST", message });
   }
 }
 
@@ -256,4 +259,90 @@ async function completeAction(
     .where(eq(mcpActionRequests.id, id))
     .returning();
   return updated;
+}
+
+function formatApprovalError(
+  error: unknown,
+  context: {
+    action: string;
+    domain: string;
+    payload: unknown;
+  },
+) {
+  if (error instanceof z.ZodError) {
+    const issues = error.issues.slice(0, 3).map((issue) => {
+      const path = issue.path.length > 0 ? issue.path.join(".") : "payload";
+      return `${path}: ${issue.message}`;
+    });
+    return `Payload MCP tidak valid untuk ${context.action}: ${issues.join(
+      "; ",
+    )}`;
+  }
+
+  if (isUniqueViolation(error)) {
+    const slug = getPayloadSlug(context.payload);
+    if (slug) {
+      return `Slug blog "${slug}" sudah dipakai. Ubah slug draft MCP lalu ajukan ulang.`;
+    }
+    return "Data blog memakai nilai unik yang sudah ada. Periksa slug draft MCP lalu ajukan ulang.";
+  }
+
+  if (isBlogTargetNotFound(error)) {
+    return `Blog post target tidak ditemukan untuk ${context.action}. Periksa ID blog pada payload MCP.`;
+  }
+
+  if (isUnsupportedExecutor(error)) {
+    return `Unsupported MCP action executor: ${context.domain}.${context.action}`;
+  }
+
+  return error instanceof Error ? error.message : "Failed to approve MCP action";
+}
+
+function isUniqueViolation(error: unknown) {
+  const record = toRecord(error);
+  if (!record) return false;
+
+  const code = String(record.code ?? "");
+  const constraint = String(record.constraint_name ?? record.constraint ?? "");
+  const detail = String(record.detail ?? "");
+  const message = String(record.message ?? "");
+
+  return (
+    code === "23505" ||
+    constraint.includes("blog_posts_slug_unique") ||
+    detail.includes("already exists") ||
+    message.includes("duplicate key value")
+  );
+}
+
+function isBlogTargetNotFound(error: unknown) {
+  return error instanceof Error && error.message === "Blog post not found";
+}
+
+function isUnsupportedExecutor(error: unknown) {
+  return (
+    error instanceof Error &&
+    error.message.startsWith("Unsupported MCP action executor:")
+  );
+}
+
+function getPayloadSlug(payload: unknown) {
+  const record = toRecord(payload);
+  if (!record) return null;
+  if (typeof record.slug === "string" && record.slug.trim()) {
+    return record.slug.trim();
+  }
+
+  const data = toRecord(record.data);
+  if (typeof data?.slug === "string" && data.slug.trim()) {
+    return data.slug.trim();
+  }
+
+  return null;
+}
+
+function toRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object"
+    ? (value as Record<string, unknown>)
+    : null;
 }

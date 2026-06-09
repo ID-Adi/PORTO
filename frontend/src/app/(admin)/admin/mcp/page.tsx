@@ -22,12 +22,25 @@ export default function AdminMcpPage() {
   const requests = trpc.mcp.listRequests.useQuery({ limit: 50 });
 
   const approve = trpc.mcp.approve.useMutation({
-    onSuccess: () => {
-      toast.success("MCP action approved");
+    onSuccess: (data) => {
+      if (data.status === "succeeded" || data.status === "approved") {
+        toast.success("MCP action approved");
+      } else {
+        toast.error(data.errorMessage ?? `MCP action moved to ${data.status}`);
+      }
+      if (
+        data.domain === "blog" &&
+        data.action === "blog_propose_create" &&
+        data.status === "succeeded"
+      ) {
+        void utils.blog.invalidate();
+      }
+    },
+    onError: (error) => toast.error(`Approval gagal: ${error.message}`),
+    onSettled: () => {
       void utils.mcp.overview.invalidate();
       void utils.mcp.listRequests.invalidate();
     },
-    onError: (error) => toast.error(error.message),
   });
 
   const reject = trpc.mcp.reject.useMutation({
@@ -198,7 +211,14 @@ export default function AdminMcpPage() {
               >
                 {item.status}
               </Badge>
-              <span className="truncate text-sm">{item.action}</span>
+              <div className="min-w-0">
+                <span className="block truncate text-sm">{item.action}</span>
+                {item.status === "failed" && item.errorMessage ? (
+                  <p className="mt-1 break-words text-xs leading-snug text-destructive">
+                    {item.errorMessage}
+                  </p>
+                ) : null}
+              </div>
               <span className="text-right text-xs text-(--muted-foreground)">
                 {new Date(item.createdAt).toLocaleDateString("id-ID")}
               </span>

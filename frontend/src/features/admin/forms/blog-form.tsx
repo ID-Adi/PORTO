@@ -161,7 +161,7 @@ export function BlogForm({
       <Field
         label="Category"
         htmlFor="category"
-        hint="Global = editorial; Saham/Crypto = laporan runtime terpisah; Saham & Crypto = legacy gabungan."
+        hint="Global = editorial; Saham & Crypto = laporan runtime market; Study = catatan belajar dan riset."
       >
         <Select
           value={state.category}
