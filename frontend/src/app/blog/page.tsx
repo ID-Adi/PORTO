@@ -9,7 +9,10 @@ import { ThumbImage } from "@/components/common/thumb-image";
 import { ShareMenu } from "@/components/common/share-menu";
 import { BlogListSkeleton } from "@/components/skeletons/blog-list-skeleton";
 import { usePublicBlogPosts } from "@/features/public-data/client";
-import { parseBlogTags } from "@/features/public-data/blog-meta";
+import {
+  getBlogCategoryLabel,
+  parseBlogTags,
+} from "@/features/public-data/blog-meta";
 import type { BlogCategory, PublicBlogPost } from "@/features/public-data/types";
 import { cn } from "@/lib/utils";
 import { normalizeImageUrl } from "@/lib/image-url";
@@ -20,7 +23,9 @@ import {
 
 const BLOG_CATEGORY_TABS: { value: BlogCategory; label: string }[] = [
   { value: "global", label: "Global" },
-  { value: "saham_crypto", label: "Saham & Crypto" },
+  { value: "saham", label: "Saham" },
+  { value: "crypto", label: "Crypto" },
+  { value: "saham_crypto", label: "Gabungan" },
 ];
 
 const CATEGORY_STORAGE_KEY = "porto.blog.activeCategory";
@@ -49,8 +54,18 @@ const CATEGORY_COPY: Record<
   },
   saham_crypto: {
     description:
-      "Ringkasan runtime harian Saham & Crypto dari agent cronjob.",
+      "Arsip legacy laporan gabungan Saham & Crypto dari agent cronjob.",
     empty: "Belum ada laporan Saham & Crypto yang dipublikasikan.",
+  },
+  saham: {
+    description:
+      "Laporan pasar saham harian dari agent cronjob berbasis data runtime.",
+    empty: "Belum ada laporan saham yang dipublikasikan.",
+  },
+  crypto: {
+    description:
+      "Laporan pasar crypto harian dari agent cronjob berbasis data runtime.",
+    empty: "Belum ada laporan crypto yang dipublikasikan.",
   },
 };
 
@@ -116,32 +131,34 @@ export default function BlogPage() {
             </p>
 
             {/* Segmented switch kategori */}
-            <div
-              role="tablist"
-              aria-label="Kategori blog"
-              className="mt-4 inline-flex border border-(--line) font-mono text-[11px]"
-            >
-              {BLOG_CATEGORY_TABS.map((tab, index) => {
-                const active = tab.value === category;
-                return (
-                  <button
-                    key={tab.value}
-                    type="button"
-                    role="tab"
-                    aria-selected={active}
-                    onClick={() => setCategory(tab.value)}
-                    className={cn(
-                      "px-3 py-1.5 uppercase tracking-wide transition-colors",
-                      index > 0 && "border-l border-(--line)",
-                      active
-                        ? "bg-(--foreground) text-(--background)"
-                        : "text-(--muted-foreground) hover:bg-(--muted) hover:text-(--foreground)",
-                    )}
-                  >
-                    {tab.label}
-                  </button>
-                );
-              })}
+            <div className="mt-4 overflow-x-auto">
+              <div
+                role="tablist"
+                aria-label="Kategori blog"
+                className="inline-flex min-w-max border border-(--line) font-mono text-[11px]"
+              >
+                {BLOG_CATEGORY_TABS.map((tab, index) => {
+                  const active = tab.value === category;
+                  return (
+                    <button
+                      key={tab.value}
+                      type="button"
+                      role="tab"
+                      aria-selected={active}
+                      onClick={() => setCategory(tab.value)}
+                      className={cn(
+                        "shrink-0 px-3 py-1.5 tracking-wide whitespace-nowrap uppercase transition-colors",
+                        index > 0 && "border-l border-(--line)",
+                        active
+                          ? "bg-(--foreground) text-(--background)"
+                          : "text-(--muted-foreground) hover:bg-(--muted) hover:text-(--foreground)",
+                      )}
+                    >
+                      {tab.label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </header>
 
@@ -231,9 +248,9 @@ export default function BlogPage() {
                         ) : null}
                       </Link>
                       <div className="mt-1 flex min-w-0 items-center gap-2 font-mono text-[11px] text-(--muted-foreground)">
-                        {post.category === "saham_crypto" ? (
+                        {post.category !== "global" ? (
                           <span className="shrink-0 border border-(--line) px-1.5 py-0.5 text-[9px] uppercase tracking-wide">
-                            Saham &amp; Crypto
+                            {getBlogCategoryLabel(post.category)}
                           </span>
                         ) : null}
                         <span className="flex shrink-0 items-center gap-1.5">

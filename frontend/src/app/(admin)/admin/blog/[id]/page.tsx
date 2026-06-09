@@ -5,6 +5,7 @@ import { use } from "react";
 import { trpc } from "@/lib/trpc";
 import { BlogForm } from "@/features/admin/forms/blog-form";
 import { PageHeader } from "@/features/admin/components/page-header";
+import { isBlogCategory } from "@/features/public-data/blog-meta";
 
 function toLocalDateTime(d: Date | string | null | undefined): string {
   if (!d) return "";
@@ -41,10 +42,9 @@ export default function EditBlogPage({
             description: query.data.description ?? "",
             content: query.data.content ?? "",
             meta: query.data.meta ?? "",
-            category:
-              query.data.category === "saham_crypto"
-                ? "saham_crypto"
-                : "global",
+            category: isBlogCategory(query.data.category)
+              ? query.data.category
+              : "global",
             coverUrl: query.data.coverUrl ?? "",
             published: query.data.published,
             publishedAt: toLocalDateTime(query.data.publishedAt),

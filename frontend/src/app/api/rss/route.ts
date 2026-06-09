@@ -1,16 +1,24 @@
 import { siteConfig } from "@/config/site";
+import { getBlogCategoryLabel } from "@/features/public-data/blog-meta";
+import { getPublicBlogPosts } from "@/features/public-data/server";
+
+function cdata(value: string | null | undefined): string {
+  return `<![CDATA[${(value ?? "").replaceAll("]]>", "]]]]><![CDATA[>")}]]>`;
+}
 
 export async function GET() {
-  const posts: Array<{ title: string; description: string; slug: string }> = [];
+  const posts = (await getPublicBlogPosts()) ?? [];
 
   const items = posts
     .map(
       (post) => `
         <item>
-          <title><![CDATA[${post.title}]]></title>
-          <description><![CDATA[${post.description}]]></description>
+          <title>${cdata(post.title)}</title>
+          <description>${cdata(post.description)}</description>
           <link>${siteConfig.url}/blog/${post.slug}</link>
           <guid>${siteConfig.url}/blog/${post.slug}</guid>
+          <category>${cdata(getBlogCategoryLabel(post.category))}</category>
+          <pubDate>${new Date(post.publishedAt ?? post.createdAt).toUTCString()}</pubDate>
         </item>
       `
     )

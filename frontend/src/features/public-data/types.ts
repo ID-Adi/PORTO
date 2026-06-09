@@ -1,5 +1,7 @@
 import type { ReadingItem } from "@/types/content";
 
+import type { BlogCategory } from "./blog-meta";
+
 export type PublicSiteSettings = {
   id: number;
   profileName: string;
@@ -38,7 +40,7 @@ export type PublicSkill = {
   iconUrl: string | null;
 };
 
-export type BlogCategory = "global" | "saham_crypto";
+export type { BlogCategory } from "./blog-meta";
 
 export type PublicBlogPost = {
   id: number;

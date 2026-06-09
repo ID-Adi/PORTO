@@ -1,8 +1,19 @@
 "use client";
 
-import { useMemo } from "react";
+import { isValidElement, useMemo, type ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
-import { ArrowLeft, Calendar } from "lucide-react";
+import {
+  ArrowLeft,
+  BarChart3,
+  Calendar,
+  FileText,
+  Link2,
+  ListChecks,
+  Newspaper,
+  ShieldAlert,
+  Sigma,
+  Table2,
+} from "lucide-react";
 import Link from "next/link";
 import GithubSlugger from "github-slugger";
 import remarkGfm from "remark-gfm";
@@ -48,6 +59,47 @@ const rehypePlugins = [
   ],
   [rehypeHighlight, { detect: true, ignoreMissing: true }],
 ] as React.ComponentProps<typeof ReactMarkdown>["rehypePlugins"];
+
+const getPlainText = (children: ReactNode): string => {
+  if (typeof children === "string" || typeof children === "number") {
+    return String(children);
+  }
+  if (Array.isArray(children)) {
+    return children.map(getPlainText).join("");
+  }
+  if (isValidElement<{ children?: ReactNode }>(children)) {
+    return getPlainText(children.props.children);
+  }
+  return "";
+};
+
+const getHeadingIcon = (text: string) => {
+  const normalized = text.toLowerCase();
+  if (/snapshot|market|mover|top|ihsg|btc|eth|ticker|aset/.test(normalized)) {
+    return BarChart3;
+  }
+  if (/berita|news|headline|sentimen/.test(normalized)) return Newspaper;
+  if (/watchlist|pemantauan|checklist|besok/.test(normalized)) {
+    return ListChecks;
+  }
+  if (/risiko|disclaimer|catatan/.test(normalized)) return ShieldAlert;
+  if (/sumber|referensi|link/.test(normalized)) return Link2;
+  if (/analisis|ringkasan|eksekutif|flow|diagram/.test(normalized)) {
+    return Sigma;
+  }
+  return FileText;
+};
+
+const isDiagramBlock = (text: string, className?: string) => {
+  const lower = className?.toLowerCase() ?? "";
+  return (
+    lower.includes("language-ascii") ||
+    lower.includes("language-flow") ||
+    lower.includes("language-dfd") ||
+    /[┌┐└┘├┤─│▶→←↔]/.test(text) ||
+    /\[[^\]]+\]\s*(-->|->|=>|→)\s*\[[^\]]+\]/.test(text)
+  );
+};
 
 export function BlogPostView({ slug }: { slug: string }) {
   const { data: post, isLoading } = usePublicBlogPost(slug);
@@ -151,27 +203,138 @@ export function BlogPostView({ slug }: { slug: string }) {
                     remarkPlugins={remarkPlugins}
                     rehypePlugins={rehypePlugins}
                     components={{
+                      h2: ({ children, ...props }) => {
+                        const text = getPlainText(children);
+                        const Icon = getHeadingIcon(text);
+                        return (
+                          <h2
+                            {...props}
+                            className="group mt-9 flex scroll-mt-24 items-center gap-2 border-b border-(--line) pb-2 font-heading text-lg font-semibold tracking-tight"
+                          >
+                            <span className="flex size-6 shrink-0 items-center justify-center border border-(--line) bg-(--muted)/35 text-(--muted-foreground)">
+                              <Icon className="size-3.5" aria-hidden />
+                            </span>
+                            <span>{children}</span>
+                          </h2>
+                        );
+                      },
+                      h3: ({ children, ...props }) => {
+                        const text = getPlainText(children);
+                        const Icon = getHeadingIcon(text);
+                        return (
+                          <h3
+                            {...props}
+                            className="mt-7 flex scroll-mt-24 items-center gap-2 font-heading text-base font-semibold tracking-tight"
+                          >
+                            <Icon
+                              className="size-3.5 shrink-0 text-(--muted-foreground)"
+                              aria-hidden
+                            />
+                            <span>{children}</span>
+                          </h3>
+                        );
+                      },
+                      a: ({ children, href, ...props }) => (
+                        <a
+                          {...props}
+                          href={href}
+                          target={href?.startsWith("http") ? "_blank" : undefined}
+                          rel={
+                            href?.startsWith("http")
+                              ? "noreferrer noopener"
+                              : undefined
+                          }
+                          className="font-medium text-blue-600 underline underline-offset-4 transition-colors hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                        >
+                          {children}
+                        </a>
+                      ),
                       table: ({ children, ...props }) => (
-                        <div className="my-6 overflow-x-auto">
-                          <table {...props}>{children}</table>
+                        <div className="not-prose my-7 overflow-x-auto border border-(--line) bg-(--background)">
+                          <table
+                            {...props}
+                            className="w-full min-w-[640px] border-collapse text-left text-sm"
+                          >
+                            {children}
+                          </table>
                         </div>
                       ),
-                      pre: ({ children, ...props }) => (
-                        <div className="group/code relative">
-                          <pre {...props}>{children}</pre>
-                          <CopyButton
-                            className="absolute top-2 right-2 size-7 opacity-0 transition-opacity group-hover/code:opacity-100"
-                            size="icon"
-                            variant="ghost"
-                            text={() => {
-                              const el = document.querySelector(
-                                ".group\\/code:hover pre code",
-                              );
-                              return el?.textContent ?? "";
-                            }}
-                          />
-                        </div>
+                      thead: ({ children, ...props }) => (
+                        <thead
+                          {...props}
+                          className="border-b border-(--line) bg-(--muted)/35"
+                        >
+                          {children}
+                        </thead>
                       ),
+                      th: ({ children, ...props }) => (
+                        <th
+                          {...props}
+                          className="whitespace-nowrap px-3 py-2.5 font-mono text-[11px] font-semibold tracking-[0.12em] text-(--foreground) uppercase after:content-none"
+                        >
+                          {children}
+                        </th>
+                      ),
+                      td: ({ children, ...props }) => (
+                        <td
+                          {...props}
+                          className="border-t border-(--line) px-3 py-2.5 align-top text-[13px] leading-relaxed text-(--foreground)"
+                        >
+                          {children}
+                        </td>
+                      ),
+                      blockquote: ({ children, ...props }) => (
+                        <blockquote
+                          {...props}
+                          className="not-prose my-6 border-l-2 border-(--foreground) bg-(--muted)/25 px-4 py-3 text-sm leading-relaxed text-(--muted-foreground)"
+                        >
+                          {children}
+                        </blockquote>
+                      ),
+                      code: ({ children, className, ...props }) => (
+                        <code
+                          {...props}
+                          className={`${className ?? ""} rounded-none bg-(--muted)/45 px-1 py-0.5 font-mono text-[12px] text-(--foreground)`}
+                        >
+                          {children}
+                        </code>
+                      ),
+                      pre: ({ children, ...props }) => {
+                        const codeEl = Array.isArray(children)
+                          ? children.find(isValidElement)
+                          : children;
+                        const text = getPlainText(children);
+                        const className = isValidElement<{ className?: string }>(
+                          codeEl,
+                        )
+                          ? codeEl.props.className
+                          : undefined;
+                        const diagram = isDiagramBlock(text, className);
+
+                        return (
+                          <div
+                            className={`not-prose group/code relative my-7 overflow-hidden border border-(--line) bg-(--surface) ${diagram ? "surface-dots" : ""}`}
+                          >
+                            {diagram ? (
+                              <div className="border-b border-(--line) bg-(--muted)/35 px-3 py-2 font-mono text-[10px] tracking-[0.16em] text-(--muted-foreground) uppercase">
+                                ASCII / Flow Diagram
+                              </div>
+                            ) : null}
+                            <pre
+                              {...props}
+                              className={`${diagram ? "min-w-max" : ""} overflow-x-auto bg-transparent p-4 font-mono text-[12px] leading-relaxed text-(--foreground)`}
+                            >
+                              {children}
+                            </pre>
+                            <CopyButton
+                              className="absolute top-2 right-2 size-7 opacity-0 transition-opacity group-hover/code:opacity-100"
+                              size="icon"
+                              variant="ghost"
+                              text={() => text}
+                            />
+                          </div>
+                        );
+                      },
                     }}
                   >
                     {content}

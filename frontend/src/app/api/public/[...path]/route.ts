@@ -1,5 +1,6 @@
 import { unstable_cache } from "next/cache";
 
+import { BLOG_CATEGORIES } from "@/features/public-data/blog-meta";
 import { BACKEND_URL } from "@/lib/backend-url";
 
 const PUBLIC_REVALIDATE_SECONDS = 60;
@@ -78,8 +79,6 @@ const fetchCachedPublicData = unstable_cache(
   },
 );
 
-const VALID_BLOG_CATEGORIES = ["global", "saham_crypto"] as const;
-
 export async function GET(request: Request, context: PublicRouteContext) {
   const { path: pathParts = [] } = await context.params;
   let path = normalizePublicPath(pathParts);
@@ -88,11 +87,11 @@ export async function GET(request: Request, context: PublicRouteContext) {
     return Response.json({ error: "Not found" }, { status: 404 });
   }
 
-  // Teruskan filter kategori untuk list blog (?category=global|saham_crypto).
+  // Teruskan filter kategori untuk list blog (?category=global|saham_crypto|saham|crypto).
   if (path === "blog") {
     const category = new URL(request.url).searchParams.get("category");
     if (category) {
-      if (!(VALID_BLOG_CATEGORIES as readonly string[]).includes(category)) {
+      if (!(BLOG_CATEGORIES as readonly string[]).includes(category)) {
         return Response.json({ error: "Invalid category" }, { status: 400 });
       }
       path = `blog?category=${category}`;

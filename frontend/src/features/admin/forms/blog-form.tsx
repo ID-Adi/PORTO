@@ -18,6 +18,10 @@ import {
 } from "@/components/ui/select";
 import { Field, TextField } from "@/features/admin/components/form-field";
 import { MediaPickerField } from "@/features/admin/components/media-picker-field";
+import {
+  BLOG_CATEGORIES,
+  getBlogCategoryLabel,
+} from "@/features/public-data/blog-meta";
 import type { BlogCategory } from "@/features/public-data/types";
 
 const MarkdownEditor = dynamic(
@@ -56,10 +60,11 @@ const empty: BlogFormState = {
   publishedAt: "",
 };
 
-const CATEGORY_OPTIONS: { value: BlogCategory; label: string }[] = [
-  { value: "global", label: "Global" },
-  { value: "saham_crypto", label: "Saham & Crypto" },
-];
+const CATEGORY_OPTIONS: { value: BlogCategory; label: string }[] =
+  BLOG_CATEGORIES.map((category) => ({
+    value: category,
+    label: getBlogCategoryLabel(category),
+  }));
 
 export function BlogForm({
   id,
@@ -156,7 +161,7 @@ export function BlogForm({
       <Field
         label="Category"
         htmlFor="category"
-        hint="Global = artikel editorial; Saham & Crypto = laporan runtime harian."
+        hint="Global = editorial; Saham/Crypto = laporan runtime terpisah; Saham & Crypto = legacy gabungan."
       >
         <Select
           value={state.category}

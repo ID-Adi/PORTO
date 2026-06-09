@@ -1,10 +1,11 @@
 import type { MetadataRoute } from "next";
 
 import { siteConfig } from "@/config/site";
+import { getPublicBlogPosts } from "@/features/public-data/server";
 
-export default function sitemap(): MetadataRoute.Sitemap {
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const staticRoutes = ["/", "/#skills", "/#projects", "/#writing", "/#partners"];
-  const blogSlugs: string[] = [];
+  const blogPosts = (await getPublicBlogPosts()) ?? [];
 
   return [
     ...staticRoutes.map((route, index) => ({
@@ -13,9 +14,9 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency: "weekly" as const,
       priority: index === 0 ? 1 : 0.8,
     })),
-    ...blogSlugs.map((slug) => ({
-      url: `${siteConfig.url}/blog/${slug}`,
-      lastModified: new Date(),
+    ...blogPosts.map((post) => ({
+      url: `${siteConfig.url}/blog/${post.slug}`,
+      lastModified: new Date(post.publishedAt ?? post.createdAt),
       changeFrequency: "weekly" as const,
       priority: 0.7,
     })),

@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { DataTable } from "@/features/admin/components/data-table";
 import { DeleteButton } from "@/features/admin/components/delete-button";
 import { PageHeader } from "@/features/admin/components/page-header";
+import { getBlogCategoryLabel } from "@/features/public-data/blog-meta";
 
 export default function BlogListPage() {
   const utils = trpc.useUtils();
@@ -58,7 +59,7 @@ export default function BlogListPage() {
             header: "Category",
             render: (row) => (
               <span className="border border-(--line) px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-(--muted-foreground)">
-                {row.category === "saham_crypto" ? "Saham & Crypto" : "Global"}
+                {getBlogCategoryLabel(row.category)}
               </span>
             ),
           },
