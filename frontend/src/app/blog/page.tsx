@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import Link from "next/link";
 import { Calendar, Search, X } from "lucide-react";
 
@@ -22,6 +22,22 @@ const BLOG_CATEGORY_TABS: { value: BlogCategory; label: string }[] = [
   { value: "global", label: "Global" },
   { value: "saham_crypto", label: "Saham & Crypto" },
 ];
+
+const CATEGORY_STORAGE_KEY = "porto.blog.activeCategory";
+
+function isBlogCategory(value: string | null): value is BlogCategory {
+  return BLOG_CATEGORY_TABS.some((tab) => tab.value === value);
+}
+
+function readStoredCategory(): BlogCategory {
+  if (typeof window === "undefined") return "global";
+  try {
+    const raw = window.localStorage.getItem(CATEGORY_STORAGE_KEY);
+    return isBlogCategory(raw) ? raw : "global";
+  } catch {
+    return "global";
+  }
+}
 
 const CATEGORY_COPY: Record<
   BlogCategory,
@@ -56,6 +72,22 @@ function filterPosts(posts: PublicBlogPost[], query: string): PublicBlogPost[] {
 
 export default function BlogPage() {
   const [category, setCategory] = useState<BlogCategory>("global");
+
+  // Hidrasi tab aktif dari localStorage pasca-mount (tidak bisa di-init di
+  // useState karena localStorage tak tersedia saat SSR → hindari mismatch).
+  useEffect(() => {
+    setCategory(readStoredCategory());
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(CATEGORY_STORAGE_KEY, category);
+    } catch {
+      // ignore quota / private mode
+    }
+  }, [category]);
+
   const { data: posts, isLoading } = usePublicBlogPosts(category);
   const [preview, setPreview] = useState<MediaExpandTarget | null>(null);
   const [searchQuery, setSearchQuery] = useState("");

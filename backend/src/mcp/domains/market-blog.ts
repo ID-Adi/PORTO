@@ -3,12 +3,14 @@ import { z } from "zod";
 
 import { db } from "../../db/index.js";
 import { blogPosts, mcpActionRequests } from "../../db/schema/index.js";
-import { buildCryptoDraft, buildStockDailyDraft, buildStockDraft } from "../../lib/market-blog/draft.js";
+import { buildCryptoDailyDraft, buildCryptoDraft, buildStockDailyDraft, buildStockDraft } from "../../lib/market-blog/draft.js";
 import {
+  CryptoDailyInputSchema,
   CryptoDraftInputSchema,
   StockDailyInputSchema,
   StockDraftInputSchema,
   approvalStatusShape,
+  cryptoDailyShape,
   cryptoDraftShape,
   stockDailyShape,
   stockDraftShape,
@@ -185,6 +187,32 @@ export function registerMarketBlogMcp(registry: PortoMcpRegistry) {
           ok: true as const,
           type: "crypto" as const,
           draftId: String(row.id),
+          status: "pending_approval" as const,
+          title: draft.title,
+          slug: draft.slug,
+          summary: draft.summary,
+          approvalUrl: APPROVAL_URL,
+          sources: draft.sourceMetadata.sources,
+        };
+      },
+    },
+    {
+      name: "blog_propose_crypto_daily",
+      title: "Propose Daily Crypto Market Blog (AI content)",
+      description:
+        "Membuat draft blog crypto harian (kategori `crypto`) dari konten markdown PENUH yang disusun AI agent (boleh tabel GFM). Masuk approval queue (pending_approval). Tidak publish otomatis. Disclaimer & blok Sumber dijamin hadir.",
+      inputSchema: cryptoDailyShape,
+      annotations: { openWorldHint: false },
+      execute: async (context, input) => {
+        const safe = CryptoDailyInputSchema.parse(input);
+        const draft = buildCryptoDailyDraft(safe);
+        const row = await enqueueMarketDraft(context, draft);
+        return {
+          ok: true as const,
+          type: "crypto" as const,
+          draftId: String(row.id),
+          requestId: row.id,
+          category: "crypto" as const,
           status: "pending_approval" as const,
           title: draft.title,
           slug: draft.slug,

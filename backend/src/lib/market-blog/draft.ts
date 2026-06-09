@@ -1,5 +1,6 @@
 import {
   MARKET_DISCLAIMER,
+  type CryptoDailyInput,
   type CryptoDraftInput,
   type MarketBlogDraft,
   type MarketLanguage,
@@ -342,13 +343,21 @@ function finalizeDraft(args: {
 }
 
 /**
- * Builder draft saham harian berbasis AI agent. Berbeda dari `buildStockDraft`
- * (template kosong): di sini `content` markdown penuh datang dari runtime AI.
- * Backend hanya menormalkan — pastikan heading judul, disclaimer, dan blok
- * Sumber selalu hadir, lalu menyusun metadata. Tabel GFM dibiarkan apa adanya
- * (frontend render via remark-gfm).
+ * Builder draft harian berbasis AI agent (saham/crypto). Berbeda dari builder
+ * deterministik (`buildStockDraft`/`buildCryptoDraft` — template kosong): di sini
+ * `content` markdown penuh datang dari runtime AI. Backend hanya menormalkan —
+ * pastikan heading judul, disclaimer, dan blok Sumber selalu hadir, lalu menyusun
+ * metadata. Tabel GFM dibiarkan apa adanya (frontend render via remark-gfm).
  */
-export function buildStockDailyDraft(input: StockDailyInput): MarketBlogDraft {
+function buildDailyDraft(
+  input: StockDailyInput | CryptoDailyInput,
+  opts: {
+    kind: "saham" | "crypto";
+    type: "stock" | "crypto";
+    tool: string;
+    scope: { market?: "IDX" | "US"; chain?: string };
+  },
+): MarketBlogDraft {
   const language: MarketLanguage = "id";
   const disclaimer = MARKET_DISCLAIMER[language];
   const sources = input.sources ?? [];
@@ -363,7 +372,6 @@ export function buildStockDailyDraft(input: StockDailyInput): MarketBlogDraft {
   // Pastikan disclaimer hadir (blockquote) bila belum disebut.
   if (!content.includes(disclaimer)) {
     const lines = content.split("\n");
-    // Sisipkan setelah baris judul pertama.
     const headIdx = lines.findIndex((l) => /^#\s+/.test(l));
     const insertAt = headIdx >= 0 ? headIdx + 1 : 0;
     lines.splice(insertAt, 0, "", `> ${disclaimer}`);
@@ -375,9 +383,9 @@ export function buildStockDailyDraft(input: StockDailyInput): MarketBlogDraft {
     content = `${content.trimEnd()}\n\n## Sumber\n\n${block}`;
   }
 
-  const slug = slugify(`saham-${input.marketDate}-${input.title}`);
+  const slug = slugify(`${opts.kind}-${input.marketDate}-${input.title}`);
   const meta = buildMeta([
-    "saham",
+    opts.kind,
     "daily",
     input.marketDate,
     ...assets.slice(0, 6),
@@ -385,13 +393,14 @@ export function buildStockDailyDraft(input: StockDailyInput): MarketBlogDraft {
   ]);
 
   const sourceMetadata = {
-    tool: "blog_propose_stock_daily",
+    tool: opts.tool,
     generatedAt: new Date().toISOString(),
-    type: "stock" as const,
+    type: opts.type,
     timeframe: "daily" as const,
     language,
     tone: "technical" as const,
-    market: "IDX" as const,
+    ...(opts.scope.market ? { market: opts.scope.market } : {}),
+    ...(opts.scope.chain ? { chain: opts.scope.chain } : {}),
     sources,
     disclaimer,
     ...(input.sourceRuntime ? { sourceRuntime: input.sourceRuntime } : {}),
@@ -405,11 +414,29 @@ export function buildStockDailyDraft(input: StockDailyInput): MarketBlogDraft {
     description: input.summary.slice(0, 180),
     content,
     meta,
-    category: "saham",
+    category: opts.kind,
     coverUrl: null,
     published: false,
     publishedAt: null,
     summary: input.summary,
     sourceMetadata,
   };
+}
+
+export function buildStockDailyDraft(input: StockDailyInput): MarketBlogDraft {
+  return buildDailyDraft(input, {
+    kind: "saham",
+    type: "stock",
+    tool: "blog_propose_stock_daily",
+    scope: { market: "IDX" },
+  });
+}
+
+export function buildCryptoDailyDraft(input: CryptoDailyInput): MarketBlogDraft {
+  return buildDailyDraft(input, {
+    kind: "crypto",
+    type: "crypto",
+    tool: "blog_propose_crypto_daily",
+    scope: { chain: "Multi-chain" },
+  });
 }

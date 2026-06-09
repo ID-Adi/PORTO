@@ -268,3 +268,48 @@ curl -sS "$PORTO_MCP_ENDPOINT" \
   panggil `blog_propose_stock_daily` → laporkan requestId ke Telegram.
   **Status awal: paused** sampai backend (tool ini) di-deploy ke produksi
   (`https://api.pawa.my.id/api/mcp`).
+
+---
+
+# Tool harian crypto berbasis AI agent: `blog_propose_crypto_daily`
+
+Paralel penuh dengan `blog_propose_stock_daily`, untuk ranah **crypto**. Menerima
+**konten markdown PENUH** yang disusun runtime AI agent (cron) dari data riil.
+Kategori hasil: `crypto`. **Tidak auto-publish** — masuk `mcp_action_requests`
+(`action: blog_propose_create`), direview & approve admin di `/admin/mcp`.
+Backend menjamin heading judul, **disclaimer**, dan blok **Sumber** hadir.
+
+## Input
+
+| Field           | Tipe        | Wajib | Catatan |
+| --------------- | ----------- | ----- | ------- |
+| `title`         | string      | ya    | mis. "Crypto Daily Update — 09 Juni 2026". |
+| `summary`       | string      | ya    | → `description` (≤180 char). |
+| `content`       | string      | ya    | **Markdown penuh** dari AI (boleh tabel GFM). |
+| `marketDate`    | string      | ya    | `YYYY-MM-DD`. Slug & meta. |
+| `assets`        | string[]    | tidak | mis. `["BTC","ETH","SOL"]` → meta (≤6 pertama). |
+| `sources`       | string[]    | tidak | Blok Sumber + `sourceMetadata.sources`. |
+| `sourceRuntime` | string      | tidak | mis. `cronjob-crypto-daily`. |
+
+Slug: `crypto-${marketDate}-${slugify(title)}`. `sourceMetadata` memuat
+`chain: "Multi-chain"` (bukan `market`).
+
+## Sumber data crypto (CoinGecko + RSS, gratis tanpa key)
+
+- **CoinGecko** `/global` (total market cap, dominasi BTC/ETH, perubahan 24h) +
+  `/coins/markets` (BTC, ETH, top coins, top movers 24h).
+- **RSS**: Cointelegraph (`https://cointelegraph.com/rss`) + Decrypt
+  (`https://decrypt.co/feed`). CoinDesk RSS tidak reliabel — tidak dipakai.
+
+## Runtime cron crypto
+
+- **Script context**: `~/.hermes/profiles/work/scripts/crypto_blog_context.sh`
+  — fetch CoinGecko global+markets, parse RSS Cointelegraph+Decrypt, cetak JSON
+  ringkas (global, btc, eth, top_coins, top_movers, news, assets) ke stdout.
+  Self-contained (tidak butuh pipeline external). Guard: `{"ok":false}` bila
+  CoinGecko gagal → AI agent SKIP. Tidak panggil LLM, tidak post MCP.
+- **Cron job**: "Crypto → Blog (AI Agent Analytic)" (`15 6 * * *`, harian termasuk
+  weekend karena crypto 24/7), job_id `ef718c6cad58`. Mode AI agent: parse konteks
+  → susun markdown 7-bagian (Ringkasan, Market Snapshot, Berita, Analisis,
+  Watchlist, Disclaimer) → panggil `blog_propose_crypto_daily` → lapor ke Telegram.
+  **Status awal: paused** sampai backend di-deploy ke produksi.
