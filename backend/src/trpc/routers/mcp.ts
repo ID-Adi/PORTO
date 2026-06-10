@@ -1,4 +1,4 @@
-import { count, desc, eq } from "drizzle-orm";
+import { and, count, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "../../db/index.js";
@@ -23,6 +23,8 @@ const statusInput = z.enum([
   "failed",
 ]);
 
+const MCP_DOMAINS = ["blog", "tools.image", "canvas"] as const;
+
 export const mcpRouter = router({
   overview: protectedProcedure.query(async () => {
     const [pending, failed, succeeded] = await Promise.all([
@@ -39,6 +41,60 @@ export const mcpRouter = router({
         .from(mcpActionRequests)
         .where(eq(mcpActionRequests.status, "succeeded")),
     ]);
+    const domainStatsEntries = await Promise.all(
+      MCP_DOMAINS.map(async (domain) => {
+        const [domainPending, domainFailed, domainSucceeded, lastAction] =
+          await Promise.all([
+            db
+              .select({ value: count() })
+              .from(mcpActionRequests)
+              .where(
+                and(
+                  eq(mcpActionRequests.domain, domain),
+                  eq(mcpActionRequests.status, "pending"),
+                ),
+              ),
+            db
+              .select({ value: count() })
+              .from(mcpActionRequests)
+              .where(
+                and(
+                  eq(mcpActionRequests.domain, domain),
+                  eq(mcpActionRequests.status, "failed"),
+                ),
+              ),
+            db
+              .select({ value: count() })
+              .from(mcpActionRequests)
+              .where(
+                and(
+                  eq(mcpActionRequests.domain, domain),
+                  eq(mcpActionRequests.status, "succeeded"),
+                ),
+              ),
+            db
+              .select({
+                action: mcpActionRequests.action,
+                status: mcpActionRequests.status,
+                createdAt: mcpActionRequests.createdAt,
+              })
+              .from(mcpActionRequests)
+              .where(eq(mcpActionRequests.domain, domain))
+              .orderBy(desc(mcpActionRequests.createdAt))
+              .limit(1),
+          ]);
+
+        return [
+          domain,
+          {
+            pending: domainPending[0]?.value ?? 0,
+            failed: domainFailed[0]?.value ?? 0,
+            succeeded: domainSucceeded[0]?.value ?? 0,
+            lastAction: lastAction[0] ?? null,
+          },
+        ] as const;
+      }),
+    );
 
     return {
       catalog: getPortoMcpCatalog(),
@@ -47,6 +103,7 @@ export const mcpRouter = router({
         failed: failed[0]?.value ?? 0,
         succeeded: succeeded[0]?.value ?? 0,
       },
+      domainStats: Object.fromEntries(domainStatsEntries),
     };
   }),
 

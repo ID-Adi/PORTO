@@ -1,6 +1,6 @@
 # Rancangan Implementasi — Cron Job Saham → Blog (Analytic AI Agent)
 
-Status: DRAFT RANCANGAN (belum diimplementasi)
+Status: DRAFT RANCANGAN (catatan historis; sebagian asumsi sudah digantikan implementasi terbaru)
 Scope: SAHAM saja. Crypto akan dibuat terpisah dengan pola yang sama.
 Tanggal rancangan: 2026-06-08
 
@@ -12,7 +12,7 @@ Membuat cron job harian yang:
 
 1. **Scraping** data pasar saham (sudah ada: `RAG-scrapping-saham`).
 2. **Menganalisis** data mentah menjadi narasi via **AI agent** (analytic, bukan template deterministik).
-3. **Mem-posting** hasil sebagai **draft blog** kategori `saham` ke MCP PORTO (`market_blog_*`), masuk approval queue — **tidak publish otomatis**.
+3. **Mem-posting** hasil sebagai **draft blog** kategori **`saham_crypto`** ke MCP PORTO (`market_blog_*`), masuk approval queue — **tidak publish otomatis**.
 4. Output blog **rapi & terstruktur**: tabel, heading konsisten, disclaimer, sumber — agar client mudah membaca.
 
 Prinsip yang dipertahankan dari sistem existing:
@@ -33,8 +33,8 @@ Prinsip yang dipertahankan dari sistem existing:
 - Sudah ada cron `Stock RAG Berita Saham Harian` (`0 6 * * 1-5`) yang menjalankan pipeline & **kirim ringkasan ke Telegram** (mode `--no-agent`, stdout verbatim).
 
 ### MCP market-blog — `/Users/bravo/Documents/PORTO/backend/src/mcp/domains/market-blog.ts`
-- Tool `market_blog_create_stock_draft` (kategori `saham`) — **sudah ada**, tapi generator-nya (`backend/src/lib/market-blog/draft.ts`) **deterministik tanpa AI dan tanpa angka riil**. Hanya menyusun kerangka editorial kosong.
-- Endpoint MCP: `POST /api/mcp` (JSON-RPC 2.0), auth `Authorization: Bearer $PORTO_MCP_TOKEN`.
+- Tool `market_blog_create_stock_draft` — **sudah ada**, tapi generator-nya (`backend/src/lib/market-blog/draft.ts`) **deterministik tanpa AI dan tanpa angka riil**. Hanya menyusun kerangka editorial kosong.
+- Endpoint MCP: `POST /api/mcp` (JSON-RPC 2.0), auth `Authorization: Bearer $PORTO...EN`.
 - Env sudah tersedia di `~/.hermes/.env`: `PORTO_MCP_ENDPOINT`, `PORTO_MCP_TOKEN`.
 
 ### Blog rendering — `frontend/src/app/blog/[slug]/blog-post-view.tsx`
@@ -50,24 +50,22 @@ Prinsip yang dipertahankan dari sistem existing:
 
 Ada dua opsi untuk men-generate konten. Kita pilih **Opsi A** karena paling cepat, fleksibel, dan tidak menyentuh backend.
 
-### Opsi A (DIPILIH) — AI agent di sisi cron, konten lewat tool harian gabungan/legacy
+### Opsi A (DIPILIH) — AI agent di sisi cron, konten lewat tool harian market-blog
 - Cron job berjalan **mode AI agent** (bukan `--no-agent`).
 - Script pre-fetch menjalankan pipeline scraping → kumpulkan `market.json` + ringkasan `news.jsonl` sebagai **konteks** ke prompt.
-- AI agent menyusun **markdown lengkap** (dengan tabel) lalu memanggil MCP tool untuk membuat draft kategori `saham`.
-- **Tool MCP yang dipakai**: perlu tool yang menerima `content` markdown penuh. Tool legacy `blog_propose_saham_crypto_daily` menerima `content` bebas, **tapi** kategorinya `saham_crypto`, bukan `saham`.
-
-  → **Perlu penyesuaian backend kecil** (lihat §4): tambah dukungan `content` override pada `market_blog_create_stock_draft`, ATAU buat tool baru `blog_propose_stock_daily` (kategori `saham`, content bebas). Rekomendasi: **tool baru tipis** agar tidak merusak generator deterministik existing.
+- AI agent menyusun **markdown lengkap** (dengan tabel) lalu memanggil MCP tool untuk membuat draft kategori **`saham_crypto`**.
+- **Tool MCP yang dipakai**: `blog_propose_stock_daily`, yaitu tool yang menerima `content` markdown penuh dan mengantarkan hasil ke approval queue dengan kategori **`saham_crypto`**.
 
 ### Opsi B (tidak dipilih sekarang) — Generator AI di dalam backend
 - Pindahkan analisis ke `draft.ts` (panggil LLM dari backend). Lebih berat: backend harus pegang API key LLM + data scraping. Menambah coupling. Ditunda.
 
-**Kesimpulan arsitektur:** cron AI agent (Opsi A) + **1 tool MCP baru** `blog_propose_stock_daily` yang menerima konten markdown penuh dan menyimpan ke kategori `saham`.
+**Kesimpulan arsitektur:** cron AI agent (Opsi A) + **1 tool MCP** `blog_propose_stock_daily` yang menerima konten markdown penuh dan menyimpan ke kategori **`saham_crypto`**.
 
 ---
 
 ## ◆ 4. Perubahan Backend (minimal)
 
-### 4.1 Tool MCP baru — `blog_propose_stock_daily`
+### 4.1 Tool MCP — `blog_propose_stock_daily`
 File: `backend/src/mcp/domains/market-blog.ts`
 
 - Input:
@@ -81,7 +79,7 @@ File: `backend/src/mcp/domains/market-blog.ts`
   | `sources` | string[] | tidak | Blok Sumber + `sourceMetadata`. |
   | `sourceRuntime` | string | tidak | `cronjob-saham-daily`. |
 
-- Behaviour: `category = "saham"`, `published = false`, slug `saham-${marketDate}-${slugify(title)}`, inject disclaimer bila belum ada, masuk `mcp_action_requests` (`action: blog_propose_create`) — **sama persis alur approval existing**.
+- Behaviour: `category = "saham_crypto"`, `published = false`, slug `saham-${marketDate}-${slugify(title)}`, inject disclaimer bila belum ada, masuk `mcp_action_requests` (`action: blog_propose_create`) — **sama persis alur approval existing**.
 - Guard: tetap tidak auto-publish; disclaimer wajib; sources disimpan.
 
 ### 4.2 Tidak mengubah generator deterministik
@@ -169,7 +167,7 @@ Aturan gaya konten:
 4. Draft masuk approval queue (mcp_action_requests, status pending)
         │
         ▼
-5. Admin review di /admin/mcp → approve → blog draft kategori `saham`
+5. Admin review di /admin/mcp → approve → blog draft kategori `saham_crypto`
         │
         ▼
 6. Publish manual (toggle / blog_propose_publish)
@@ -191,7 +189,7 @@ Catatan timing: jalankan **setelah** pipeline existing (`0 6 * * 1-5`) selesai, 
 
 Script #3 tugasnya: pastikan `data/market.json` fresh (run pipeline bila stale), lalu cetak JSON ringkas (market + top headline) ke stdout untuk diinject ke prompt. Tidak memanggil LLM.
 
-Prompt cron #4 (ringkas): "Kamu analis pasar saham. Dari konteks JSON terlampir, susun laporan markdown rapi sesuai kerangka [§5], lalu panggil MCP `blog_propose_stock_daily` dengan curl ke `$PORTO_MCP_ENDPOINT` (Bearer `$PORTO_MCP_TOKEN`). Jangan publish. Laporkan requestId hasilnya."
+Prompt cron #4 (ringkas): "Kamu analis pasar saham. Dari konteks JSON terlampir, susun laporan markdown rapi sesuai kerangka [§5], lalu panggil MCP `blog_propose_stock_daily` dengan curl ke `$PORTO_MCP_ENDPOINT` (Bearer `$PORTO_MCP_TOKEN`). Jangan publish. Laporkan requestId hasilnya. Pastikan payload memakai kategori hasil `saham_crypto` sebagaimana tool backend saat ini."
 
 ---
 
@@ -199,7 +197,7 @@ Prompt cron #4 (ringkas): "Kamu analis pasar saham. Dari konteks JSON terlampir,
 
 1. **Backend**: `pnpm --dir backend build` + smoke `tools/list` harus memuat `blog_propose_stock_daily`.
 2. **Manual call**: `curl` `tools/call` dengan content markdown contoh → cek row baru di `mcp_action_requests` (status pending).
-3. **Approve** di `/admin/mcp` → cek blog post kategori `saham` (`published=false`).
+3. **Approve** di `/admin/mcp` → cek blog post kategori `saham_crypto` (`published=false`).
 4. **Render**: buka `/blog/{slug}` setelah publish → pastikan **tabel ter-render**, TOC muncul, disclaimer tampil.
 5. **Cron dry-run**: `cronjob action=run` sekali → verifikasi draft terbuat & tidak auto-publish.
 
@@ -213,13 +211,13 @@ Prompt cron #4 (ringkas): "Kamu analis pasar saham. Dari konteks JSON terlampir,
 | AI menghasilkan markdown rusak | Validasi minimal di prompt (kerangka tetap); render GFM toleran. |
 | AI menambah rekomendasi beli/jual | Guard di prompt + disclaimer wajib di tool backend. |
 | Token MCP bocor | Tetap di `~/.hermes/.env`, tidak di-commit, tidak di-print. |
-| Crypto bercampur | Tool & cron terpisah; kategori `saham` strict. |
+| Crypto bercampur | Tool & cron terpisah; hasil tetap masuk kategori `saham_crypto` yang dipakai backend saat ini. |
 
 ---
 
 ## ◆ 10. Rencana Pemisahan Crypto (nanti)
 
-Pola identik: tool `blog_propose_crypto_daily` (kategori `crypto`), script context dari sumber crypto, cron terpisah. Tidak dikerjakan di fase ini.
+Pola identik: tool `blog_propose_crypto_daily`, script context dari sumber crypto, cron terpisah. Hasil runtime crypto juga masuk kategori **`saham_crypto`** pada implementasi backend saat ini. Tidak dikerjakan di fase ini.
 
 ---
 
@@ -233,5 +231,3 @@ Urutan eksekusi yang saya rekomendasikan begitu Anda setuju:
 3. **Cron AI agent** saham→blog (`10 6 * * 1-5`), dry-run sekali.
 4. **Update docs** MCP runtime.
 5. Verifikasi end-to-end (draft → approve → render tabel).
-
-Konfirmasikan: lanjut ke implementasi dengan urutan ini, atau ada bagian rancangan yang ingin diubah dulu?

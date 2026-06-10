@@ -36,16 +36,14 @@ Kategori yang valid dan sudah disinkronkan frontend/backend:
 | Category | Label UI | Fungsi |
 | --- | --- | --- |
 | `global` | Global | Artikel editorial/teknis umum. |
-| `saham` | Saham | Laporan saham dari cronjob market agent. |
-| `crypto` | Crypto | Laporan crypto dari cronjob market agent. |
-| `saham_crypto` | Saham & Crypto / Gabungan | Legacy laporan gabungan saham + crypto. |
+| `saham_crypto` | Saham & Crypto | Laporan market otomatis saham/crypto dari cronjob agent. |
+| `learning` | Learning | Catatan belajar, riset, dan breakdown konsep. |
 
 ### Rekomendasi untuk cronjob baru
 
-- Cronjob saham gunakan **`saham`**.
-- Cronjob crypto gunakan **`crypto`**.
+- Cronjob market otomatis gunakan **`saham_crypto`**.
 - Jangan gunakan **`global`** untuk laporan market otomatis.
-- Gunakan **`saham_crypto`** hanya bila memang membuat laporan gabungan legacy.
+- Gunakan **`learning`** hanya untuk catatan pembelajaran/riset editorial.
 
 ---
 
@@ -60,7 +58,7 @@ Field inti `blog_posts`:
 | `description` | string/null | tidak | Ringkasan pendek, idealnya ≤180 karakter. |
 | `content` | string/null | ya untuk cron | Markdown penuh. |
 | `meta` | string/null | tidak | Tag dipisah koma. Ditampilkan sebagai chips. |
-| `category` | category string | ya | `saham`, `crypto`, `global`, atau `saham_crypto`. |
+| `category` | category string | ya | `global`, `saham_crypto`, atau `learning`. |
 | `coverUrl` | string/null | tidak | URL/path gambar cover. Opsional. |
 | `published` | boolean | ya | Untuk cron/MCP harus `false`. |
 | `publishedAt` | date/null | tidak | Untuk cron/MCP harus `null`. |
@@ -88,8 +86,7 @@ GET /api/public/blog?category=<category>
 Contoh:
 
 ```http
-GET /api/public/blog?category=saham
-GET /api/public/blog?category=crypto
+GET /api/public/blog?category=saham_crypto
 ```
 
 Post yang tampil di list harus memenuhi:
@@ -180,7 +177,7 @@ blog_propose_stock_daily
 Kategori hasil:
 
 ```text
-saham
+saham_crypto
 ```
 
 Input schema:
@@ -203,7 +200,7 @@ Output sukses minimal:
   "type": "stock",
   "draftId": "123",
   "requestId": 123,
-  "category": "saham",
+  "category": "saham_crypto",
   "status": "pending_approval",
   "title": "Laporan Pasar Saham Indonesia — 2026-06-09",
   "slug": "saham-2026-06-09-laporan-pasar-saham-indonesia-2026-06-09",
@@ -247,7 +244,7 @@ Output sukses minimal:
   "type": "crypto",
   "draftId": "124",
   "requestId": 124,
-  "category": "crypto",
+  "category": "saham_crypto",
   "status": "pending_approval",
   "title": "Crypto Daily Update — 09 Juni 2026",
   "slug": "crypto-2026-06-09-crypto-daily-update-09-juni-2026",

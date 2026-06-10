@@ -77,22 +77,30 @@ export function usePublicExperience() {
   });
 }
 
-export function usePublicBlogPosts(category?: BlogCategory) {
+export function usePublicBlogPosts(
+  category?: BlogCategory,
+  options?: { enabled?: boolean; initialData?: PublicBlogPost[] },
+) {
   return useQuery({
     queryKey: ["public-data", "blog", category ?? "all"],
     queryFn: () =>
       fetchPublicData<PublicBlogPost[]>(
         category ? `blog?category=${category}` : "blog",
       ),
+    enabled: options?.enabled ?? true,
+    initialData: options?.initialData,
     staleTime: PUBLIC_DATA_STALE_MS,
   });
 }
 
-export function usePublicBlogPost(slug: string) {
+export function usePublicBlogPost(slug: string, initialPost?: PublicBlogPost) {
   return useQuery({
-    queryKey: ["public-data", "blog", slug],
+    // Segmen "blog-post" (bukan "blog") agar slug seperti "global"/"learning"
+    // tidak bertabrakan dengan cache list per kategori di atas.
+    queryKey: ["public-data", "blog-post", slug],
     queryFn: () => fetchPublicData<PublicBlogPost | null>(`blog/${encodeURIComponent(slug)}`),
     enabled: Boolean(slug),
+    initialData: initialPost,
     staleTime: PUBLIC_DATA_STALE_MS,
   });
 }

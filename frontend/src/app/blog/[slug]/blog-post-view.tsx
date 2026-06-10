@@ -12,7 +12,6 @@ import {
   Newspaper,
   ShieldAlert,
   Sigma,
-  Table2,
 } from "lucide-react";
 import Link from "next/link";
 import GithubSlugger from "github-slugger";
@@ -27,18 +26,26 @@ import { ShareMenu } from "@/components/common/share-menu";
 import { BlogPostSkeleton } from "@/components/skeletons/blog-post-skeleton";
 import { usePublicBlogPost } from "@/features/public-data/client";
 import { parseBlogTags } from "@/features/public-data/blog-meta";
+import type { PublicBlogPost } from "@/features/public-data/types";
 import { TOCMinimap, type TOCItemType } from "@/components/toc-minimap";
 
 function extractTOC(markdown: string): TOCItemType[] {
-  const headingRegex = /^(#{2,4})\s+(.+)$/gm;
   const items: TOCItemType[] = [];
   const slugger = new GithubSlugger();
-  let match;
-  while ((match = headingRegex.exec(markdown)) !== null) {
+  // Lacak code fence agar baris komentar `## ...` di dalam blok ``` (umum di
+  // contoh bash/yaml) tidak ikut jadi item TOC dengan anchor yang tak ada.
+  let inFence = false;
+  for (const line of markdown.split(/\r?\n/)) {
+    if (/^\s*(```|~~~)/.test(line)) {
+      inFence = !inFence;
+      continue;
+    }
+    if (inFence) continue;
+    const match = /^(#{2,4})\s+(.+)$/.exec(line);
+    if (!match) continue;
     const depth = match[1].length;
     const title = match[2].trim();
-    const url = `#${slugger.slug(title)}`;
-    items.push({ title, url, depth });
+    items.push({ title, url: `#${slugger.slug(title)}`, depth });
   }
   return items;
 }
@@ -57,7 +64,8 @@ const rehypePlugins = [
       },
     },
   ],
-  [rehypeHighlight, { detect: true, ignoreMissing: true }],
+  // rehype-highlight v7 otomatis melewati bahasa yang tak dikenal.
+  [rehypeHighlight, { detect: true }],
 ] as React.ComponentProps<typeof ReactMarkdown>["rehypePlugins"];
 
 const getPlainText = (children: ReactNode): string => {
@@ -101,8 +109,16 @@ const isDiagramBlock = (text: string, className?: string) => {
   );
 };
 
-export function BlogPostView({ slug }: { slug: string }) {
-  const { data: post, isLoading } = usePublicBlogPost(slug);
+export function BlogPostView({
+  slug,
+  initialPost,
+}: {
+  slug: string;
+  // Hasil fetch server (page.tsx) — jadi initialData React Query supaya konten
+  // langsung ter-render di HTML awal tanpa skeleton + fetch ulang.
+  initialPost?: PublicBlogPost;
+}) {
+  const { data: post, isLoading } = usePublicBlogPost(slug, initialPost);
 
   const content = post?.content ?? "";
   const toc = useMemo(() => (content ? extractTOC(content) : []), [content]);
@@ -153,7 +169,11 @@ export function BlogPostView({ slug }: { slug: string }) {
             <div className="flex items-start justify-between gap-3">
               <div className="flex min-w-0 items-center gap-1.5 font-mono text-[11px] text-(--muted-foreground)">
                 <Calendar className="size-3 shrink-0" />
-                <time>
+                <time
+                  dateTime={new Date(
+                    post.publishedAt ?? post.createdAt,
+                  ).toISOString()}
+                >
                   {new Date(
                     post.publishedAt ?? post.createdAt,
                   ).toLocaleDateString("id-ID", {

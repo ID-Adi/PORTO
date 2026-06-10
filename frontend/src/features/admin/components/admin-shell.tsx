@@ -26,6 +26,7 @@ import { Button } from "@/components/ui/button";
 import {
   Sheet,
   SheetContent,
+  SheetFooter,
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
@@ -156,15 +157,15 @@ export function AdminShell({
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-14 items-center gap-3 border-b border-(--border) bg-(--background)/80 px-4 backdrop-blur md:px-6">
+        <header className="sticky top-0 z-40 flex h-14 items-center gap-3 border-b border-(--border) bg-(--background)/90 px-3 backdrop-blur md:px-6">
           <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
             <SheetTrigger asChild>
               <Button variant="ghost" size="icon" className="md:hidden">
                 <Menu className="size-5" />
               </Button>
             </SheetTrigger>
-            <SheetContent side="left" className="w-64 p-4">
-              <div className="mb-4 flex items-start justify-between gap-3">
+            <SheetContent side="left" className="w-[86vw] max-w-72 p-4">
+              <div className="mb-4 flex items-start justify-between gap-3 pr-8">
                 <SheetTitle className="min-w-0 text-(--primary)">
                   PORTO Admin
                 </SheetTitle>
@@ -174,18 +175,36 @@ export function AdminShell({
                 pathname={pathname}
                 onNavigate={() => setMobileOpen(false)}
               />
+              <SheetFooter className="border-t border-(--sidebar-border) px-0 pb-0">
+                <div className="grid gap-2">
+                  <div>
+                    <p className="text-xs text-(--muted-foreground)">Signed in as</p>
+                    <p className="mt-1 break-all text-sm font-medium">{email}</p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleLogout}
+                    className="w-full justify-start gap-2"
+                  >
+                    <LogOut className="size-4" /> Sign out
+                  </Button>
+                </div>
+              </SheetFooter>
             </SheetContent>
           </Sheet>
-          <div className="text-sm font-medium text-(--foreground)">
+          <div className="min-w-0 truncate text-sm font-medium text-(--foreground)">
             {navItems.find((i) =>
               i.exact ? pathname === i.href : pathname.startsWith(i.href),
             )?.label ?? "Admin"}
           </div>
-          <div className="ml-auto text-xs text-(--muted-foreground) md:hidden">
+          <div className="ml-auto hidden text-xs text-(--muted-foreground) md:block">
             {email}
           </div>
         </header>
-        <main className="flex-1 px-4 py-6 md:px-8 md:py-8">{children}</main>
+        <main className="min-w-0 flex-1 px-3 py-4 sm:px-4 md:px-8 md:py-8">
+          {children}
+        </main>
       </div>
     </div>
   );

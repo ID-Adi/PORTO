@@ -18,6 +18,7 @@
 # Usage:
 #   ./deploy.sh                 # deploy normal (abort kalau working tree kotor)
 #   ./deploy.sh --force         # paksa lanjut walau ada perubahan lokal (akan di-reset)
+#   ./deploy.sh --force --yes   # force non-interaktif (untuk automation)
 #   ./deploy.sh --no-backup     # skip backup DB (TIDAK disarankan)
 #   ./deploy.sh --skip-pull     # deploy ulang dari kode yang sudah ada (tanpa git fetch/reset)
 #   ./deploy.sh --skip-frontend # hanya redeploy backend, jangan sentuh frontend
@@ -48,16 +49,18 @@ DO_BACKUP=1
 DO_PULL=1
 DO_BACKEND=1
 DO_FRONTEND=1
+ASSUME_YES=0
 
 for arg in "$@"; do
   case "$arg" in
     --force)         FORCE=1 ;;
+    --yes)           ASSUME_YES=1 ;;
     --no-backup)     DO_BACKUP=0 ;;
     --skip-pull)     DO_PULL=0 ;;
     --skip-backend)  DO_BACKEND=0 ;;
     --skip-frontend) DO_FRONTEND=0 ;;
     -h|--help)
-      sed -n '2,24s/^# \{0,1\}//p' "$0"
+      sed -n '2,25s/^# \{0,1\}//p' "$0"
       exit 0
       ;;
     *)
@@ -82,6 +85,98 @@ step() { echo "${C_DIM}▸${C_RST} $*"; }
 ok()   { echo "${C_OK}✓${C_RST} $*"; }
 warn() { echo "${C_WARN}!${C_RST} $*"; }
 die()  { echo "${C_ERR}✗ $*${C_RST}" >&2; exit 1; }
+
+require_env() {
+  local name="$1"
+  local hint="${2:-}"
+  local value="${!name:-}"
+  if [ -z "$value" ]; then
+    if [ -n "$hint" ]; then
+      die "Env ${name} wajib diisi di .env root. ${hint}"
+    fi
+    die "Env ${name} wajib diisi di .env root."
+  fi
+}
+
+require_http_url_env() {
+  local name="$1"
+  local value="${!name:-}"
+  require_env "$name"
+  case "$value" in
+    http://*|https://*) ;;
+    *) die "Env ${name} harus berupa URL http(s), sekarang: ${value}" ;;
+  esac
+}
+
+validate_deploy_env() {
+  step "Validasi env deploy..."
+
+  require_env POSTGRES_PASSWORD "Dibutuhkan oleh service postgres dan backup pg_dump."
+
+  if [ "$DO_BACKEND" -eq 1 ]; then
+    require_env BACKEND_DATABASE_URL "Contoh: postgresql://porto:PASS@porto-postgres:5432/porto_db"
+  fi
+
+  if [ "$DO_FRONTEND" -eq 1 ]; then
+    export NEXT_PUBLIC_BACKEND_URL="${NEXT_PUBLIC_BACKEND_URL:-https://api.pawa.my.id}"
+    export NEXT_PUBLIC_ADMIN_EMAIL="${NEXT_PUBLIC_ADMIN_EMAIL:-adi@pawa.my.id}"
+    export NEXT_PUBLIC_SITE_URL="${NEXT_PUBLIC_SITE_URL:-https://pawa.my.id}"
+
+    require_http_url_env NEXT_PUBLIC_BACKEND_URL
+    require_http_url_env NEXT_PUBLIC_SITE_URL
+    require_env NEXT_PUBLIC_ADMIN_EMAIL
+    case "$NEXT_PUBLIC_ADMIN_EMAIL" in
+      *@*) ;;
+      *) die "Env NEXT_PUBLIC_ADMIN_EMAIL harus berupa email, sekarang: ${NEXT_PUBLIC_ADMIN_EMAIL}" ;;
+    esac
+  fi
+
+  ok "Env deploy valid."
+}
+
+confirm_force_reset() {
+  local prev_commit="$1"
+
+  if [ "$FORCE" -ne 1 ] || [ "$DO_PULL" -ne 1 ]; then
+    return 0
+  fi
+
+  if [ "$ASSUME_YES" -eq 1 ]; then
+    warn "--force --yes dipakai: perubahan lokal akan ditimpa oleh origin/main."
+    return 0
+  fi
+
+  if [ ! -t 0 ]; then
+    die "--force butuh konfirmasi interaktif. Untuk automation, jalankan: ./deploy.sh --force --yes"
+  fi
+
+  echo
+  warn "--force akan menjalankan git reset --hard origin/main."
+  echo "  Commit saat ini: ${prev_commit}"
+  echo "  Perubahan lokal yang akan hilang:"
+  git status --short
+  printf "Ketik RESET untuk lanjut: "
+  local answer
+  read -r answer
+  [ "$answer" = "RESET" ] || die "Deploy dibatalkan."
+}
+
+print_health_details() {
+  local container="$1"
+
+  warn "Detail healthcheck ${container}:"
+  docker inspect -f '  state={{.State.Status}} health={{if .State.Health}}{{.State.Health.Status}}{{else}}n/a{{end}} exitCode={{.State.ExitCode}} error={{.State.Error}}' "$container" 2>/dev/null || {
+    warn "Container ${container} tidak ditemukan."
+    return 0
+  }
+
+  if docker inspect -f '{{if .State.Health}}{{range .State.Health.Log}}{{.ExitCode}}|{{.Output}}{{end}}{{end}}' "$container" 2>/dev/null | grep -q .; then
+    echo "  health log terbaru:"
+    docker inspect -f '{{if .State.Health}}{{range .State.Health.Log}}{{printf "    exit=%d output=%q\n" .ExitCode .Output}}{{end}}{{end}}' "$container" 2>/dev/null || true
+  else
+    echo "  health log: n/a"
+  fi
+}
 
 # Laporkan migrasi yang belum diterapkan dengan membandingkan _journal.json
 # (sumber kebenaran di repo) vs tabel drizzle.__drizzle_migrations di DB.
@@ -154,7 +249,10 @@ docker info >/dev/null 2>&1 || die "Docker daemon tidak berjalan / tidak punya a
 [ -f docker-compose.yml ] || die "docker-compose.yml tidak ada di $(pwd)."
 [ -f .env ] || die ".env (root) tidak ada. Salin dari .env.example dan isi nilainya."
 if [ "$DO_BACKEND" -eq 1 ]; then
-  [ -f backend/.env ] || warn "backend/.env tidak ada — pastikan env backend sudah diset."
+  [ -f backend/.env ] || die "backend/.env tidak ada — dibutuhkan oleh service backend."
+fi
+if [ "$DO_FRONTEND" -eq 1 ]; then
+  [ -f frontend/.env ] || die "frontend/.env tidak ada — dibutuhkan oleh service frontend."
 fi
 
 # Muat kredensial Postgres dari .env root untuk keperluan pg_dump.
@@ -162,6 +260,7 @@ set -a
 # shellcheck disable=SC1091
 . ./.env
 set +a
+validate_deploy_env
 PGUSER="${POSTGRES_USER:-porto}"
 PGDB="${POSTGRES_DB:-porto_db}"
 ok "Preflight lolos (compose: ${DC})."
@@ -210,6 +309,8 @@ if [ "$DO_PULL" -eq 1 ]; then
   if [ -n "$(git status --porcelain)" ] && [ "$FORCE" -ne 1 ]; then
     git status --short
     die "Working tree kotor. Commit/stash dulu, atau jalankan dengan --force untuk menimpa."
+  elif [ -n "$(git status --porcelain)" ]; then
+    confirm_force_reset "$PREV_COMMIT"
   fi
   step "Menarik main terbaru dari origin..."
   git fetch origin main
@@ -236,7 +337,10 @@ if [ "$DO_BACKEND" -eq 1 ]; then
       ok "Postgres siap."
       break
     fi
-    [ "$i" -eq "$HEALTH_RETRIES" ] && die "Postgres tidak siap setelah $((HEALTH_RETRIES * HEALTH_INTERVAL))s."
+    if [ "$i" -eq "$HEALTH_RETRIES" ]; then
+      print_health_details "$PG_CONTAINER"
+      die "Postgres tidak siap setelah $((HEALTH_RETRIES * HEALTH_INTERVAL))s."
+    fi
     sleep "$HEALTH_INTERVAL"
   done
 
@@ -248,6 +352,7 @@ if [ "$DO_BACKEND" -eq 1 ]; then
       break
     fi
     if [ "$i" -eq "$HEALTH_RETRIES" ]; then
+      print_health_details "$REDIS_CONTAINER"
       warn "Redis tidak siap setelah $((HEALTH_RETRIES * HEALTH_INTERVAL))s — lanjut tanpa cache (app tetap jalan)."
       break
     fi
@@ -277,7 +382,11 @@ if [ "$DO_BACKEND" -eq 1 ]; then
   # ──────────────────────────────────────────────────────────────────────────
   step "Menunggu backend sehat..."
   backend_ok=0
-  if wait_healthy "$BACKEND_CONTAINER"; then backend_ok=1; fi
+  if wait_healthy "$BACKEND_CONTAINER"; then
+    backend_ok=1
+  else
+    print_health_details "$BACKEND_CONTAINER"
+  fi
 fi
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -294,7 +403,11 @@ if [ "$DO_FRONTEND" -eq 1 ]; then
 
   step "Menunggu frontend sehat..."
   frontend_ok=0
-  if wait_healthy "$FRONTEND_CONTAINER"; then frontend_ok=1; fi
+  if wait_healthy "$FRONTEND_CONTAINER"; then
+    frontend_ok=1
+  else
+    print_health_details "$FRONTEND_CONTAINER"
+  fi
 else
   warn "Frontend di-skip (--skip-frontend)."
 fi

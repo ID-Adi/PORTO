@@ -47,7 +47,9 @@ export type PublicBlogPost = {
   title: string;
   slug: string;
   description: string | null;
-  content: string | null;
+  // Hanya dikirim endpoint detail (`blog/:slug`); list memakai proyeksi tanpa
+  // body markdown supaya payload index tetap kecil.
+  content?: string | null;
   meta: string | null;
   category: BlogCategory;
   coverUrl: string | null;

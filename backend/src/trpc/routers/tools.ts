@@ -79,6 +79,9 @@ const VIDEO_JOB_TIMEOUT_MS = 15 * 60_000;
 const TTS_RATE_WINDOW_MS = 60_000;
 const TTS_RATE_MAX_PER_WINDOW = 10;
 const TTS_PREVIEW_RATE_MAX_PER_WINDOW = 20;
+// Konversi gambar = kerja CPU sharp + tulis file; batasi per user per menit.
+const CONVERT_RATE_WINDOW_MS = 60_000;
+const CONVERT_RATE_MAX_PER_WINDOW = 10;
 const TTS_PREVIEW_TEXT = "Halo, ini contoh suara.";
 
 function ensureContained(filePath: string, baseDir = TOOLS_UPLOAD_DIR) {
@@ -232,12 +235,6 @@ async function callN8n(payload: {
   return json;
 }
 
-function sourceExtensionFromMime(mime: string): string {
-  if (mime.includes("png")) return "png";
-  if (mime.includes("webp")) return "webp";
-  return "jpg";
-}
-
 function outputMimeTypeForFormat(format: "webp" | "jpeg") {
   return format === "jpeg" ? "image/jpeg" : "image/webp";
 }
@@ -246,22 +243,47 @@ function outputExtensionForFormat(format: "webp" | "jpeg") {
   return format === "jpeg" ? "jpg" : "webp";
 }
 
-async function convertImageForUser(args: {
+// Throttle konversi in-memory per user (konversi synchronous & singkat,
+// DB count seperti TTS tidak diperlukan). Reset saat proses restart.
+const convertHits = new SlidingWindowRateLimiter({
+  windowMs: CONVERT_RATE_WINDOW_MS,
+  maxHits: CONVERT_RATE_MAX_PER_WINDOW,
+  sweepEveryMs: 30_000,
+  maxSweepEntries: 100,
+});
+
+export type ConvertSourceMime =
+  | "image/png"
+  | "image/jpeg"
+  | "image/jpg"
+  | "image/webp";
+
+// Dipakai dua transport: tRPC `tools.convertImage` (base64, kompat lama) dan
+// route multipart `/api/tools/convert-image` (Buffer langsung, tanpa overhead
+// JSON ~33%).
+export async function convertImageForUser(args: {
   userId: string;
   source: {
-    base64: string;
-    mimeType: "image/png" | "image/jpeg" | "image/jpg" | "image/webp";
+    buffer: Buffer;
+    mimeType: ConvertSourceMime;
     fileName: string;
   };
   format: "webp" | "jpeg";
   quality: number;
 }) {
   const { source, format, quality, userId } = args;
-  const originalBytes = decodedByteLength(source.base64);
+  if (!convertHits.hit(userId)) {
+    throw new TRPCError({
+      code: "TOO_MANY_REQUESTS",
+      message: "Terlalu banyak konversi. Coba lagi sebentar.",
+    });
+  }
+  const buffer = source.buffer;
+  const originalBytes = buffer.byteLength;
   if (originalBytes === 0) {
     throw new TRPCError({
       code: "BAD_REQUEST",
-      message: "Base64 gambar kosong",
+      message: "File gambar kosong",
     });
   }
   if (originalBytes > MAX_FRAME_BYTES) {
@@ -271,10 +293,13 @@ async function convertImageForUser(args: {
     });
   }
 
-  const buffer = Buffer.from(source.base64, "base64");
+  // Error file korup baru muncul saat sharp membaca header (metadata()),
+  // bukan di konstruktor — keduanya harus berada di dalam try yang sama.
   let transformed: sharp.Sharp;
+  let metadata: sharp.Metadata;
   try {
     transformed = sharp(buffer, { failOn: "error" }).rotate();
+    metadata = await transformed.metadata();
   } catch {
     throw new TRPCError({
       code: "BAD_REQUEST",
@@ -282,7 +307,6 @@ async function convertImageForUser(args: {
     });
   }
 
-  const metadata = await transformed.metadata();
   if (!metadata.width || !metadata.height) {
     throw new TRPCError({
       code: "BAD_REQUEST",
@@ -1314,7 +1338,11 @@ export const toolsRouter = router({
     .mutation(async ({ ctx, input }) => {
       return convertImageForUser({
         userId: ctx.session.user.id,
-        source: input.source,
+        source: {
+          buffer: Buffer.from(input.source.base64, "base64"),
+          mimeType: input.source.mimeType,
+          fileName: input.source.fileName,
+        },
         format: input.format,
         quality: input.quality,
       });

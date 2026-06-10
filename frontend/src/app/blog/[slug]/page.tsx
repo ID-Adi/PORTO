@@ -104,10 +104,14 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
       {jsonLd ? (
         <script
           type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+          dangerouslySetInnerHTML={{
+            // Escape `<` agar title/description yang mengandung "</script>"
+            // tidak bisa keluar dari tag (konten bisa datang dari agent MCP).
+            __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c"),
+          }}
         />
       ) : null}
-      <BlogPostView slug={slug} />
+      <BlogPostView slug={slug} initialPost={post ?? undefined} />
     </>
   );
 }

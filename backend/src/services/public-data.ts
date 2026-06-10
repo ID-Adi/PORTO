@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 
 import { db } from "../db/index.js";
 import {
@@ -23,7 +23,6 @@ const BOOKMARK_PER_PAGE = 5;
 const SINGLETON_SITE_SETTINGS_ID = 1;
 
 type ProjectRow = typeof projects.$inferSelect;
-type BlogPostRow = typeof blogPosts.$inferSelect;
 type SkillRow = typeof skills.$inferSelect;
 type SocialRow = typeof socials.$inferSelect;
 type SiteSettingsRow = typeof siteSettings.$inferSelect;
@@ -57,7 +56,7 @@ function withProjectPublicUrls(row: ProjectRow): ProjectRow {
   };
 }
 
-function withBlogPublicUrls(row: BlogPostRow): BlogPostRow {
+function withBlogPublicUrls<T extends { coverUrl: string | null }>(row: T): T {
   return {
     ...row,
     coverUrl: publicUrl(row.coverUrl),
@@ -199,16 +198,36 @@ export async function listPublicExperience() {
   }));
 }
 
+// Batas aman list publik: halaman /blog belum punya pagination, jadi cap di
+// server agar laporan harian cronjob tidak membuat payload tumbuh tanpa batas.
+const PUBLIC_BLOG_LIST_LIMIT = 100;
+
 export async function listPublicBlogPosts(category?: BlogCategory) {
   const where = category
     ? and(eq(blogPosts.published, true), eq(blogPosts.category, category))
     : eq(blogPosts.published, true);
 
+  // Proyeksi tanpa `content`: list/index hanya butuh metadata kartu; body
+  // markdown (bisa puluhan KB per laporan) hanya dikirim endpoint detail.
   const rows = await db
-    .select()
+    .select({
+      id: blogPosts.id,
+      title: blogPosts.title,
+      slug: blogPosts.slug,
+      description: blogPosts.description,
+      meta: blogPosts.meta,
+      category: blogPosts.category,
+      coverUrl: blogPosts.coverUrl,
+      published: blogPosts.published,
+      publishedAt: blogPosts.publishedAt,
+      createdAt: blogPosts.createdAt,
+    })
     .from(blogPosts)
     .where(where)
-    .orderBy(desc(blogPosts.createdAt));
+    .orderBy(
+      desc(sql`coalesce(${blogPosts.publishedAt}, ${blogPosts.createdAt})`),
+    )
+    .limit(PUBLIC_BLOG_LIST_LIMIT);
 
   return rows.map(withBlogPublicUrls);
 }

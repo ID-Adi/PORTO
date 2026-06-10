@@ -12,6 +12,7 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { BACKEND_URL } from "@/lib/backend-url";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 
@@ -29,11 +30,24 @@ type ConverterSession = {
 };
 
 type ImageFile = {
-  base64: string;
+  // File asli dikirim apa adanya via multipart; dataUrl hanya untuk preview.
+  blob: File;
   dataUrl: string;
   fileName: string;
   mimeType: "image/png" | "image/jpeg" | "image/jpg" | "image/webp";
   size: number;
+};
+
+// Response POST /api/tools/convert-image (lihat backend/src/routes/tools-convert.ts).
+type ConvertResponse = {
+  id: number;
+  url: string | null;
+  mimeType: string;
+  originalBytes: number;
+  outputBytes: number;
+  width: number;
+  height: number;
+  format: ConvertFormat;
 };
 
 type ConverterHistoryRow = {
@@ -97,20 +111,13 @@ function readSession(): ConverterSession {
     if (Date.now() - (parsed.savedAt ?? 0) > SESSION_TTL_MS) {
       return defaultSession();
     }
-    const file = parsed.file;
-    const normalizedFile =
-      file &&
-      typeof file === "object" &&
-      typeof (file as ImageFile).base64 === "string" &&
-      typeof (file as ImageFile).dataUrl === "string"
-        ? (file as ImageFile)
-        : null;
     const quality =
       typeof parsed.quality === "number"
         ? Math.min(100, Math.max(1, Math.round(parsed.quality)))
         : 82;
     return {
-      file: normalizedFile,
+      // File tidak dipersist (lihat writeSession); selalu mulai tanpa file.
+      file: null,
       format: parsed.format === "jpeg" ? "jpeg" : "webp",
       quality,
       status:
@@ -135,7 +142,10 @@ function writeSession(session: ConverterSession) {
   try {
     window.localStorage.setItem(
       STORAGE_KEY,
-      JSON.stringify({ ...session, savedAt: Date.now() }),
+      // Jangan persist payload gambar: dataUrl file 10MB ≈ belasan MB JSON —
+      // melewati kuota localStorage dan stringify-nya nge-jank di tiap
+      // perubahan state (mis. slider quality). Cukup preferensi + hasil.
+      JSON.stringify({ ...session, file: null, savedAt: Date.now() }),
     );
   } catch {
     // ignore quota / private mode
@@ -225,7 +235,6 @@ function mapHistory(rows: ConverterHistoryRow[] | undefined): ConverterHistoryEn
 
 export function ImageConverterCard() {
   const utils = trpc.useUtils();
-  const convertMutation = trpc.tools.convertImage.useMutation();
   const deleteEntry = trpc.tools.deleteMyEntry.useMutation();
   const historyQuery = trpc.tools.listMyHistory.useQuery({ kind: "image-converter" });
 
@@ -255,11 +264,10 @@ export function ImageConverterCard() {
     }
     try {
       const dataUrl = await fileToDataUrl(file);
-      const base64 = dataUrl.slice(dataUrl.indexOf(",") + 1);
       setSession((prev) => ({
         ...prev,
         file: {
-          base64,
+          blob: file,
           dataUrl,
           fileName: file.name,
           mimeType: file.type as ImageFile["mimeType"],
@@ -302,15 +310,29 @@ export function ImageConverterCard() {
     }));
 
     try {
-      const result = await convertMutation.mutateAsync({
-        source: {
-          base64: session.file.base64,
-          mimeType: session.file.mimeType,
-          fileName: session.file.fileName,
-        },
-        format: session.format,
-        quality: session.quality,
+      // Multipart langsung ke backend — file 10MB tidak dibengkakkan base64
+      // ~33% seperti jalur tRPC JSON sebelumnya.
+      const form = new FormData();
+      form.append("file", session.file.blob, session.file.fileName);
+      form.append("format", session.format);
+      form.append("quality", String(session.quality));
+
+      const response = await fetch(`${BACKEND_URL}/api/tools/convert-image`, {
+        method: "POST",
+        body: form,
+        credentials: "include",
       });
+      const payload: unknown = await response.json().catch(() => null);
+      if (!response.ok || !payload) {
+        const errorMessage = readRecord(payload)?.error;
+        throw new Error(
+          typeof errorMessage === "string" && errorMessage
+            ? errorMessage
+            : "Konversi gambar gagal",
+        );
+      }
+      // Kontrak route: response.ok ⇒ body ConvertResponse.
+      const result = payload as ConvertResponse;
 
       setSession((prev) => ({
         ...prev,
@@ -335,9 +357,22 @@ export function ImageConverterCard() {
     }
   }
 
-  async function onDeleteHistory(id: number) {
+  async function onDeleteHistory(entry: ConverterHistoryEntry) {
     try {
-      await deleteEntry.mutateAsync({ id });
+      await deleteEntry.mutateAsync({ id: entry.id });
+      // Bersihkan preview/Download yang masih menunjuk file yang baru dihapus.
+      setSession((prev) =>
+        prev.resultUrl === entry.resultUrl
+          ? {
+              ...prev,
+              status: "idle",
+              resultUrl: null,
+              resultMimeType: null,
+              outputBytes: null,
+              error: null,
+            }
+          : prev,
+      );
       await utils.tools.listMyHistory.invalidate({ kind: "image-converter" });
       toast.success("History dihapus");
     } catch (error) {
@@ -381,10 +416,22 @@ export function ImageConverterCard() {
     setSession(defaultSession());
   }
 
-  const latestResultUrl = session.resultUrl ?? history[0]?.resultUrl ?? null;
-  const latestResultMime = session.resultMimeType ?? history[0]?.mimeType ?? null;
-  const originalBytes = session.originalBytes ?? session.file?.size ?? history[0]?.originalBytes ?? null;
-  const outputBytes = session.outputBytes ?? history[0]?.outputBytes ?? history[0]?.fileSize ?? null;
+  // Fallback ke history hanya saat sesi belum memegang file — kalau user baru
+  // upload file (resultUrl di-reset), preview/stats tidak boleh menampilkan
+  // hasil konversi lama dari history.
+  const hasSessionFile = Boolean(session.file);
+  const latestResultUrl =
+    session.resultUrl ?? (hasSessionFile ? null : history[0]?.resultUrl ?? null);
+  const latestResultMime =
+    session.resultMimeType ??
+    (hasSessionFile ? null : history[0]?.mimeType ?? null);
+  const originalBytes =
+    session.originalBytes ??
+    session.file?.size ??
+    (hasSessionFile ? null : history[0]?.originalBytes ?? null);
+  const outputBytes =
+    session.outputBytes ??
+    (hasSessionFile ? null : history[0]?.outputBytes ?? history[0]?.fileSize ?? null);
   const reductionPercent =
     originalBytes && outputBytes && originalBytes > 0
       ? Math.max(0, Math.round((1 - outputBytes / originalBytes) * 100))
@@ -725,8 +772,9 @@ export function ImageConverterCard() {
                           </button>
                           <button
                             type="button"
-                            onClick={() => void onDeleteHistory(entry.id)}
-                            className="font-mono text-[10px] tracking-[0.16em] text-(--muted-foreground) uppercase hover:text-rose-300"
+                            onClick={() => void onDeleteHistory(entry)}
+                            disabled={deleteEntry.isPending}
+                            className="font-mono text-[10px] tracking-[0.16em] text-(--muted-foreground) uppercase hover:text-rose-300 disabled:cursor-not-allowed disabled:opacity-50"
                           >
                             Delete
                           </button>

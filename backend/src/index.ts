@@ -5,10 +5,12 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 
 import { auth } from "./auth/index.js";
+import { startToolRetentionSweeper } from "./lib/tool-retention.js";
 import { canvasAgentStreamRoute } from "./routes/canvas-agent-stream.js";
 import { mcpRoute } from "./routes/mcp.js";
 import { registerPasswordResetRoutes } from "./routes/password-reset.js";
 import { publicDataRoute } from "./routes/public-data.js";
+import { toolsConvertRoute } from "./routes/tools-convert.js";
 import { uploadRoute } from "./routes/upload.js";
 import { createTRPCContext } from "./trpc/init.js";
 import { appRouter } from "./trpc/routers/_app.js";
@@ -64,6 +66,7 @@ app.all("/api/auth/:path{.+}", (c) => auth.handler(c.req.raw));
 app.route("/api/canvas-agent", canvasAgentStreamRoute);
 app.route("/api/mcp", mcpRoute);
 app.route("/api/public", publicDataRoute);
+app.route("/api/tools/convert-image", toolsConvertRoute);
 app.route("/api/upload", uploadRoute);
 
 app.use(
@@ -88,6 +91,9 @@ app.use(
 );
 
 app.get("/", (c) => c.json({ status: "ok" }));
+
+// Retensi history /tools: pangkas row + file di luar 50 terbaru per user×kind.
+startToolRetentionSweeper();
 
 const port = Number(process.env.PORT) || 4002;
 serve({ fetch: app.fetch, port }, (info) => {

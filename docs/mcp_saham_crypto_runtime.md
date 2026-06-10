@@ -113,10 +113,11 @@ curl -sS "$PORTO_BACKEND_URL/api/mcp" \
 # Runtime MCP market-blog (saham & crypto terpisah)
 
 Selain tool harian gabungan di atas, tersedia runtime market-blog yang membuat
-draft **terpisah** per jenis aset (kategori `saham` atau `crypto`). Cocok dipanggil
-cron per-topik. Sama seperti legacy: **tidak publish otomatis** — semua masuk
-approval queue `mcp_action_requests` (`action: blog_propose_create`), direview &
-approve admin di **`/admin/mcp`**.
+draft **terpisah** per jenis aset, tetapi seluruh hasilnya kini memakai kategori
+blog tunggal **`saham_crypto`**. Cocok dipanggil cron per-topik. Sama seperti
+legacy: **tidak publish otomatis** — semua masuk approval queue
+`mcp_action_requests` (`action: blog_propose_create`), direview & approve admin
+di **`/admin/mcp`**.
 
 Generator memakai template deterministik (tanpa API harga eksternal) yang selalu
 menyertakan **disclaimer** edukasi dan blok **Sumber**.
@@ -199,7 +200,7 @@ AI agent (cron) dari data scraping riil. Backend hanya menormalkan: menjamin
 heading judul, **disclaimer**, dan blok **Sumber** hadir, lalu meng-enqueue ke
 approval queue. Tabel GFM dibiarkan apa adanya — frontend render via `remark-gfm`.
 
-Kategori hasil: `saham`. **Tidak auto-publish** — masuk `mcp_action_requests`
+Kategori hasil: `saham_crypto`. **Tidak auto-publish** — masuk `mcp_action_requests`
 (`action: blog_propose_create`), direview & approve admin di `/admin/mcp`.
 
 ## Input
@@ -225,7 +226,7 @@ Slug: `saham-${marketDate}-${slugify(title)}`. Meta compact:
   "type": "stock",
   "draftId": "456",
   "requestId": 456,
-  "category": "saham",
+  "category": "saham_crypto",
   "status": "pending_approval",
   "title": "Laporan Pasar Saham Indonesia — 2026-06-08",
   "slug": "saham-2026-06-08-laporan-pasar-saham-indonesia-2026-06-08",
