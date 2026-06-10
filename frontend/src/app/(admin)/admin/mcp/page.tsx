@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import {
+  AlertTriangle,
   Check,
   ChevronDown,
   Clock,
@@ -14,6 +15,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+import { CopyButton } from "@/components/copy-button";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -551,9 +553,7 @@ function RecentActionsSection({ items }: { items: McpActionItem[] }) {
               <div className="min-w-0">
                 <span className="block break-words text-sm">{item.action}</span>
                 {item.status === "failed" && item.errorMessage ? (
-                  <p className="mt-1 break-words text-xs leading-snug text-destructive">
-                    {item.errorMessage}
-                  </p>
+                  <RecentActionErrorPanel item={item} />
                 ) : (
                   <p className="mt-1 text-xs text-(--muted-foreground)">
                     {domainLabel(item.domain)}
@@ -572,6 +572,73 @@ function RecentActionsSection({ items }: { items: McpActionItem[] }) {
         )}
       </div>
     </section>
+  );
+}
+
+function RecentActionErrorPanel({ item }: { item: McpActionItem }) {
+  const error = parseMcpError(item);
+  const rawError = item.errorMessage ?? "Unknown MCP error";
+
+  return (
+    <div className="mt-2 border border-destructive/30 bg-destructive/5">
+      <div className="flex items-start justify-between gap-2 border-b border-destructive/20 px-3 py-2">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 font-mono text-[10px] tracking-[0.14em] text-destructive uppercase">
+            <AlertTriangle className="size-3.5 shrink-0" aria-hidden />
+            Error
+          </div>
+          <p className="mt-1 break-words text-sm font-medium text-(--foreground)">
+            {error.title}
+          </p>
+        </div>
+        <CopyButton
+          text={rawError}
+          variant="ghost"
+          size="icon-xs"
+          className="shrink-0 border-none text-destructive hover:bg-destructive/10"
+          onCopySuccess={() => toast.success("Error disalin")}
+          onCopyError={() => toast.error("Gagal menyalin error")}
+        />
+      </div>
+      <div className="grid gap-2 px-3 py-2">
+        <p className="break-words text-xs leading-relaxed text-destructive">
+          {error.summary}
+        </p>
+        <Collapsible>
+          <CollapsibleTrigger className="flex w-full items-center justify-between gap-2 border border-destructive/20 bg-(--background)/70 px-2 py-1.5 text-left font-mono text-[10px] tracking-[0.12em] text-(--muted-foreground) uppercase">
+            Detail error
+            <ChevronDown className="size-3.5 shrink-0" aria-hidden />
+          </CollapsibleTrigger>
+          <CollapsibleContent className="border-x border-b border-destructive/20 bg-(--background)">
+            <div className="grid gap-3 p-3">
+              <ErrorDetailRow label="Kemungkinan penyebab" value={error.cause} />
+              <ErrorDetailRow label="Aksi berikutnya" value={error.nextAction} />
+              <div className="grid gap-1">
+                <span className="font-mono text-[10px] tracking-[0.12em] text-(--muted-foreground) uppercase">
+                  Raw error
+                </span>
+                <pre className="max-h-44 overflow-auto whitespace-pre-wrap break-words border border-(--line) bg-(--muted)/20 p-2 font-mono text-[11px] leading-relaxed text-(--foreground)">
+                  {rawError}
+                </pre>
+              </div>
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
+      </div>
+    </div>
+  );
+}
+
+function ErrorDetailRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="grid gap-1">
+      <span className="font-mono text-[10px] tracking-[0.12em] text-(--muted-foreground) uppercase">
+        {label}
+      </span>
+      <p className="break-words text-xs leading-relaxed text-(--foreground)">
+        {value}
+      </p>
+    </div>
   );
 }
 
@@ -842,6 +909,98 @@ function getTypedDetails(
   return Object.entries(payload)
     .slice(0, 4)
     .map(([label, value]) => ({ label, value: stringValue(value) }));
+}
+
+type ParsedMcpError = {
+  title: string;
+  summary: string;
+  cause: string;
+  nextAction: string;
+};
+
+function parseMcpError(item: McpActionItem): ParsedMcpError {
+  const raw = item.errorMessage?.trim() || "Unknown MCP error";
+  const lower = raw.toLowerCase();
+  const payload = getRecord(item.payload);
+  const data = getRecord(payload?.data);
+  const slug = stringValue(payload?.slug ?? data?.slug);
+
+  if (
+    lower.includes("slug blog") ||
+    lower.includes("blog_posts_slug_unique") ||
+    lower.includes("duplicate key value") ||
+    lower.includes("already exists") ||
+    lower.includes("23505")
+  ) {
+    const summary =
+      slug !== "-"
+        ? `Slug "${slug}" sudah dipakai oleh blog post lain.`
+        : "Slug blog sudah dipakai oleh blog post lain.";
+    return {
+      title: "Slug blog sudah dipakai",
+      summary,
+      cause: "Database menolak insert karena field unik, kemungkinan besar slug, sudah ada.",
+      nextAction: "Ubah slug draft MCP, lalu ajukan ulang action dari agent.",
+    };
+  }
+
+  if (lower.includes("payload mcp tidak valid") || lower.includes("zod")) {
+    return {
+      title: "Payload MCP tidak valid",
+      summary: truncateErrorSummary(raw),
+      cause: "Data dari agent tidak sesuai kontrak action yang dieksekusi.",
+      nextAction: "Buka review payload, perbaiki field yang disebut di error, lalu ajukan ulang.",
+    };
+  }
+
+  if (lower.includes("blog post target tidak ditemukan")) {
+    return {
+      title: "Target blog tidak ditemukan",
+      summary: truncateErrorSummary(raw),
+      cause: "Action update/publish mengarah ke ID blog yang tidak tersedia.",
+      nextAction: "Cek ID blog pada payload MCP atau buat ulang proposal dengan target yang benar.",
+    };
+  }
+
+  if (lower.includes("unsupported mcp action executor")) {
+    return {
+      title: "Executor MCP belum tersedia",
+      summary: truncateErrorSummary(raw),
+      cause: "Action sudah masuk queue, tetapi backend belum punya handler untuk domain/action ini.",
+      nextAction: "Tambahkan executor backend untuk action tersebut atau ubah agent agar memakai action yang didukung.",
+    };
+  }
+
+  if (lower.includes("failed query")) {
+    const isBlogCreate =
+      item.domain === "blog" &&
+      item.action === "blog_propose_create" &&
+      lower.includes("insert into");
+    return {
+      title: isBlogCreate ? "Gagal membuat blog post" : "Query database gagal",
+      summary: isBlogCreate
+        ? "Database menolak pembuatan blog post dari proposal MCP."
+        : "Database menolak operasi yang dijalankan oleh action MCP.",
+      cause: "Error mentah dari database tersimpan di audit log. Biasanya terkait constraint, payload, atau nilai yang tidak sesuai schema.",
+      nextAction: isBlogCreate
+        ? "Cek slug, kategori, title, content, dan field wajib lain. Gunakan detail raw bila perlu debugging SQL."
+        : "Buka raw error, cek constraint/query yang gagal, lalu ajukan ulang setelah data diperbaiki.",
+    };
+  }
+
+  return {
+    title: "Action MCP gagal",
+    summary: truncateErrorSummary(raw),
+    cause: "Backend mengembalikan error saat menjalankan action MCP.",
+    nextAction: "Buka detail raw error, salin pesan, lalu perbaiki payload atau executor sesuai konteks.",
+  };
+}
+
+function truncateErrorSummary(value: string) {
+  const firstLine = value.split(/\r?\n/)[0]?.trim() ?? value;
+  const firstSentence = firstLine.match(/^.{1,180}?(?:[.!?](?:\s|$)|$)/)?.[0];
+  const summary = (firstSentence ?? firstLine).trim();
+  return summary.length > 180 ? `${summary.slice(0, 177)}...` : summary;
 }
 
 function domainLabel(domain: string) {
