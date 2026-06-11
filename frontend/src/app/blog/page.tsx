@@ -1,26 +1,16 @@
-import type { Metadata } from "next";
-
-import { siteConfig } from "@/config/site";
 import { getPublicBlogPosts } from "@/features/public-data/server";
+import { createRouteMetadata } from "@/lib/seo";
 
 import { BlogPageClient } from "./blog-page-client";
 
-const BLOG_URL = `${siteConfig.url.replace(/\/$/, "")}/blog`;
+const BLOG_DESCRIPTION =
+  "Tulisan teknis, catatan eksplorasi, laporan pasar Saham & Crypto, dan catatan belajar.";
 
-export const metadata: Metadata = {
+export const metadata = createRouteMetadata({
   title: "Blog",
-  description:
-    "Tulisan teknis, catatan eksplorasi, laporan pasar Saham & Crypto, dan catatan belajar.",
-  alternates: { canonical: BLOG_URL },
-  openGraph: {
-    type: "website",
-    title: "Blog",
-    description:
-      "Tulisan teknis, catatan eksplorasi, laporan pasar Saham & Crypto, dan catatan belajar.",
-    url: BLOG_URL,
-    siteName: siteConfig.name,
-  },
-};
+  description: BLOG_DESCRIPTION,
+  path: "/blog",
+});
 
 export default async function BlogPage() {
   // Prefetch list kategori default (global) di server — ISR 60 detik — supaya

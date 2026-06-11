@@ -1,6 +1,13 @@
 import { redirect } from "next/navigation";
 
+import { createNoIndexMetadata } from "@/lib/seo";
+
 const DEFAULT_EXCALIDRAW_URL = "/canvas";
+
+export const metadata = createNoIndexMetadata(
+  "Excalidraw Redirect",
+  "Internal redirect to the PORTO canvas workspace."
+);
 
 export default function ExcalidrawRedirectPage() {
   redirect(

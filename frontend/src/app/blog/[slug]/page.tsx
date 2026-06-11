@@ -11,6 +11,12 @@ type BlogPostPageProps = {
   params: Promise<{ slug: string }>;
 };
 
+function toIsoDate(value: string | Date | null | undefined) {
+  if (!value) return undefined;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
+}
+
 export async function generateMetadata({
   params,
 }: BlogPostPageProps): Promise<Metadata> {
@@ -27,14 +33,12 @@ export async function generateMetadata({
   const url = `${siteConfig.url.replace(/\/$/, "")}/blog/${post.slug}`;
   const description = post.description ?? siteConfig.description;
   const tags = parseBlogTags(post.meta);
-  const publishedTime = (post.publishedAt ?? post.createdAt)
-    ? new Date(post.publishedAt ?? post.createdAt).toISOString()
-    : undefined;
+  const publishedTime = toIsoDate(post.publishedAt ?? post.createdAt);
 
   // Cover post jadi OG image (absolut). Fallback ke OG default situs.
   const ogImage = post.coverUrl
     ? normalizeImageUrl(post.coverUrl)
-    : siteConfig.ogImage;
+    : new URL(siteConfig.ogImage, siteConfig.url).toString();
 
   return {
     title: post.title,
@@ -82,9 +86,7 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
         image: post.coverUrl
           ? normalizeImageUrl(post.coverUrl)
           : new URL(siteConfig.ogImage, siteConfig.url).toString(),
-        datePublished: (post.publishedAt ?? post.createdAt)
-          ? new Date(post.publishedAt ?? post.createdAt).toISOString()
-          : undefined,
+        datePublished: toIsoDate(post.publishedAt ?? post.createdAt),
         keywords: parseBlogTags(post.meta).join(", ") || undefined,
         url: `${siteConfig.url.replace(/\/$/, "")}/blog/${post.slug}`,
         mainEntityOfPage: {

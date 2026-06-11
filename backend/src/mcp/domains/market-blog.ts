@@ -243,7 +243,8 @@ export function registerMarketBlogMcp(registry: PortoMcpRegistry) {
             })
             .where(eq(mcpActionRequests.id, id));
         }
-        const resolved = await resolveApprovalStatus(row);
+        const freshRow = await loadRequest(id);
+        const resolved = await resolveApprovalStatus(freshRow);
         return {
           ok: true as const,
           draftId: String(id),

@@ -1,9 +1,10 @@
 # PORTO — Prasetya Adi Wijaya
-Site: https://porto.dev
+Site: https://pawa.my.id
 Owner: Prasetya Adi Wijaya
 Role: Design Engineer & Full Stack Developer
 Location: Banjar Baru, Kalimantan Selatan, Indonesia
 Stack: Next.js, React, TypeScript, Tailwind CSS, shadcn/ui
-Sections: Overview, Components, Projects, Writing, Partners, GitHub Contributions, Tech Stack, Awards, Certifications
-Contact: hello@porto.dev
+Sections: Overview, Projects, Skills, Experience, Blog, Contact, GitHub Contributions, Tech Stack, Awards, Certifications
+Canonical public routes: /, /projects, /skills, /experience, /blog, /contact
+Description: Minimalist technical editorial portfolio for Prasetya Adi Wijaya and PORTO.
 This file is provided for AI indexing purposes.

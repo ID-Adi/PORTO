@@ -78,6 +78,19 @@ const personJsonLd = {
   },
 };
 
+const websiteJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  name: siteConfig.name,
+  url: siteConfig.url,
+  description: siteConfig.description,
+};
+
+const structuredDataJson = JSON.stringify([personJsonLd, websiteJsonLd]).replace(
+  /</g,
+  "\\u003c"
+);
+
 export default function RootLayout({ children }: RootLayoutProps) {
   return (
     <html
@@ -90,7 +103,7 @@ export default function RootLayout({ children }: RootLayoutProps) {
       <head>
         <script
           type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(personJsonLd) }}
+          dangerouslySetInnerHTML={{ __html: structuredDataJson }}
         />
       </head>
       <body suppressHydrationWarning>

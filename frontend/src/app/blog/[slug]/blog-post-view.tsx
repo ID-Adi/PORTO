@@ -34,13 +34,20 @@ function extractTOC(markdown: string): TOCItemType[] {
   const slugger = new GithubSlugger();
   // Lacak code fence agar baris komentar `## ...` di dalam blok ``` (umum di
   // contoh bash/yaml) tidak ikut jadi item TOC dengan anchor yang tak ada.
-  let inFence = false;
+  let fence: { marker: "`" | "~"; length: number } | null = null;
   for (const line of markdown.split(/\r?\n/)) {
-    if (/^\s*(```|~~~)/.test(line)) {
-      inFence = !inFence;
+    const fenceMatch = /^ {0,3}(`{3,}|~{3,})/.exec(line);
+    if (fenceMatch) {
+      const marker = fenceMatch[1][0] as "`" | "~";
+      const length = fenceMatch[1].length;
+      if (!fence) {
+        fence = { marker, length };
+      } else if (fence.marker === marker && length >= fence.length) {
+        fence = null;
+      }
       continue;
     }
-    if (inFence) continue;
+    if (fence) continue;
     const match = /^(#{2,4})\s+(.+)$/.exec(line);
     if (!match) continue;
     const depth = match[1].length;
@@ -109,6 +116,12 @@ const isDiagramBlock = (text: string, className?: string) => {
   );
 };
 
+const toValidDate = (value: string | Date | null | undefined) => {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
 export function BlogPostView({
   slug,
   initialPost,
@@ -149,6 +162,8 @@ export function BlogPostView({
     );
   }
 
+  const displayDate = toValidDate(post.publishedAt ?? post.createdAt);
+
   return (
     <SiteShell>
       <div className="page-frame border-x border-(--line)">
@@ -169,19 +184,17 @@ export function BlogPostView({
             <div className="flex items-start justify-between gap-3">
               <div className="flex min-w-0 items-center gap-1.5 font-mono text-[11px] text-(--muted-foreground)">
                 <Calendar className="size-3 shrink-0" />
-                <time
-                  dateTime={new Date(
-                    post.publishedAt ?? post.createdAt,
-                  ).toISOString()}
-                >
-                  {new Date(
-                    post.publishedAt ?? post.createdAt,
-                  ).toLocaleDateString("id-ID", {
-                    year: "numeric",
-                    month: "long",
-                    day: "numeric",
-                  })}
-                </time>
+                {displayDate ? (
+                  <time dateTime={displayDate.toISOString()}>
+                    {displayDate.toLocaleDateString("id-ID", {
+                      year: "numeric",
+                      month: "long",
+                      day: "numeric",
+                    })}
+                  </time>
+                ) : (
+                  <span>Tanggal tidak tersedia</span>
+                )}
               </div>
               {/* Share artikel */}
               <ShareMenu
