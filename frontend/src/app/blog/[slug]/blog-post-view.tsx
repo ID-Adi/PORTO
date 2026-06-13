@@ -72,7 +72,7 @@ const rehypePlugins = [
     },
   ],
   // rehype-highlight v7 otomatis melewati bahasa yang tak dikenal.
-  [rehypeHighlight, { detect: true }],
+  [rehypeHighlight, { detect: true, plainText: ["txt", "text", "plain"] }],
 ] as React.ComponentProps<typeof ReactMarkdown>["rehypePlugins"];
 
 const getPlainText = (children: ReactNode): string => {
@@ -114,6 +114,19 @@ const isDiagramBlock = (text: string, className?: string) => {
     /[┌┐└┘├┤─│▶→←↔]/.test(text) ||
     /\[[^\]]+\]\s*(-->|->|=>|→)\s*\[[^\]]+\]/.test(text)
   );
+};
+
+const getCodeLanguage = (className?: string) => {
+  const match = /(?:^|\s)(?:language|lang)-([^\s]+)/.exec(className ?? "");
+  return match?.[1]?.toUpperCase() ?? null;
+};
+
+const isBlockCode = (className?: string) =>
+  Boolean(className?.match(/(?:^|\s)(?:hljs|language-[^\s]+|lang-[^\s]+)/));
+
+const formatCodeLabel = (language: string | null, diagram: boolean) => {
+  if (diagram) return "ASCII / Flow Diagram";
+  return language ? `Code · ${language}` : "Code";
 };
 
 const toValidDate = (value: string | Date | null | undefined) => {
@@ -324,15 +337,28 @@ export function BlogPostView({
                           {children}
                         </blockquote>
                       ),
-                      code: ({ children, className, ...props }) => (
-                        <code
-                          {...props}
-                          className={`${className ?? ""} rounded-none bg-(--muted)/45 px-1 py-0.5 font-mono text-[12px] text-(--foreground)`}
-                        >
-                          {children}
-                        </code>
-                      ),
-                      pre: ({ children, ...props }) => {
+                      code: ({ children, className, node: _node, ...props }) => {
+                        if (isBlockCode(className)) {
+                          return (
+                            <code
+                              {...props}
+                              className={`${className ?? ""} block bg-transparent p-0 font-mono text-[12px] leading-relaxed text-(--foreground)`}
+                            >
+                              {children}
+                            </code>
+                          );
+                        }
+
+                        return (
+                          <code
+                            {...props}
+                            className="rounded-none bg-(--muted)/45 px-1 py-0.5 font-mono text-[12px] text-(--foreground)"
+                          >
+                            {children}
+                          </code>
+                        );
+                      },
+                      pre: ({ children, node: _node, ...props }) => {
                         const codeEl = Array.isArray(children)
                           ? children.find(isValidElement)
                           : children;
@@ -343,28 +369,33 @@ export function BlogPostView({
                           ? codeEl.props.className
                           : undefined;
                         const diagram = isDiagramBlock(text, className);
+                        const language = getCodeLanguage(className);
+                        const label = formatCodeLabel(language, diagram);
 
                         return (
                           <div
-                            className={`not-prose group/code relative my-7 overflow-hidden border border-(--line) bg-(--surface) ${diagram ? "surface-dots" : ""}`}
+                            className={`not-prose blog-code-block group/code relative my-7 overflow-hidden border border-(--line) bg-(--surface) ${diagram ? "surface-dots" : ""}`}
                           >
-                            {diagram ? (
-                              <div className="border-b border-(--line) bg-(--muted)/35 px-3 py-2 font-mono text-[10px] tracking-[0.16em] text-(--muted-foreground) uppercase">
-                                ASCII / Flow Diagram
+                            <div className="flex min-h-10 items-center justify-between gap-3 border-b border-(--line) bg-(--muted)/25 px-3 py-2">
+                              <div className="flex min-w-0 items-center gap-2">
+                                <span className="size-1.5 shrink-0 bg-(--foreground)" />
+                                <span className="truncate font-mono text-[10px] tracking-[0.18em] text-(--muted-foreground) uppercase">
+                                  {label}
+                                </span>
                               </div>
-                            ) : null}
+                              <CopyButton
+                                className="size-7 shrink-0 border border-(--line) bg-(--background) opacity-70 transition-opacity hover:opacity-100"
+                                size="icon"
+                                variant="ghost"
+                                text={() => text}
+                              />
+                            </div>
                             <pre
                               {...props}
                               className={`${diagram ? "min-w-max" : ""} overflow-x-auto bg-transparent p-4 font-mono text-[12px] leading-relaxed text-(--foreground)`}
                             >
                               {children}
                             </pre>
-                            <CopyButton
-                              className="absolute top-2 right-2 size-7 opacity-0 transition-opacity group-hover/code:opacity-100"
-                              size="icon"
-                              variant="ghost"
-                              text={() => text}
-                            />
                           </div>
                         );
                       },

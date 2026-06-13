@@ -785,6 +785,21 @@ a {
   color: var(--foreground);
   display: block;
 }
+.prose .blog-code-block pre {
+  margin: 0;
+  border: 0;
+  background: transparent;
+  padding: 1rem;
+}
+.prose .blog-code-block code,
+.prose .blog-code-block code.hljs {
+  background: transparent;
+  padding: 0;
+  color: var(--foreground);
+}
+.prose .blog-code-block .hljs {
+  background: transparent;
+}
 
 /* --- LIGHT palette (default) --- */
 .hljs-comment,

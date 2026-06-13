@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { type CSSProperties, useEffect, useMemo, useState } from "react";
 import {
   Download,
   FileImage,
@@ -11,7 +11,6 @@ import {
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { BACKEND_URL } from "@/lib/backend-url";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
@@ -618,11 +617,13 @@ export function ImageConverterCard() {
           </form>
         </section>
 
-        <aside className="flex min-h-full w-full min-w-0 flex-col p-4 sm:p-5 lg:w-[320px] lg:shrink-0">
+        <aside className="flex min-h-full w-full min-w-0 flex-col p-4 sm:p-5 lg:w-[360px] lg:shrink-0 xl:w-[384px]">
           <div className="grid min-w-0 gap-4">
-            <div>
-              <p className="profile-kicker">Output format</p>
-              <div className="mt-2 grid grid-cols-2 gap-2">
+            <div className="border border-(--line) bg-(--background)">
+              <div className="border-b border-(--line) px-3 py-2.5">
+                <p className="profile-kicker">Output format</p>
+              </div>
+              <div className="grid min-w-0 grid-cols-2">
                 {(["webp", "jpeg"] as const).map((format) => {
                   const active = session.format === format;
                   return (
@@ -642,10 +643,10 @@ export function ImageConverterCard() {
                         }))
                       }
                       className={cn(
-                        "border px-3 py-2 text-center font-mono text-[11px] tracking-[0.16em] uppercase transition-colors",
+                        "min-w-0 border-r border-(--line) px-3 py-3 text-center font-mono text-[11px] tracking-[0.16em] uppercase transition-colors last:border-r-0 focus-visible:z-10 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-(--foreground)",
                         active
-                          ? "border-(--foreground) bg-(--foreground) text-(--background)"
-                          : "border-(--line) text-(--muted-foreground) hover:text-(--foreground)",
+                          ? "bg-(--foreground) text-(--background)"
+                          : "text-(--muted-foreground) hover:bg-(--muted)/25 hover:text-(--foreground)",
                       )}
                     >
                       {outputLabel(format)}
@@ -655,21 +656,28 @@ export function ImageConverterCard() {
               </div>
             </div>
 
-            <div>
+            <div className="border border-(--line) bg-(--background) p-3">
               <label
                 htmlFor="converter-quality"
-                className="flex items-center justify-between font-mono text-[10px] tracking-[0.2em] text-(--muted-foreground) uppercase"
+                className="flex items-center justify-between gap-3 font-mono text-[10px] tracking-[0.2em] text-(--muted-foreground) uppercase"
               >
                 <span>Quality</span>
-                <span>{session.quality}%</span>
+                <span className="border border-(--line) px-2 py-1 text-(--foreground) tabular-nums tracking-[0.12em]">
+                  {session.quality}%
+                </span>
               </label>
-              <Input
+              <input
                 id="converter-quality"
                 type="range"
                 min={1}
                 max={100}
                 step={1}
                 value={session.quality}
+                style={
+                  {
+                    "--converter-quality": `${session.quality}%`,
+                  } as CSSProperties
+                }
                 onChange={(event) =>
                   setSession((prev) => ({
                     ...prev,
@@ -681,8 +689,12 @@ export function ImageConverterCard() {
                     outputBytes: prev.status === "success" ? null : prev.outputBytes,
                   }))
                 }
-                className="mt-2"
+                className="mt-4 h-8 w-full cursor-pointer appearance-none bg-transparent focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 [&::-moz-range-progress]:h-px [&::-moz-range-progress]:bg-(--foreground) [&::-moz-range-thumb]:size-4 [&::-moz-range-thumb]:rounded-none [&::-moz-range-thumb]:border [&::-moz-range-thumb]:border-(--foreground) [&::-moz-range-thumb]:bg-(--background) [&::-moz-range-thumb]:shadow-none [&::-moz-range-track]:h-px [&::-moz-range-track]:bg-(--line) [&::-webkit-slider-runnable-track]:h-px [&::-webkit-slider-runnable-track]:bg-[linear-gradient(to_right,var(--foreground)_0,var(--foreground)_var(--converter-quality),var(--line)_var(--converter-quality),var(--line)_100%)] [&::-webkit-slider-thumb]:mt-[-7px] [&::-webkit-slider-thumb]:size-4 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:border [&::-webkit-slider-thumb]:border-(--foreground) [&::-webkit-slider-thumb]:bg-(--background) [&::-webkit-slider-thumb]:shadow-none focus-visible:[&::-moz-range-thumb]:ring-2 focus-visible:[&::-moz-range-thumb]:ring-(--ring)/40 focus-visible:[&::-webkit-slider-thumb]:ring-2 focus-visible:[&::-webkit-slider-thumb]:ring-(--ring)/40"
               />
+              <div className="mt-2 flex items-center justify-between font-mono text-[10px] tracking-[0.14em] text-(--muted-foreground) uppercase">
+                <span>1</span>
+                <span>100</span>
+              </div>
             </div>
 
             <div className="border border-(--line) p-3">
