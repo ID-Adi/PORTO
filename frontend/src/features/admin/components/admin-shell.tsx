@@ -70,6 +70,7 @@ function NavList({
             key={item.href}
             href={item.href}
             onClick={onNavigate}
+            aria-current={active ? "page" : undefined}
             className={cn(
               "flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
               active
@@ -164,33 +165,40 @@ export function AdminShell({
                 <Menu className="size-5" />
               </Button>
             </SheetTrigger>
-            <SheetContent side="left" className="w-[86vw] max-w-72 p-4">
-              <div className="mb-4 flex items-start justify-between gap-3 pr-8">
-                <SheetTitle className="min-w-0 text-(--primary)">
-                  PORTO Admin
-                </SheetTitle>
-                <HomeBackButton onNavigate={() => setMobileOpen(false)} />
-              </div>
-              <NavList
-                pathname={pathname}
-                onNavigate={() => setMobileOpen(false)}
-              />
-              <SheetFooter className="border-t border-(--sidebar-border) px-0 pb-0">
-                <div className="grid gap-2">
-                  <div>
-                    <p className="text-xs text-(--muted-foreground)">Signed in as</p>
-                    <p className="mt-1 break-all text-sm font-medium">{email}</p>
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleLogout}
-                    className="w-full justify-start gap-2"
-                  >
-                    <LogOut className="size-4" /> Sign out
-                  </Button>
+            <SheetContent
+              side="left"
+              className="admin-theme w-[86vw] max-w-72 gap-0 p-0"
+            >
+              <div className="flex h-full flex-col bg-(--sidebar) p-4 text-(--sidebar-foreground)">
+                <div className="mb-4 flex items-start justify-between gap-3 pr-8">
+                  <SheetTitle className="min-w-0 text-(--primary)">
+                    PORTO Admin
+                  </SheetTitle>
+                  <HomeBackButton onNavigate={() => setMobileOpen(false)} />
                 </div>
-              </SheetFooter>
+                <NavList
+                  pathname={pathname}
+                  onNavigate={() => setMobileOpen(false)}
+                />
+                <SheetFooter className="border-t border-(--sidebar-border) px-0 pb-0">
+                  <div className="grid gap-2">
+                    <div>
+                      <p className="text-xs text-(--muted-foreground)">
+                        Signed in as
+                      </p>
+                      <p className="mt-1 break-all text-sm font-medium">{email}</p>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleLogout}
+                      className="w-full justify-start gap-2"
+                    >
+                      <LogOut className="size-4" /> Sign out
+                    </Button>
+                  </div>
+                </SheetFooter>
+              </div>
             </SheetContent>
           </Sheet>
           <div className="min-w-0 truncate text-sm font-medium text-(--foreground)">
