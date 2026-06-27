@@ -22,6 +22,7 @@ type AiSettingsState = {
   canvasAgentProvider: "gemini" | "vertex" | "openrouter" | "local" | "9router";
   canvasAgentSystemPrompt: string;
   canvasAgentEnabled: boolean;
+  nineRouterImageModels: string[];
 };
 
 const empty: AiSettingsState = {
@@ -33,6 +34,7 @@ const empty: AiSettingsState = {
   canvasAgentProvider: "gemini",
   canvasAgentSystemPrompt: "",
   canvasAgentEnabled: false,
+  nineRouterImageModels: [],
 };
 
 function parseVoiceOptions(value: string) {
@@ -49,6 +51,10 @@ function parseVoiceOptions(value: string) {
 export function AiSettingsForm() {
   const utils = trpc.useUtils();
   const query = trpc.aiSettings.getTtsConfig.useQuery();
+  const nineRouterModelsQuery = trpc.aiSettings.listNineRouterModels.useQuery(undefined, {
+    enabled: Boolean(query.data?.nineRouter.hasApiKey),
+    retry: false,
+  });
   const [state, setState] = useState<AiSettingsState>(empty);
 
   useEffect(() => {
@@ -63,6 +69,7 @@ export function AiSettingsForm() {
       canvasAgentProvider: query.data.canvasAgentProvider as AiSettingsState["canvasAgentProvider"],
       canvasAgentSystemPrompt: query.data.canvasAgentSystemPrompt ?? "",
       canvasAgentEnabled: query.data.canvasAgentEnabled,
+      nineRouterImageModels: query.data.nineRouter.imageModels ?? [],
     });
   }, [query.data]);
 
@@ -79,6 +86,15 @@ export function AiSettingsForm() {
     value: AiSettingsState[K],
   ) {
     setState((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function toggleNineRouterImageModel(modelId: string, checked: boolean) {
+    setState((prev) => ({
+      ...prev,
+      nineRouterImageModels: checked
+        ? Array.from(new Set([...prev.nineRouterImageModels, modelId]))
+        : prev.nineRouterImageModels.filter((id) => id !== modelId),
+    }));
   }
 
   function onSubmit(event: React.FormEvent) {
@@ -98,6 +114,7 @@ export function AiSettingsForm() {
       canvasAgentProvider: state.canvasAgentProvider,
       canvasAgentModel: state.canvasAgentModel.trim(),
       canvasAgentSystemPrompt: state.canvasAgentSystemPrompt.trim() || null,
+      nineRouterImageModels: state.nineRouterImageModels,
     });
   }
 
@@ -236,6 +253,57 @@ export function AiSettingsForm() {
               hint="OpenAI-compatible endpoint dari 9router, default http://localhost:20128/v1."
               status={query.data.nineRouter}
             />
+
+            <Field
+              label="9Router image models"
+              htmlFor="nineRouterImageModels"
+              hint="Centang model 9Router yang boleh muncul di /tools Generate Image. Kosong = tidak ada model yang ditampilkan."
+            >
+              <div id="nineRouterImageModels" className="max-h-72 overflow-y-auto border border-(--line)">
+                {nineRouterModelsQuery.isLoading ? (
+                  <div className="px-3 py-4 text-sm text-(--muted-foreground)">
+                    Loading 9Router models...
+                  </div>
+                ) : nineRouterModelsQuery.error ? (
+                  <div className="px-3 py-4 text-sm text-rose-500">
+                    {nineRouterModelsQuery.error.message}
+                  </div>
+                ) : (nineRouterModelsQuery.data?.models.length ?? 0) === 0 ? (
+                  <div className="px-3 py-4 text-sm text-(--muted-foreground)">
+                    Belum ada model. Simpan/test 9Router API key terlebih dulu.
+                  </div>
+                ) : (
+                  <div className="divide-y divide-(--line)">
+                    {nineRouterModelsQuery.data?.models.map((model) => {
+                      const checked = state.nineRouterImageModels.includes(model.id);
+                      return (
+                        <label
+                          key={model.id}
+                          className="flex cursor-pointer items-start gap-3 px-3 py-2 text-sm hover:bg-(--muted)/30"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(event) =>
+                              toggleNineRouterImageModel(model.id, event.target.checked)
+                            }
+                            className="mt-1"
+                          />
+                          <span className="min-w-0">
+                            <span className="block truncate font-mono text-[11px]">
+                              {model.id}
+                            </span>
+                            <span className="block truncate text-xs text-(--muted-foreground)">
+                              {model.name}
+                            </span>
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </Field>
           </>
         ) : null}
       </div>

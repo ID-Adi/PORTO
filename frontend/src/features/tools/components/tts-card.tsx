@@ -39,7 +39,7 @@ type TtsSpeaker = {
 };
 
 type TtsFormat = "wav" | "mp3";
-type TtsProviderId = "gemini" | "vertex" | "openrouter";
+type TtsProviderId = "gemini" | "vertex" | "openrouter" | "9router";
 
 type TtsSession = {
   provider: TtsProviderId;
@@ -103,6 +103,7 @@ const PROVIDER_LABEL: Record<TtsProviderId, string> = {
   gemini: "Gemini",
   vertex: "Vertex AI",
   openrouter: "OpenRouter",
+  "9router": "9Router",
 };
 
 function readRecord(value: unknown): Record<string, unknown> | null {
@@ -178,7 +179,13 @@ function defaultSession(
 }
 
 function normalizeProvider(value: unknown): TtsProviderId {
-  return value === "vertex" || value === "openrouter" ? value : "gemini";
+  return value === "vertex" || value === "openrouter" || value === "9router"
+    ? value
+    : "gemini";
+}
+
+function providerStatusKey(provider: TtsProviderId) {
+  return provider === "9router" ? "nineRouter" : provider;
 }
 
 function readSession(defaultVoice: string, voices: readonly string[]): TtsSession {
@@ -542,12 +549,12 @@ export function TtsCard() {
 
   const availableProviders = useMemo<TtsProviderId[]>(() => {
     if (!providerStatus) return [];
-    return (["gemini", "vertex", "openrouter"] as TtsProviderId[]).filter(
-      (p) => providerStatus[p]?.hasApiKey,
+    return (["gemini", "vertex", "openrouter", "9router"] as TtsProviderId[]).filter(
+      (p) => providerStatus[providerStatusKey(p)]?.hasApiKey,
     );
   }, [providerStatus]);
 
-  const providerReady = Boolean(providerStatus?.[session.provider]?.hasApiKey);
+  const providerReady = Boolean(providerStatus?.[providerStatusKey(session.provider)]?.hasApiKey);
 
   // Daftar model live untuk provider terpilih.
   const modelsQuery = trpc.tools.listTtsModels.useQuery(
@@ -560,7 +567,7 @@ export function TtsCard() {
     [modelsQuery.data?.voices, config?.voiceOptions],
   );
   const defaultVoice = voiceOptions[0] ?? "Kore";
-  const isSingleVoice = session.provider === "openrouter";
+  const isSingleVoice = session.provider === "openrouter" || session.provider === "9router";
 
   // Pastikan provider terpilih punya key; jika tidak, pindah ke yang tersedia.
   useEffect(() => {

@@ -60,6 +60,8 @@ type PersistedSession = {
   aspectRatio: string;
   imageProvider: ImageProvider;
   imageModel: string;
+  videoProvider: "9router" | "n8n";
+  videoModel: string;
   // Optional jobId yang akan diisi backend/N8N saat integrasi.
   jobId: string | null;
   // Untuk video: row id di tool_generation untuk polling getVideoStatus.
@@ -109,8 +111,10 @@ function defaultSession(kind: GenerateKind): PersistedSession {
     resultUrl: null,
     error: null,
     aspectRatio: ASPECT_OPTIONS[kind][0].value,
-    imageProvider: "local",
+    imageProvider: "9router",
     imageModel: "",
+    videoProvider: "9router",
+    videoModel: "",
     jobId: null,
     rowId: null,
     firstFrame: null,
@@ -167,8 +171,10 @@ function readSession(kind: GenerateKind): PersistedSession {
       imageProvider:
         parsed.imageProvider === "9router" || parsed.imageProvider === "n8n"
           ? parsed.imageProvider
-          : "local",
+          : "9router",
       imageModel: parsed.imageModel ?? "",
+      videoProvider: parsed.videoProvider === "n8n" ? "n8n" : "9router",
+      videoModel: parsed.videoModel ?? "",
       jobId: parsed.jobId ?? null,
       rowId: parsed.rowId ?? null,
       firstFrame: parsed.firstFrame ?? null,
@@ -235,7 +241,7 @@ const COPY: Record<
     title: "Generate Image",
     sup: "v1",
     description:
-      "Tulis prompt deskriptif. Default render via backend lokal dengan dukungan referensi; N8N tetap tersedia sebagai mode legacy.",
+      "Tulis prompt deskriptif. Default render via 9Router dengan model yang difilter dari AI Settings; N8N tetap tersedia sebagai mode legacy.",
     placeholder:
       "Contoh: ilustrasi editorial monokrom, garis tipis, komposisi rule-of-thirds, atmosphere senja...",
     icon: ImageIcon,
@@ -410,6 +416,10 @@ export function GenerateCard({ kind }: GenerateCardProps) {
     { provider: session.imageProvider === "9router" ? "9router" : "local" },
     { enabled: kind === "image" && session.imageProvider !== "n8n", retry: false },
   );
+  const videoModelsQuery = trpc.tools.listImageModels.useQuery(
+    { provider: "9router" },
+    { enabled: kind === "video" && session.videoProvider === "9router", retry: false },
+  );
 
   useEffect(() => {
     // Hidrasi state dari localStorage pasca-mount; tidak bisa di-init di
@@ -469,6 +479,22 @@ export function GenerateCard({ kind }: GenerateCardProps) {
       prev.status === "generating" || prev.imageModel === model
         ? prev
         : { ...prev, imageModel: model },
+    );
+  }, []);
+
+  const setVideoProvider = useCallback((provider: "9router" | "n8n") => {
+    setSession((prev) =>
+      prev.status === "generating" || prev.videoProvider === provider
+        ? prev
+        : { ...prev, videoProvider: provider, videoModel: "" },
+    );
+  }, []);
+
+  const setVideoModel = useCallback((model: string) => {
+    setSession((prev) =>
+      prev.status === "generating" || prev.videoModel === model
+        ? prev
+        : { ...prev, videoModel: model },
     );
   }, []);
 
@@ -829,6 +855,10 @@ export function GenerateCard({ kind }: GenerateCardProps) {
           toast.error("Prompt tidak boleh kosong");
           return;
         }
+        if (session.imageProvider === "9router" && !session.imageModel) {
+          toast.error("Pilih model 9Router dari daftar AI Settings");
+          return;
+        }
 
         const startedAt = Date.now();
         const aspectRatioSnapshot = session.aspectRatio;
@@ -891,6 +921,10 @@ export function GenerateCard({ kind }: GenerateCardProps) {
         toast.error("Upload minimal First Frame untuk image-to-video");
         return;
       }
+      if (session.videoProvider === "9router" && !session.videoModel) {
+        toast.error("Pilih model 9Router untuk generate video");
+        return;
+      }
       const lastFrame = session.lastFrame;
 
       const startedAt = Date.now();
@@ -918,6 +952,8 @@ export function GenerateCard({ kind }: GenerateCardProps) {
           lastFrame: lastFrame
             ? { base64: lastFrame.base64, mimeType: lastFrame.mimeType }
             : undefined,
+          provider: session.videoProvider,
+          model: session.videoModel.trim() || undefined,
         });
         // Tetap "generating" — useEffect polling yang akan flip ke success/error.
         setSession((prev) => ({
@@ -951,6 +987,8 @@ export function GenerateCard({ kind }: GenerateCardProps) {
       session.references,
       session.imageProvider,
       session.imageModel,
+      session.videoProvider,
+      session.videoModel,
       kind,
       generateImage,
       generateVideo,
@@ -1329,18 +1367,90 @@ export function GenerateCard({ kind }: GenerateCardProps) {
                     </div>
                   ) : (
                     <Select
-                      value={session.imageModel || "__default"}
-                      disabled={isGenerating || imageModelsQuery.isLoading}
-                      onValueChange={(value) =>
-                        setImageModel(value === "__default" ? "" : value)
+                      value={
+                        session.imageModel ||
+                        (session.imageProvider === "local" ? "__default" : "__select")
                       }
+                      disabled={isGenerating || imageModelsQuery.isLoading}
+                      onValueChange={(value) => {
+                        if (value === "__select") return;
+                        setImageModel(value === "__default" ? "" : value);
+                      }}
                     >
                       <SelectTrigger className="h-8 rounded-none border-(--line) font-mono text-[11px]">
                         <SelectValue placeholder="Default model" />
                       </SelectTrigger>
                       <SelectContent className="rounded-none border-(--line)">
-                        <SelectItem value="__default">Default image model</SelectItem>
+                        {session.imageProvider === "9router" && !session.imageModel ? (
+                          <SelectItem value="__select" disabled>
+                            Pilih model dari AI Settings
+                          </SelectItem>
+                        ) : null}
+                        {session.imageProvider === "local" ? (
+                          <SelectItem value="__default">Default image model</SelectItem>
+                        ) : null}
                         {(imageModelsQuery.data?.models ?? []).map((model) => (
+                          <SelectItem key={model.id} value={model.id}>
+                            {model.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+              </fieldset>
+            ) : null}
+
+            {kind === "video" ? (
+              <fieldset
+                disabled={isGenerating}
+                className="grid gap-3 disabled:cursor-not-allowed sm:grid-cols-2"
+              >
+                <div className="grid gap-2">
+                  <div className="font-mono text-[10px] tracking-[0.2em] text-(--muted-foreground) uppercase">
+                    Engine
+                  </div>
+                  <Select
+                    value={session.videoProvider}
+                    disabled={isGenerating}
+                    onValueChange={(value) => setVideoProvider(value as "9router" | "n8n")}
+                  >
+                    <SelectTrigger className="h-8 rounded-none border-(--line) font-mono text-[11px] uppercase">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-none border-(--line)">
+                      <SelectItem value="9router">9Router</SelectItem>
+                      <SelectItem value="n8n">N8N legacy</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid gap-2">
+                  <div className="font-mono text-[10px] tracking-[0.2em] text-(--muted-foreground) uppercase">
+                    Model
+                  </div>
+                  {session.videoProvider === "n8n" ? (
+                    <div className="flex h-8 items-center border border-(--line) px-3 font-mono text-[11px] text-(--muted-foreground) uppercase">
+                      workflow default
+                    </div>
+                  ) : (
+                    <Select
+                      value={session.videoModel || "__select"}
+                      disabled={isGenerating || videoModelsQuery.isLoading}
+                      onValueChange={(value) => {
+                        if (value === "__select") return;
+                        setVideoModel(value);
+                      }}
+                    >
+                      <SelectTrigger className="h-8 rounded-none border-(--line) font-mono text-[11px]">
+                        <SelectValue placeholder="Pilih model video" />
+                      </SelectTrigger>
+                      <SelectContent className="rounded-none border-(--line)">
+                        {!session.videoModel ? (
+                          <SelectItem value="__select" disabled>
+                            Pilih model 9Router
+                          </SelectItem>
+                        ) : null}
+                        {(videoModelsQuery.data?.models ?? []).map((model) => (
                           <SelectItem key={model.id} value={model.id}>
                             {model.name}
                           </SelectItem>
@@ -1510,8 +1620,10 @@ export function GenerateCard({ kind }: GenerateCardProps) {
                   disabled={
                     isGenerating ||
                     (kind === "image"
-                      ? !session.prompt.trim()
-                      : !session.firstFrame)
+                      ? !session.prompt.trim() ||
+                        (session.imageProvider === "9router" && !session.imageModel)
+                      : !session.firstFrame ||
+                        (session.videoProvider === "9router" && !session.videoModel))
                   }
                   className="h-8 gap-1.5 px-3 font-mono text-[11px] tracking-wide"
                 >

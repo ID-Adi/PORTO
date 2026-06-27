@@ -15,6 +15,7 @@ import {
 } from "../../db/schema/index.js";
 import { decryptSecret, encryptSecret } from "../../lib/encrypted-secret.js";
 import {
+  listProviderModels,
   normalizeBaseUrl,
   testProvider,
   type ListModelsArgs,
@@ -46,6 +47,7 @@ const ttsConfigInput = z.object({
   canvasAgentProvider: AGENT_PROVIDER.optional().default("gemini"),
   canvasAgentModel: z.string().min(1).max(160).optional().default(DEFAULT_CANVAS_AGENT_MODEL),
   canvasAgentSystemPrompt: z.string().max(8000).optional().nullable(),
+  nineRouterImageModels: z.array(z.string().min(1).max(200)).max(100).optional().default([]),
 });
 
 // Kredensial per provider (dipakai untuk Save & Test di modal).
@@ -139,6 +141,7 @@ function publicConfig(row: AiToolSettingsRow) {
       last4: row.nineRouterApiKeyLast4,
       baseUrl: row.nineRouterBaseUrl,
       enabled: row.provider9routerEnabled,
+      imageModels: row.nineRouterImageModels,
     },
     // Kompat lama.
     ttsApiKeyLast4: row.ttsApiKeyLast4,
@@ -321,6 +324,32 @@ export const aiSettingsRouter = router({
     return publicConfig(await getOrCreateSettings());
   }),
 
+  listNineRouterModels: protectedProcedure.query(async () => {
+    const row = await getOrCreateSettings();
+    const apiKey = row.nineRouterApiKeyEncrypted
+      ? decryptSecret(row.nineRouterApiKeyEncrypted)
+      : "";
+    if (!apiKey) {
+      throw new Error("9Router API key belum dikonfigurasi");
+    }
+    try {
+      return {
+        models: await listProviderModels({
+          provider: "9router",
+          apiKey,
+          baseUrl: row.nineRouterBaseUrl || NINE_ROUTER_DEFAULT_BASE_URL,
+        }),
+      };
+    } catch (err) {
+      throw new Error(
+        friendlyNineRouterConnectionError({
+          baseUrl: normalizeBaseUrl(row.nineRouterBaseUrl || NINE_ROUTER_DEFAULT_BASE_URL),
+          raw: err instanceof Error ? err.message : "Gagal memuat model 9Router",
+        }),
+      );
+    }
+  }),
+
   updateTtsConfig: protectedProcedure
     .input(ttsConfigInput)
     .mutation(async ({ input }) => {
@@ -337,6 +366,7 @@ export const aiSettingsRouter = router({
           canvasAgentProvider: input.canvasAgentProvider,
           canvasAgentModel: input.canvasAgentModel,
           canvasAgentSystemPrompt: input.canvasAgentSystemPrompt?.trim() || null,
+          nineRouterImageModels: Array.from(new Set(input.nineRouterImageModels.map((m) => m.trim()).filter(Boolean))),
           updatedAt: new Date(),
         })
         .where(eq(aiToolSettings.id, existing.id))

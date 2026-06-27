@@ -41,7 +41,7 @@ export const DEFAULT_CANVAS_AGENT_MODEL = "gemini-3.1-flash";
 // 9router: AI router self-hosted dengan endpoint OpenAI-compatible.
 export const NINE_ROUTER_DEFAULT_BASE_URL = "http://localhost:20128/v1";
 
-export type TtsProvider = "gemini" | "vertex" | "openrouter";
+export type TtsProvider = "gemini" | "vertex" | "openrouter" | "9router";
 // Canvas Agent / agent CLI mendukung lebih banyak provider dari TTS.
 export type CanvasAgentProviderId =
   | "gemini"
@@ -69,6 +69,10 @@ export const aiToolSettings = pgTable("ai_tool_settings", {
   nineRouterBaseUrl: text("nine_router_base_url")
     .notNull()
     .default(NINE_ROUTER_DEFAULT_BASE_URL),
+  nineRouterImageModels: jsonb("nine_router_image_models")
+    .$type<string[]>()
+    .notNull()
+    .default([]),
   // Flag enable/disable per provider credential (global). Disabled = tidak boleh
   // dipakai walau credential valid. Tidak menghapus credential.
   providerGeminiEnabled: boolean("provider_gemini_enabled")

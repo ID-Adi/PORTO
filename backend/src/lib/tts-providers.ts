@@ -57,7 +57,7 @@ export function voicesFor(
   provider: TtsProvider,
   geminiVoiceOptions: string[],
 ): string[] {
-  if (provider === "openrouter") return [...OPENAI_TTS_VOICES];
+  if (provider === "openrouter" || provider === "9router") return [...OPENAI_TTS_VOICES];
   return geminiVoiceOptions.length > 0
     ? geminiVoiceOptions
     : [...DEFAULT_TTS_VOICES];

@@ -28,6 +28,7 @@ import { callOpenAiAudio } from "../../lib/tts-openai-audio.js";
 import {
   isRetryableTtsStatus,
   listProviderModels,
+  normalizeBaseUrl,
   OPENROUTER_BASE_URL,
   TtsError,
   vertexAccessToken,
@@ -42,7 +43,7 @@ import {
 } from "../../lib/uploads-dir.js";
 import { authenticatedProcedure, router } from "../init.js";
 
-type TtsProviderId = "gemini" | "vertex" | "openrouter";
+type TtsProviderId = "gemini" | "vertex" | "openrouter" | "9router";
 
 const KIND = z.enum(["image", "video", "tts", "image-converter"]);
 
@@ -390,16 +391,19 @@ const generateImageInput = z.object({
   prompt: z.string().min(1).max(2000),
   aspectRatio: z.enum(IMAGE_ASPECT_RATIOS),
   references: z.array(framePayload).max(MAX_REFERENCES).optional().default([]),
-  provider: z.enum(IMAGE_GENERATION_PROVIDERS).optional().default("local"),
+  provider: z.enum(IMAGE_GENERATION_PROVIDERS).optional().default("9router"),
   model: z.string().max(160).optional(),
 });
 export type GenerateImageInput = z.infer<typeof generateImageInput>;
 
+const VIDEO_GENERATION_PROVIDERS = ["9router", "n8n"] as const;
 const generateVideoInput = z.object({
   prompt: z.string().max(2000).optional().default(""),
   aspectRatio: z.enum(VIDEO_ASPECT_RATIOS),
   firstFrame: framePayload,
   lastFrame: framePayload.optional(),
+  provider: z.enum(VIDEO_GENERATION_PROVIDERS).optional().default("9router"),
+  model: z.string().max(160).optional(),
 });
 
 type FramePayload = z.infer<typeof framePayload>;
@@ -409,7 +413,7 @@ const ttsSpeakerInput = z.object({
   voiceName: z.string().min(1).max(80),
 });
 
-const TTS_PROVIDER = z.enum(["gemini", "vertex", "openrouter"]);
+const TTS_PROVIDER = z.enum(["gemini", "vertex", "openrouter", "9router"]);
 
 const generateTtsInput = z.object({
   provider: TTS_PROVIDER.optional().default("gemini"),
@@ -683,10 +687,22 @@ async function generateImageWithProvider(args: {
     if (!settings.nineRouterApiKeyEncrypted) {
       throw new TRPCError({ code: "BAD_REQUEST", message: "9router API key belum dikonfigurasi" });
     }
+    if (!args.model) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Pilih model 9Router di AI Settings sebelum generate image.",
+      });
+    }
+    if (!(settings.nineRouterImageModels ?? []).includes(args.model)) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Model 9Router ini belum diizinkan untuk Generate Image di AI Settings.",
+      });
+    }
     return callOpenAiCompatibleImage({
       baseUrl: settings.nineRouterBaseUrl || NINE_ROUTER_DEFAULT_BASE_URL,
       apiKey: decryptSecret(settings.nineRouterApiKeyEncrypted),
-      model: modelOrDefault(args.model ?? undefined, "fe_oa_/gpt-5.5-image"),
+      model: args.model,
       prompt: args.prompt,
       aspectRatio: args.aspectRatio,
       references: args.references,
@@ -879,6 +895,8 @@ function fallbackTtsSettings(): Pick<
   | "ttsModel"
   | "ttsApiKeyEncrypted"
   | "openrouterApiKeyEncrypted"
+  | "nineRouterApiKeyEncrypted"
+  | "nineRouterBaseUrl"
   | "vertexServiceAccountEncrypted"
   | "vertexProjectId"
   | "vertexLocation"
@@ -894,6 +912,8 @@ function fallbackTtsSettings(): Pick<
     ttsModel: DEFAULT_TTS_MODEL,
     ttsApiKeyEncrypted: null,
     openrouterApiKeyEncrypted: null,
+    nineRouterApiKeyEncrypted: null,
+    nineRouterBaseUrl: NINE_ROUTER_DEFAULT_BASE_URL,
     vertexServiceAccountEncrypted: null,
     vertexProjectId: null,
     vertexLocation: "us-central1",
@@ -1138,11 +1158,8 @@ async function withTtsRetry<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 // Kredensial provider yang sudah didekripsi (bentuk = ListModelsArgs).
-// Provider "local" & "9router" hanya dipakai canvas agent, bukan jalur TTS ini.
-type ProviderCreds = Exclude<
-  ListModelsArgs,
-  { provider: "local" } | { provider: "9router" }
->;
+// Provider "local" tidak dipakai jalur TTS ini.
+type ProviderCreds = Exclude<ListModelsArgs, { provider: "local" }>;
 type AiToolSettingsLike = Awaited<ReturnType<typeof readTtsSettings>>;
 
 // Ambil + dekripsi kredensial provider dari settings; lempar bila belum diatur.
@@ -1156,6 +1173,7 @@ function resolveProviderCreds(
     gemini: settings.providerGeminiEnabled,
     vertex: settings.providerVertexEnabled,
     openrouter: settings.providerOpenrouterEnabled,
+    "9router": settings.provider9routerEnabled,
   };
   if (!enabledMap[provider]) {
     throw new TRPCError({
@@ -1184,6 +1202,19 @@ function resolveProviderCreds(
       apiKey: decryptSecret(settings.openrouterApiKeyEncrypted),
     };
   }
+  if (provider === "9router") {
+    if (!settings.nineRouterApiKeyEncrypted) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "9Router API key belum dikonfigurasi",
+      });
+    }
+    return {
+      provider,
+      apiKey: decryptSecret(settings.nineRouterApiKeyEncrypted),
+      baseUrl: settings.nineRouterBaseUrl || NINE_ROUTER_DEFAULT_BASE_URL,
+    };
+  }
   // vertex
   if (!settings.vertexServiceAccountEncrypted || !settings.vertexProjectId) {
     throw new TRPCError({
@@ -1192,7 +1223,7 @@ function resolveProviderCreds(
     });
   }
   return {
-    provider,
+    provider: "vertex",
     saJson: decryptSecret(settings.vertexServiceAccountEncrypted),
     projectId: settings.vertexProjectId,
     location: settings.vertexLocation,
@@ -1240,10 +1271,10 @@ async function runTtsJob(args: {
     let durationSeconds: number | undefined;
     let tokens: TtsTokens;
 
-    if (creds.provider === "openrouter") {
+    if (creds.provider === "openrouter" || creds.provider === "9router") {
       const result = await withTtsRetry(() =>
         callOpenAiAudio({
-          baseUrl: OPENROUTER_BASE_URL,
+          baseUrl: creds.provider === "9router" ? creds.baseUrl : OPENROUTER_BASE_URL,
           apiKey: creds.apiKey,
           model,
           voice: speakers[0]?.voiceName ?? "alloy",
@@ -1385,6 +1416,80 @@ function isRetryableVideoStatusError(error: string): boolean {
     /\bunavailable\b/i,
     /rate limit/i,
   ].some((pattern) => pattern.test(error));
+}
+
+type DirectVideoResponse = {
+  mimeType: string;
+  videoBase64: string;
+};
+
+async function callOpenAiCompatibleVideo(args: {
+  baseUrl: string;
+  apiKey: string;
+  model: string;
+  prompt: string;
+  aspectRatio: string;
+  firstFrame: FramePayload;
+  lastFrame?: FramePayload;
+}): Promise<DirectVideoResponse> {
+  const form = new FormData();
+  form.set("model", args.model);
+  form.set("prompt", args.prompt || "Generate a smooth video from the attached frame.");
+  form.set("aspect_ratio", args.aspectRatio);
+  form.set("response_format", "b64_json");
+  form.append(
+    "image",
+    new Blob([Buffer.from(args.firstFrame.base64, "base64")], { type: args.firstFrame.mimeType }),
+    `first-frame.${extensionFromMime(args.firstFrame.mimeType)}`,
+  );
+  if (args.lastFrame) {
+    form.append(
+      "image",
+      new Blob([Buffer.from(args.lastFrame.base64, "base64")], { type: args.lastFrame.mimeType }),
+      `end-frame.${extensionFromMime(args.lastFrame.mimeType)}`,
+    );
+  }
+
+  let res: Response;
+  try {
+    res = await fetch(`${normalizeBaseUrl(args.baseUrl)}/videos/generations`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${args.apiKey}` },
+      body: form,
+      signal: AbortSignal.timeout(180_000),
+    });
+  } catch (err) {
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: err instanceof Error ? err.message : "Gagal menghubungi 9Router video",
+    });
+  }
+  const contentType = res.headers.get("content-type") ?? "";
+  if (contentType.startsWith("video/")) {
+    const buffer = Buffer.from(await res.arrayBuffer());
+    return { mimeType: contentType.split(";")[0], videoBase64: buffer.toString("base64") };
+  }
+  const json = (await res.json().catch(() => ({}))) as {
+    data?: Array<{ b64_json?: string; url?: string }>;
+    error?: { message?: string };
+  };
+  if (!res.ok) {
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: json.error?.message ?? `9Router video HTTP ${res.status}`,
+    });
+  }
+  const first = json.data?.[0];
+  if (first?.b64_json) return { mimeType: "video/mp4", videoBase64: first.b64_json };
+  if (first?.url) {
+    const videoRes = await fetch(first.url, { signal: AbortSignal.timeout(180_000) });
+    const buffer = Buffer.from(await videoRes.arrayBuffer());
+    return {
+      mimeType: (videoRes.headers.get("content-type") ?? "video/mp4").split(";")[0],
+      videoBase64: buffer.toString("base64"),
+    };
+  }
+  throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "9Router tidak mengembalikan video" });
 }
 
 async function callN8nVideoStart(payload: {
@@ -1554,7 +1659,7 @@ export const toolsRouter = router({
   getImageGenerationConfig: authenticatedProcedure.query(async () => {
     const settings = await readImageSettings();
     return {
-      defaultProvider: "local" as const,
+      defaultProvider: "9router" as const,
       providers: {
         local: {
           enabled: Boolean(settings?.providerLocalEnabled),
@@ -1586,7 +1691,8 @@ export const toolsRouter = router({
             apiKey: decryptSecret(settings.nineRouterApiKeyEncrypted),
             baseUrl: settings.nineRouterBaseUrl || NINE_ROUTER_DEFAULT_BASE_URL,
           });
-          return { models };
+          const allowed = new Set(settings.nineRouterImageModels ?? []);
+          return { models: allowed.size > 0 ? models.filter((m) => allowed.has(m.id)) : [] };
         }
         if (!settings?.providerLocalEnabled || !settings.localBaseUrl) {
           throw new Error("Local LLM belum aktif atau belum dikonfigurasi");
@@ -1625,6 +1731,10 @@ export const toolsRouter = router({
         openrouter: {
           hasApiKey: Boolean(settings.openrouterApiKeyEncrypted),
           enabled: settings.providerOpenrouterEnabled,
+        },
+        nineRouter: {
+          hasApiKey: Boolean(settings.nineRouterApiKeyEncrypted),
+          enabled: settings.provider9routerEnabled,
         },
       },
       // Kompat lama: hasApiKey = Gemini.
@@ -1697,6 +1807,9 @@ export const toolsRouter = router({
         });
       }
 
+      const provider = input.provider ?? "9router";
+      const model = input.model?.trim() || null;
+
       // Insert row pending dulu supaya frontend bisa polling by id.
       const [row] = await db
         .insert(toolGeneration)
@@ -1707,8 +1820,56 @@ export const toolsRouter = router({
           aspectRatio: input.aspectRatio,
           requestId,
           status: "pending",
+          inputMeta: { provider, model },
         })
         .returning();
+
+      if (provider === "9router") {
+        if (!model) {
+          const message = "Pilih model 9Router untuk generate video.";
+          await db.update(toolGeneration).set({ status: "error", errorMessage: message }).where(eq(toolGeneration.id, row.id));
+          throw new TRPCError({ code: "BAD_REQUEST", message });
+        }
+        const settings = await readImageSettings();
+        if (!settings?.provider9routerEnabled || !settings.nineRouterApiKeyEncrypted) {
+          const message = "9Router belum aktif atau API key belum dikonfigurasi.";
+          await db.update(toolGeneration).set({ status: "error", errorMessage: message }).where(eq(toolGeneration.id, row.id));
+          throw new TRPCError({ code: "BAD_REQUEST", message });
+        }
+        try {
+          const video = await callOpenAiCompatibleVideo({
+            baseUrl: settings.nineRouterBaseUrl || NINE_ROUTER_DEFAULT_BASE_URL,
+            apiKey: decryptSecret(settings.nineRouterApiKeyEncrypted),
+            model,
+            prompt: input.prompt ?? "",
+            aspectRatio: input.aspectRatio,
+            firstFrame: input.firstFrame,
+            lastFrame: input.lastFrame,
+          });
+          if (!ALLOWED_VIDEO_MIME.has(video.mimeType)) {
+            throw new Error(`MIME video tidak didukung: ${video.mimeType}`);
+          }
+          const buffer = Buffer.from(video.videoBase64, "base64");
+          if (buffer.byteLength === 0 || buffer.byteLength > MAX_VIDEO_BYTES) {
+            throw new Error("Ukuran video tidak valid");
+          }
+          const filename = `${requestId}.mp4`;
+          const targetPath = ensureContained(path.join(TOOLS_UPLOAD_DIR, filename));
+          await fs.mkdir(TOOLS_UPLOAD_DIR, { recursive: true });
+          await fs.writeFile(targetPath, buffer);
+          const [updated] = await db.update(toolGeneration).set({
+            status: "success",
+            fileUrl: `/uploads/tools/${filename}`,
+            mimeType: video.mimeType,
+            fileSize: buffer.byteLength,
+            outputMeta: { provider, model },
+          }).where(eq(toolGeneration.id, row.id)).returning();
+          return { id: updated.id, requestId, jobId: requestId, status: "pending" as const, createdAt: updated.createdAt };
+        } catch (err) {
+          await db.update(toolGeneration).set({ status: "error", errorMessage: err instanceof Error ? err.message : "Generate video gagal" }).where(eq(toolGeneration.id, row.id));
+          throw err;
+        }
+      }
 
       let started: VideoStartResponse;
       try {
@@ -1779,10 +1940,10 @@ export const toolsRouter = router({
           message: "Gemini/Vertex TTS hanya mendukung maksimal 2 speaker.",
         });
       }
-      if (provider === "openrouter" && normalizedSpeakers.length > 1) {
+      if ((provider === "openrouter" || provider === "9router") && normalizedSpeakers.length > 1) {
         throw new TRPCError({
           code: "BAD_REQUEST",
-          message: "OpenRouter TTS hanya mendukung 1 voice.",
+          message: `${provider} TTS hanya mendukung 1 voice.`,
         });
       }
       for (const speaker of normalizedSpeakers) {
@@ -1921,10 +2082,10 @@ export const toolsRouter = router({
 
       try {
         // Ephemeral: tidak disimpan ke history/disk; kembalikan data URL audio.
-        if (creds.provider === "openrouter") {
+        if (creds.provider === "openrouter" || creds.provider === "9router") {
           const { audio, mimeType } = await withTtsRetry(() =>
             callOpenAiAudio({
-              baseUrl: OPENROUTER_BASE_URL,
+              baseUrl: creds.provider === "9router" ? creds.baseUrl : OPENROUTER_BASE_URL,
               apiKey: creds.apiKey,
               model: input.model,
               voice: input.voiceName,
