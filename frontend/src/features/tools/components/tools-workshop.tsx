@@ -66,7 +66,7 @@ export function ToolsWorkshop() {
   }
 
   return (
-    <div className="flex min-h-[calc(100dvh-10rem)] flex-col">
+    <div className="flex min-h-[calc(100dvh-10rem)] min-w-0 flex-col overflow-x-hidden">
       <div className="screen-line-bottom shrink-0 overflow-x-auto overflow-y-hidden overscroll-x-contain bg-(--background) md:overflow-x-hidden">
         <div
           role="tablist"

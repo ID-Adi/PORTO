@@ -1077,12 +1077,12 @@ export function GenerateCard({ kind }: GenerateCardProps) {
   const previewAspectRatio = session.aspectRatio;
 
   return (
-    <article className="flex h-full min-h-0 flex-col border-(--line) bg-(--background)">
-      <header className="screen-line-bottom shrink-0 flex items-center justify-between gap-3 px-4 py-3">
+    <article className="flex h-full min-w-0 min-h-0 flex-col border-(--line) bg-(--background)">
+      <header className="screen-line-bottom shrink-0 flex min-w-0 items-center justify-between gap-3 px-4 py-3">
         <div className="flex min-w-0 items-center gap-2.5">
           <span
             aria-hidden
-            className="grid size-7 place-items-center border border-(--line) text-(--foreground)"
+            className="grid size-7 shrink-0 place-items-center border border-(--line) text-(--foreground)"
           >
             <Icon className="size-3.5" />
           </span>
@@ -1124,9 +1124,9 @@ export function GenerateCard({ kind }: GenerateCardProps) {
         </p>
       </div>
 
-      <div className="screen-line-top min-h-0 flex-1 overflow-y-auto px-4 py-4">
-        <div className="flex min-h-full flex-col gap-4">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:gap-4">
+      <div className="screen-line-top min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-4 py-4">
+        <div className="flex min-h-full min-w-0 flex-col gap-4">
+          <div className="flex min-w-0 flex-col gap-4 lg:flex-row lg:items-start lg:gap-4">
             {kind === "image" ? (
               <ReferenceRail
                 values={session.references}

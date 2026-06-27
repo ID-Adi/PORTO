@@ -806,12 +806,12 @@ export function TtsCard() {
       : "Multi-speaker (Gemini/Vertex) atau single-voice (OpenRouter). Pilih provider, model, voice lalu generate.";
 
   return (
-    <article className="flex h-full min-h-0 flex-col border-(--line) bg-(--background)">
-      <header className="screen-line-bottom shrink-0 flex items-center justify-between gap-3 px-4 py-3">
+    <article className="flex h-full min-w-0 min-h-0 flex-col border-(--line) bg-(--background)">
+      <header className="screen-line-bottom shrink-0 flex min-w-0 items-center justify-between gap-3 px-4 py-3">
         <div className="flex min-w-0 items-center gap-2.5">
           <span
             aria-hidden
-            className="grid size-7 place-items-center border border-(--line) text-(--foreground)"
+            className="grid size-7 shrink-0 place-items-center border border-(--line) text-(--foreground)"
           >
             <Volume2 className="size-3.5" />
           </span>
@@ -853,9 +853,9 @@ export function TtsCard() {
         </p>
       </div>
 
-      <div className="screen-line-top min-h-0 flex-1 overflow-y-auto">
-        <div className="px-4 py-4">
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,24rem)] lg:items-stretch">
+      <div className="screen-line-top min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
+        <div className="min-w-0 px-4 py-4">
+        <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,24rem)] lg:items-stretch">
           <div className="grid min-w-0 gap-4">
             <div className="flex min-h-56 items-start">
               <div className="relative w-full border border-dashed border-(--line) bg-(--muted)/20 p-4">
