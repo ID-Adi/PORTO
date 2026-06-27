@@ -466,11 +466,53 @@ type OpenAiImageResponse = {
   }>;
   error?: {
     message?: string;
+    code?: string;
+    type?: string;
   };
 };
 
 function modelOrDefault(model: string | undefined, fallback: string) {
   return model?.trim() || fallback;
+}
+
+function friendlyImageProviderError(args: {
+  status?: number;
+  providerMode: "generations" | "edits";
+  model: string;
+  raw?: string;
+}) {
+  const raw = args.raw?.trim() || "";
+  const text = raw.toLowerCase();
+  const editLabel = args.providerMode === "edits" ? "image edit/reference" : "text-to-image";
+
+  if (
+    args.providerMode === "edits" &&
+    (args.status === 404 ||
+      text.includes("not found") ||
+      text.includes("unsupported") ||
+      text.includes("not support") ||
+      text.includes("does not support") ||
+      text.includes("image edits") ||
+      text.includes("edit"))
+  ) {
+    return `Model ${args.model} belum mendukung reference/image edit. Coba model image lain atau pakai mode N8N legacy.`;
+  }
+  if (args.status === 401 || args.status === 403 || text.includes("unauthorized") || text.includes("forbidden")) {
+    return "Akses image provider ditolak. Periksa API key atau izin model di AI Settings.";
+  }
+  if (args.status === 404) {
+    return `Endpoint ${editLabel} tidak ditemukan di provider. Periksa Base URL 9Router/local atau pilih model lain.`;
+  }
+  if (args.status === 429 || text.includes("rate limit") || text.includes("quota")) {
+    return "Image provider sedang terkena limit/quota. Coba beberapa saat lagi.";
+  }
+  if (args.status && args.status >= 500) {
+    return "Image provider sedang bermasalah. Coba ulang beberapa saat lagi atau pilih provider lain.";
+  }
+  if (text.includes("fetch failed") || text.includes("econnrefused") || text.includes("enotfound")) {
+    return "Backend tidak bisa terhubung ke image provider. Periksa Base URL dan koneksi Tailscale.";
+  }
+  return raw || `Image provider gagal memproses ${editLabel}.`;
 }
 
 async function imageUrlToBase64(url: string): Promise<ImageGenerationResponse> {
@@ -524,38 +566,57 @@ async function callOpenAiCompatibleImage(args: {
   const size = aspectRatioToImageSize(args.aspectRatio);
   const hasReferences = args.references.length > 0;
 
-  const res = hasReferences
-    ? await fetch(`${baseUrl}/images/edits`, {
-        method: "POST",
-        headers: authHeaders,
-        body: buildImageEditForm({
-          model: args.model,
-          prompt: withReferenceInstruction(args.prompt, args.references.length),
-          size,
-          references: args.references,
-        }),
-        signal: AbortSignal.timeout(N8N_TIMEOUT_MS),
-      })
-    : await fetch(`${baseUrl}/images/generations`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...authHeaders,
-        },
-        body: JSON.stringify({
-          model: args.model,
-          prompt: args.prompt,
-          response_format: "b64_json",
-          size,
-        }),
-        signal: AbortSignal.timeout(N8N_TIMEOUT_MS),
-      });
+  let res: Response;
+  const providerMode = hasReferences ? "edits" : "generations";
+  try {
+    res = hasReferences
+      ? await fetch(`${baseUrl}/images/edits`, {
+          method: "POST",
+          headers: authHeaders,
+          body: buildImageEditForm({
+            model: args.model,
+            prompt: withReferenceInstruction(args.prompt, args.references.length),
+            size,
+            references: args.references,
+          }),
+          signal: AbortSignal.timeout(N8N_TIMEOUT_MS),
+        })
+      : await fetch(`${baseUrl}/images/generations`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...authHeaders,
+          },
+          body: JSON.stringify({
+            model: args.model,
+            prompt: args.prompt,
+            response_format: "b64_json",
+            size,
+          }),
+          signal: AbortSignal.timeout(N8N_TIMEOUT_MS),
+        });
+  } catch (err) {
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: friendlyImageProviderError({
+        providerMode,
+        model: args.model,
+        raw: err instanceof Error ? err.message : "fetch failed",
+      }),
+    });
+  }
 
   const json = (await res.json().catch(() => ({}))) as OpenAiImageResponse;
   if (!res.ok) {
+    const raw = json.error?.message ?? json.error?.code ?? json.error?.type ?? `HTTP ${res.status}`;
     throw new TRPCError({
       code: "INTERNAL_SERVER_ERROR",
-      message: json.error?.message ?? `Image provider HTTP ${res.status}`,
+      message: friendlyImageProviderError({
+        status: res.status,
+        providerMode,
+        model: args.model,
+        raw,
+      }),
     });
   }
   const first = json.data?.[0];

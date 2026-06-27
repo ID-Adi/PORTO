@@ -14,7 +14,11 @@ import {
   NINE_ROUTER_DEFAULT_BASE_URL,
 } from "../../db/schema/index.js";
 import { decryptSecret, encryptSecret } from "../../lib/encrypted-secret.js";
-import { testProvider, type ListModelsArgs } from "../../lib/tts-providers.js";
+import {
+  normalizeBaseUrl,
+  testProvider,
+  type ListModelsArgs,
+} from "../../lib/tts-providers.js";
 import { protectedProcedure, router } from "../init.js";
 
 const SINGLETON_ID = 1;
@@ -237,6 +241,81 @@ function buildTestCreds(
   };
 }
 
+function friendlyNineRouterConnectionError(args: {
+  baseUrl: string;
+  status?: number;
+  raw?: string;
+}) {
+  const raw = args.raw?.trim() || "";
+  const text = raw.toLowerCase();
+  const baseHint = `Base URL yang dites: ${args.baseUrl}`;
+
+  if (text.includes("fetch failed") || text.includes("econnrefused")) {
+    return `Tidak bisa terhubung ke 9Router. ${baseHint}. Pastikan 9Router listen di 0.0.0.0:20128 dan URL memakai IP/MagicDNS Tailscale yang bisa dijangkau backend.`;
+  }
+  if (text.includes("enotfound") || text.includes("eai_again") || text.includes("getaddrinfo")) {
+    return `Hostname 9Router tidak bisa di-resolve dari backend. ${baseHint}. Pakai Tailscale IP 100.x.x.x atau MagicDNS yang valid.`;
+  }
+  if (text.includes("timeout") || text.includes("abort")) {
+    return `Koneksi ke 9Router timeout. ${baseHint}. Cek Tailscale, firewall, dan apakah port 20128 terbuka.`;
+  }
+  if (args.status === 401 || args.status === 403 || text.includes("unauthorized") || text.includes("forbidden")) {
+    return `9Router terjangkau, tapi API key ditolak. Periksa API key di AI Settings. ${baseHint}.`;
+  }
+  if (args.status === 404) {
+    return `9Router terjangkau, tapi endpoint /models tidak ditemukan. Pastikan Base URL menyertakan /v1, contoh http://<tailscale-ip>:20128/v1. ${baseHint}.`;
+  }
+  if (args.status && args.status >= 500) {
+    return `9Router terjangkau, tapi server mengembalikan HTTP ${args.status}. Cek log 9Router atau coba restart service. ${baseHint}.`;
+  }
+  if (args.status && args.status >= 400) {
+    return `9Router mengembalikan HTTP ${args.status}: ${raw || "request ditolak"}. ${baseHint}.`;
+  }
+  return raw || `Koneksi 9Router gagal. ${baseHint}.`;
+}
+
+async function testNineRouterConnection(creds: Extract<ListModelsArgs, { provider: "9router" }>) {
+  const baseUrl = normalizeBaseUrl(creds.baseUrl);
+  let res: Response;
+  try {
+    res = await fetch(`${baseUrl}/models`, {
+      headers: { Authorization: `Bearer ${creds.apiKey}` },
+      signal: AbortSignal.timeout(15_000),
+    });
+  } catch (err) {
+    throw new Error(
+      friendlyNineRouterConnectionError({
+        baseUrl,
+        raw: err instanceof Error ? err.message : "fetch failed",
+      }),
+    );
+  }
+
+  const text = await res.text().catch(() => "");
+  let json: { data?: unknown; error?: { message?: string; code?: string; type?: string } } = {};
+  try {
+    json = text ? JSON.parse(text) : {};
+  } catch {
+    // Non-JSON response is handled below with a short raw preview.
+  }
+
+  if (!res.ok) {
+    throw new Error(
+      friendlyNineRouterConnectionError({
+        baseUrl,
+        status: res.status,
+        raw: json.error?.message ?? json.error?.code ?? json.error?.type ?? text.slice(0, 240),
+      }),
+    );
+  }
+
+  if (!Array.isArray(json.data)) {
+    throw new Error(
+      `9Router terjangkau, tapi response /models tidak sesuai format OpenAI-compatible (data[] tidak ditemukan). Base URL yang dites: ${baseUrl}.`,
+    );
+  }
+}
+
 export const aiSettingsRouter = router({
   getTtsConfig: protectedProcedure.query(async () => {
     return publicConfig(await getOrCreateSettings());
@@ -358,7 +437,11 @@ export const aiSettingsRouter = router({
       const row = await getOrCreateSettings();
       try {
         const creds = buildTestCreds(input, row);
-        await testProvider(creds);
+        if (creds.provider === "9router") {
+          await testNineRouterConnection(creds);
+        } else {
+          await testProvider(creds);
+        }
         return { ok: true as const };
       } catch (err) {
         return {

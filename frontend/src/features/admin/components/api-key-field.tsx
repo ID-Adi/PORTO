@@ -492,16 +492,16 @@ export function ApiKeyField({ provider, label, hint, status }: ApiKeyFieldProps)
             {testResult ? (
               <div
                 className={cn(
-                  "flex items-center gap-2 border px-3 py-2 text-xs",
+                  "flex items-start gap-2 whitespace-pre-wrap border px-3 py-2 text-xs leading-5",
                   testResult.ok
                     ? "border-emerald-500/30 bg-emerald-500/5 text-emerald-600"
                     : "border-rose-500/30 bg-rose-500/5 text-rose-500",
                 )}
               >
                 {testResult.ok ? (
-                  <Check className="size-3.5" />
+                  <Check className="mt-0.5 size-3.5 shrink-0" />
                 ) : (
-                  <X className="size-3.5" />
+                  <X className="mt-0.5 size-3.5 shrink-0" />
                 )}
                 {testResult.ok
                   ? "Koneksi berhasil"
