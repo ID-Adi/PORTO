@@ -160,6 +160,7 @@ export function registerToolsImageMcp(registry: PortoMcpRegistry) {
               prompt: payload.prompt,
               aspectRatio: payload.aspectRatio,
               references,
+              provider: "n8n",
             },
           });
           const [updated] = await db

@@ -14,6 +14,7 @@ import {
   DEFAULT_TTS_MODEL,
   DEFAULT_TTS_VOICE,
   DEFAULT_TTS_VOICES,
+  NINE_ROUTER_DEFAULT_BASE_URL,
   toolGeneration,
 } from "../../db/schema/index.js";
 import type {
@@ -184,7 +185,7 @@ async function callN8n(payload: {
   userEmail: string | null | undefined;
   references: ToolReferenceImage[];
   referenceMapping: ToolReferenceMapping;
-}): Promise<N8nResponse> {
+}): Promise<ImageGenerationResponse & N8nResponse> {
   const url = process.env.N8N_WEBHOOK_URL;
   const token = process.env.N8N_WEBHOOK_TOKEN;
   if (!url || !token) {
@@ -232,7 +233,15 @@ async function callN8n(payload: {
         "N8N tidak mengembalikan imageBase64. Pastikan Respond to Webhook (PORTO) mengembalikan JSON: ok, mimeType, imageBase64.",
     });
   }
-  return json;
+  const mimeType = json.mimeType;
+  const imageBase64 = json.imageBase64;
+  if (!mimeType || !imageBase64) {
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "N8N response image tidak lengkap",
+    });
+  }
+  return { ...json, mimeType, imageBase64 };
 }
 
 function outputMimeTypeForFormat(format: "webp" | "jpeg") {
@@ -376,10 +385,13 @@ const framePayload = z.object({
 
 const MAX_REFERENCES = 6;
 
+const IMAGE_GENERATION_PROVIDERS = ["local", "9router", "n8n"] as const;
 const generateImageInput = z.object({
   prompt: z.string().min(1).max(2000),
   aspectRatio: z.enum(IMAGE_ASPECT_RATIOS),
   references: z.array(framePayload).max(MAX_REFERENCES).optional().default([]),
+  provider: z.enum(IMAGE_GENERATION_PROVIDERS).optional().default("local"),
+  model: z.string().max(160).optional(),
 });
 export type GenerateImageInput = z.infer<typeof generateImageInput>;
 
@@ -437,6 +449,167 @@ type VideoStatusResponse = {
   mimeType?: string;
   error?: string;
 };
+
+type ImageGenerationProvider = z.infer<typeof generateImageInput>["provider"];
+
+type ImageGenerationResponse = {
+  mimeType: string;
+  imageBase64: string;
+  requestId?: string;
+};
+
+type OpenAiImageResponse = {
+  data?: Array<{
+    b64_json?: string;
+    url?: string;
+    revised_prompt?: string;
+  }>;
+  error?: {
+    message?: string;
+  };
+};
+
+function modelOrDefault(model: string | undefined, fallback: string) {
+  return model?.trim() || fallback;
+}
+
+async function imageUrlToBase64(url: string): Promise<ImageGenerationResponse> {
+  const res = await fetch(url, { signal: AbortSignal.timeout(N8N_TIMEOUT_MS) });
+  if (!res.ok) {
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: `Gagal mengunduh hasil image HTTP ${res.status}`,
+    });
+  }
+  const mimeType = (res.headers.get("content-type") ?? "image/png").split(";")[0];
+  const buffer = Buffer.from(await res.arrayBuffer());
+  return { mimeType, imageBase64: buffer.toString("base64") };
+}
+
+async function callOpenAiCompatibleImage(args: {
+  baseUrl: string;
+  apiKey?: string;
+  model: string;
+  prompt: string;
+  aspectRatio: string;
+  references: FramePayload[];
+}): Promise<ImageGenerationResponse> {
+  if (args.references.length > 0) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Referensi gambar baru didukung pada mode N8N.",
+    });
+  }
+
+  const res = await fetch(`${args.baseUrl.trim().replace(/\/+$/, "")}/images/generations`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(args.apiKey ? { Authorization: `Bearer ${args.apiKey}` } : {}),
+    },
+    body: JSON.stringify({
+      model: args.model,
+      prompt: args.prompt,
+      response_format: "b64_json",
+      size: aspectRatioToImageSize(args.aspectRatio),
+    }),
+    signal: AbortSignal.timeout(N8N_TIMEOUT_MS),
+  });
+  const json = (await res.json().catch(() => ({}))) as OpenAiImageResponse;
+  if (!res.ok) {
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: json.error?.message ?? `Image provider HTTP ${res.status}`,
+    });
+  }
+  const first = json.data?.[0];
+  if (first?.b64_json) return { mimeType: "image/png", imageBase64: first.b64_json };
+  if (first?.url) return imageUrlToBase64(first.url);
+  throw new TRPCError({
+    code: "INTERNAL_SERVER_ERROR",
+    message: "Provider tidak mengembalikan image result.",
+  });
+}
+
+function aspectRatioToImageSize(aspectRatio: string) {
+  switch (aspectRatio) {
+    case "16:9":
+      return "1536x864";
+    case "9:16":
+      return "864x1536";
+    case "4:5":
+      return "1024x1280";
+    case "3:4":
+      return "960x1280";
+    default:
+      return "1024x1024";
+  }
+}
+
+async function readImageSettings() {
+  const [row] = await db
+    .select()
+    .from(aiToolSettings)
+    .where(eq(aiToolSettings.id, 1))
+    .limit(1);
+  return row;
+}
+
+async function generateImageWithProvider(args: {
+  provider: ImageGenerationProvider;
+  model: string | null;
+  prompt: string;
+  aspectRatio: string;
+  requestId: string;
+  userEmail?: string | null;
+  references: FramePayload[];
+  referenceImages: ToolReferenceImage[];
+  referenceMapping: ToolReferenceMapping;
+}): Promise<ImageGenerationResponse> {
+  if (args.provider === "n8n") {
+    return callN8n({
+      source: "porto-web",
+      prompt: args.prompt,
+      aspectRatio: args.aspectRatio,
+      requestId: args.requestId,
+      userEmail: args.userEmail,
+      references: args.referenceImages,
+      referenceMapping: args.referenceMapping,
+    });
+  }
+
+  const settings = await readImageSettings();
+  if (args.provider === "9router") {
+    if (!settings?.provider9routerEnabled) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "9router disabled di AI Settings" });
+    }
+    if (!settings.nineRouterApiKeyEncrypted) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "9router API key belum dikonfigurasi" });
+    }
+    return callOpenAiCompatibleImage({
+      baseUrl: settings.nineRouterBaseUrl || NINE_ROUTER_DEFAULT_BASE_URL,
+      apiKey: decryptSecret(settings.nineRouterApiKeyEncrypted),
+      model: modelOrDefault(args.model ?? undefined, "fe_oa_/gpt-5.5-image"),
+      prompt: args.prompt,
+      aspectRatio: args.aspectRatio,
+      references: args.references,
+    });
+  }
+
+  if (!settings?.providerLocalEnabled) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "Local LLM disabled di AI Settings" });
+  }
+  if (!settings.localBaseUrl) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "Base URL Local LLM belum dikonfigurasi" });
+  }
+  return callOpenAiCompatibleImage({
+    baseUrl: settings.localBaseUrl,
+    model: modelOrDefault(args.model ?? undefined, "gpt-image-1"),
+    prompt: args.prompt,
+    aspectRatio: args.aspectRatio,
+    references: args.references,
+  });
+}
 
 type GeminiTtsResponse = {
   candidates?: Array<{
@@ -516,15 +689,20 @@ export async function generateImageForUser(args: {
     }
   }
 
-  let response: N8nResponse;
+  const provider = args.input.provider ?? "local";
+  const model = args.input.model?.trim() || null;
+
+  let response: ImageGenerationResponse;
   try {
-    response = await callN8n({
-      source: "porto-web",
+    response = await generateImageWithProvider({
+      provider,
+      model,
       prompt: args.input.prompt,
       aspectRatio: args.input.aspectRatio,
       requestId,
       userEmail: args.userEmail,
-      references: referenceImages,
+      references: args.input.references,
+      referenceImages,
       referenceMapping,
     });
   } catch (err) {
@@ -539,11 +717,12 @@ export async function generateImageForUser(args: {
       errorMessage: err instanceof Error ? err.message : "Unknown error",
       referenceImages,
       referenceMapping,
+      outputMeta: { provider, model },
     });
     throw err;
   }
 
-  const mimeType = response.mimeType!;
+  const mimeType = response.mimeType;
   if (!ALLOWED_MIME.has(mimeType)) {
     throw new TRPCError({
       code: "INTERNAL_SERVER_ERROR",
@@ -582,6 +761,7 @@ export async function generateImageForUser(args: {
       status: "success",
       referenceImages,
       referenceMapping,
+      outputMeta: { provider, model },
     })
     .returning();
 
@@ -1274,6 +1454,56 @@ async function callN8nVideoStatus(payload: {
 }
 
 export const toolsRouter = router({
+  getImageGenerationConfig: authenticatedProcedure.query(async () => {
+    const settings = await readImageSettings();
+    return {
+      defaultProvider: "local" as const,
+      providers: {
+        local: {
+          enabled: Boolean(settings?.providerLocalEnabled),
+          configured: Boolean(settings?.localBaseUrl),
+        },
+        nineRouter: {
+          enabled: Boolean(settings?.provider9routerEnabled),
+          configured: Boolean(settings?.nineRouterApiKeyEncrypted),
+        },
+        n8n: {
+          enabled: Boolean(process.env.N8N_WEBHOOK_URL && process.env.N8N_WEBHOOK_TOKEN),
+          configured: Boolean(process.env.N8N_WEBHOOK_URL && process.env.N8N_WEBHOOK_TOKEN),
+        },
+      },
+    };
+  }),
+
+  listImageModels: authenticatedProcedure
+    .input(z.object({ provider: z.enum(["local", "9router"]) }))
+    .query(async ({ input }) => {
+      const settings = await readImageSettings();
+      try {
+        if (input.provider === "9router") {
+          if (!settings?.provider9routerEnabled || !settings.nineRouterApiKeyEncrypted) {
+            throw new Error("9router belum aktif atau belum dikonfigurasi");
+          }
+          const models = await listProviderModels({
+            provider: "9router",
+            apiKey: decryptSecret(settings.nineRouterApiKeyEncrypted),
+            baseUrl: settings.nineRouterBaseUrl || NINE_ROUTER_DEFAULT_BASE_URL,
+          });
+          return { models };
+        }
+        if (!settings?.providerLocalEnabled || !settings.localBaseUrl) {
+          throw new Error("Local LLM belum aktif atau belum dikonfigurasi");
+        }
+        const models = await listProviderModels({ provider: "local", baseUrl: settings.localBaseUrl });
+        return { models };
+      } catch (err) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: err instanceof Error ? err.message : "Gagal memuat model image",
+        });
+      }
+    }),
+
   getTtsPublicConfig: authenticatedProcedure.query(async () => {
     const settings = await readTtsSettings();
     return {

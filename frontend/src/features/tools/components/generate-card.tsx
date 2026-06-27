@@ -12,6 +12,13 @@ import {
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
@@ -42,6 +49,8 @@ type AspectOption = {
   disabled?: boolean;
 };
 
+type ImageProvider = "local" | "9router" | "n8n";
+
 type PersistedSession = {
   prompt: string;
   status: Status;
@@ -49,6 +58,8 @@ type PersistedSession = {
   resultUrl: string | null;
   error: string | null;
   aspectRatio: string;
+  imageProvider: ImageProvider;
+  imageModel: string;
   // Optional jobId yang akan diisi backend/N8N saat integrasi.
   jobId: string | null;
   // Untuk video: row id di tool_generation untuk polling getVideoStatus.
@@ -98,6 +109,8 @@ function defaultSession(kind: GenerateKind): PersistedSession {
     resultUrl: null,
     error: null,
     aspectRatio: ASPECT_OPTIONS[kind][0].value,
+    imageProvider: "local",
+    imageModel: "",
     jobId: null,
     rowId: null,
     firstFrame: null,
@@ -151,6 +164,11 @@ function readSession(kind: GenerateKind): PersistedSession {
       resultUrl: parsed.resultUrl ?? null,
       error: parsed.error ?? null,
       aspectRatio,
+      imageProvider:
+        parsed.imageProvider === "9router" || parsed.imageProvider === "n8n"
+          ? parsed.imageProvider
+          : "local",
+      imageModel: parsed.imageModel ?? "",
       jobId: parsed.jobId ?? null,
       rowId: parsed.rowId ?? null,
       firstFrame: parsed.firstFrame ?? null,
@@ -217,7 +235,7 @@ const COPY: Record<
     title: "Generate Image",
     sup: "v1",
     description:
-      "Tulis prompt deskriptif. Pipeline N8N akan memproses dan mengembalikan satu gambar.",
+      "Tulis prompt deskriptif. Default render via backend lokal; N8N tetap tersedia sebagai mode legacy.",
     placeholder:
       "Contoh: ilustrasi editorial monokrom, garis tipis, komposisi rule-of-thirds, atmosphere senja...",
     icon: ImageIcon,
@@ -384,6 +402,15 @@ export function GenerateCard({ kind }: GenerateCardProps) {
   const [addingReferenceId, setAddingReferenceId] = useState<number | null>(null);
   const [downloadProgress, setDownloadProgress] = useState<Record<number, number>>({});
 
+  const imageConfigQuery = trpc.tools.getImageGenerationConfig.useQuery(
+    undefined,
+    { enabled: kind === "image" },
+  );
+  const imageModelsQuery = trpc.tools.listImageModels.useQuery(
+    { provider: session.imageProvider === "9router" ? "9router" : "local" },
+    { enabled: kind === "image" && session.imageProvider !== "n8n", retry: false },
+  );
+
   useEffect(() => {
     // Hidrasi state dari localStorage pasca-mount; tidak bisa di-init di
     // useState karena localStorage tidak tersedia saat SSR.
@@ -426,6 +453,22 @@ export function GenerateCard({ kind }: GenerateCardProps) {
       prev.status === "generating" || prev.aspectRatio === value
         ? prev
         : { ...prev, aspectRatio: value },
+    );
+  }, []);
+
+  const setImageProvider = useCallback((provider: ImageProvider) => {
+    setSession((prev) =>
+      prev.status === "generating" || prev.imageProvider === provider
+        ? prev
+        : { ...prev, imageProvider: provider, imageModel: "" },
+    );
+  }, []);
+
+  const setImageModel = useCallback((model: string) => {
+    setSession((prev) =>
+      prev.status === "generating" || prev.imageModel === model
+        ? prev
+        : { ...prev, imageModel: model },
     );
   }, []);
 
@@ -813,6 +856,8 @@ export function GenerateCard({ kind }: GenerateCardProps) {
             references: session.references
               .filter((r): r is ImageFile => r !== null)
               .map((r) => ({ base64: r.base64, mimeType: r.mimeType })),
+            provider: session.imageProvider,
+            model: session.imageModel.trim() || undefined,
           });
           setSession((prev) => ({
             ...prev,
@@ -904,6 +949,8 @@ export function GenerateCard({ kind }: GenerateCardProps) {
       session.firstFrame,
       session.lastFrame,
       session.references,
+      session.imageProvider,
+      session.imageModel,
       kind,
       generateImage,
       generateVideo,
@@ -1094,7 +1141,9 @@ export function GenerateCard({ kind }: GenerateCardProps) {
               </sup>
             </h3>
             <p className="line-clamp-1 font-mono text-[10px] tracking-[0.16em] text-(--muted-foreground) uppercase">
-              {kind === "image" ? "Image · N8N" : "Video · N8N"}
+              {kind === "image"
+                ? `Image · ${session.imageProvider === "n8n" ? "N8N" : session.imageProvider}`
+                : "Video · N8N"}
             </p>
           </div>
         </div>
@@ -1236,6 +1285,73 @@ export function GenerateCard({ kind }: GenerateCardProps) {
             onSubmit={onSubmit}
             className="screen-line-top flex flex-col gap-3 pt-4"
           >
+            {kind === "image" ? (
+              <fieldset
+                disabled={isGenerating}
+                className="grid gap-3 disabled:cursor-not-allowed sm:grid-cols-2"
+              >
+                <div className="grid gap-2">
+                  <div className="font-mono text-[10px] tracking-[0.2em] text-(--muted-foreground) uppercase">
+                    Engine
+                  </div>
+                  <Select
+                    value={session.imageProvider}
+                    disabled={isGenerating}
+                    onValueChange={(value) => setImageProvider(value as ImageProvider)}
+                  >
+                    <SelectTrigger className="h-8 rounded-none border-(--line) font-mono text-[11px] uppercase">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-none border-(--line)">
+                      <SelectItem value="local">
+                        Local backend
+                        {imageConfigQuery.data?.providers.local.enabled ? "" : " (disabled)"}
+                      </SelectItem>
+                      <SelectItem value="9router">
+                        9Router
+                        {imageConfigQuery.data?.providers.nineRouter.enabled ? "" : " (disabled)"}
+                      </SelectItem>
+                      <SelectItem value="n8n">
+                        N8N legacy
+                        {imageConfigQuery.data?.providers.n8n.enabled ? "" : " (disabled)"}
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="grid gap-2">
+                  <div className="font-mono text-[10px] tracking-[0.2em] text-(--muted-foreground) uppercase">
+                    Model
+                  </div>
+                  {session.imageProvider === "n8n" ? (
+                    <div className="flex h-8 items-center border border-(--line) px-3 font-mono text-[11px] text-(--muted-foreground) uppercase">
+                      workflow default
+                    </div>
+                  ) : (
+                    <Select
+                      value={session.imageModel || "__default"}
+                      disabled={isGenerating || imageModelsQuery.isLoading}
+                      onValueChange={(value) =>
+                        setImageModel(value === "__default" ? "" : value)
+                      }
+                    >
+                      <SelectTrigger className="h-8 rounded-none border-(--line) font-mono text-[11px]">
+                        <SelectValue placeholder="Default model" />
+                      </SelectTrigger>
+                      <SelectContent className="rounded-none border-(--line)">
+                        <SelectItem value="__default">Default image model</SelectItem>
+                        {(imageModelsQuery.data?.models ?? []).map((model) => (
+                          <SelectItem key={model.id} value={model.id}>
+                            {model.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+              </fieldset>
+            ) : null}
+
             <fieldset
               disabled={isGenerating}
               className="flex flex-col gap-2 disabled:cursor-not-allowed"
