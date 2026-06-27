@@ -235,7 +235,7 @@ const COPY: Record<
     title: "Generate Image",
     sup: "v1",
     description:
-      "Tulis prompt deskriptif. Default render via backend lokal; N8N tetap tersedia sebagai mode legacy.",
+      "Tulis prompt deskriptif. Default render via backend lokal dengan dukungan referensi; N8N tetap tersedia sebagai mode legacy.",
     placeholder:
       "Contoh: ilustrasi editorial monokrom, garis tipis, komposisi rule-of-thirds, atmosphere senja...",
     icon: ImageIcon,

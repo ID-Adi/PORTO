@@ -486,6 +486,29 @@ async function imageUrlToBase64(url: string): Promise<ImageGenerationResponse> {
   return { mimeType, imageBase64: buffer.toString("base64") };
 }
 
+function withReferenceInstruction(prompt: string, count: number) {
+  return `${prompt}\n\nUse the ${count} attached reference image${count > 1 ? "s" : ""} as visual guidance. If the prompt contains @1..@${count}, map those tags to the attached images in order.`;
+}
+
+function buildImageEditForm(args: {
+  model: string;
+  prompt: string;
+  size: string;
+  references: FramePayload[];
+}) {
+  const form = new FormData();
+  form.set("model", args.model);
+  form.set("prompt", args.prompt);
+  form.set("response_format", "b64_json");
+  form.set("size", args.size);
+  args.references.forEach((ref, index) => {
+    const buffer = Buffer.from(ref.base64, "base64");
+    const blob = new Blob([buffer], { type: ref.mimeType });
+    form.append("image", blob, `reference-${index + 1}.${extensionFromMime(ref.mimeType)}`);
+  });
+  return form;
+}
+
 async function callOpenAiCompatibleImage(args: {
   baseUrl: string;
   apiKey?: string;
@@ -494,27 +517,40 @@ async function callOpenAiCompatibleImage(args: {
   aspectRatio: string;
   references: FramePayload[];
 }): Promise<ImageGenerationResponse> {
-  if (args.references.length > 0) {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "Referensi gambar baru didukung pada mode N8N.",
-    });
-  }
+  const baseUrl = args.baseUrl.trim().replace(/\/+$/, "");
+  const authHeaders: Record<string, string> = args.apiKey
+    ? { Authorization: `Bearer ${args.apiKey}` }
+    : {};
+  const size = aspectRatioToImageSize(args.aspectRatio);
+  const hasReferences = args.references.length > 0;
 
-  const res = await fetch(`${args.baseUrl.trim().replace(/\/+$/, "")}/images/generations`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(args.apiKey ? { Authorization: `Bearer ${args.apiKey}` } : {}),
-    },
-    body: JSON.stringify({
-      model: args.model,
-      prompt: args.prompt,
-      response_format: "b64_json",
-      size: aspectRatioToImageSize(args.aspectRatio),
-    }),
-    signal: AbortSignal.timeout(N8N_TIMEOUT_MS),
-  });
+  const res = hasReferences
+    ? await fetch(`${baseUrl}/images/edits`, {
+        method: "POST",
+        headers: authHeaders,
+        body: buildImageEditForm({
+          model: args.model,
+          prompt: withReferenceInstruction(args.prompt, args.references.length),
+          size,
+          references: args.references,
+        }),
+        signal: AbortSignal.timeout(N8N_TIMEOUT_MS),
+      })
+    : await fetch(`${baseUrl}/images/generations`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...authHeaders,
+        },
+        body: JSON.stringify({
+          model: args.model,
+          prompt: args.prompt,
+          response_format: "b64_json",
+          size,
+        }),
+        signal: AbortSignal.timeout(N8N_TIMEOUT_MS),
+      });
+
   const json = (await res.json().catch(() => ({}))) as OpenAiImageResponse;
   if (!res.ok) {
     throw new TRPCError({
